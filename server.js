@@ -5,7 +5,7 @@ const SQLiteStore = require('connect-sqlite3')(session);
 const path = require('path');
 const fs = require('fs');
 
-const { initDatabase } = require('./db/database');
+const { initDatabase } = require('./lib/database');
 
 const app = express();
 const PORT = process.env.PORT || 3000;

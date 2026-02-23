@@ -1,6 +1,6 @@
 const router = require('express').Router();
 const bcrypt = require('bcryptjs');
-const { getDb } = require('../db/database');
+const { getDb } = require('../lib/database');
 const { requireRole, requireLogin } = require('../middleware/auth');
 
 const FIELDS = 'id, username, full_name, email, role, active, created_at';

@@ -2,7 +2,7 @@ const router = require('express').Router();
 const XLSX = require('xlsx');
 const multer = require('multer');
 const path = require('path');
-const { getDb } = require('../db/database');
+const { getDb } = require('../lib/database');
 const { requireLogin, requireRole } = require('../middleware/auth');
 
 const upload = multer({ storage: multer.memoryStorage() });
