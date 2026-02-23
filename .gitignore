@@ -1,0 +1,10 @@
+node_modules/
+.env
+db/rapporte.db
+db/rapporte.db-shm
+db/rapporte.db-wal
+db/sessions.db
+uploads/
+*.log
+.DS_Store
+Thumbs.db

@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Helbling Rapporte</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/app.css">
+  <link rel="manifest" href="/manifest.json">
+</head>
+<body>
+
+<!-- ── Login Page ──────────────────────────────────────────────────────── -->
+<div id="login-page">
+  <div class="login-card">
+    <h1>Helbling Rapporte</h1>
+    <p>Bitte melden Sie sich an</p>
+    <form id="login-form">
+      <div class="field mb-3">
+        <label>Benutzername</label>
+        <input type="text" id="login-user" autocomplete="username" required>
+      </div>
+      <div class="field mb-3">
+        <label>Passwort</label>
+        <input type="password" id="login-pass" autocomplete="current-password" required>
+      </div>
+      <button type="submit" class="btn btn-primary w-full">Anmelden</button>
+      <p id="login-error" class="text-danger text-sm mt-2 hidden"></p>
+    </form>
+  </div>
+</div>
+
+<!-- ── App Shell ───────────────────────────────────────────────────────── -->
+<div id="app-shell" class="hidden">
+  <!-- Sidebar -->
+  <aside id="sidebar">
+    <div class="logo">
+      <h1>Helbling<br>Rapporte</h1>
+      <p>Montageverwaltung</p>
+    </div>
+    <nav id="nav-menu"></nav>
+    <div class="user-info">
+      <div class="name" id="nav-username"></div>
+      <div class="role" id="nav-role"></div>
+      <a id="nav-logout">Abmelden</a>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main id="main-content"></main>
+</div>
+
+<!-- ── Toast container ─────────────────────────────────────────────────── -->
+<div id="toast-container"></div>
+
+<!-- ── Modal container ─────────────────────────────────────────────────── -->
+<div id="modal-container"></div>
+
+<!-- ── Scripts ─────────────────────────────────────────────────────────── -->
+<script src="/js/api.js"></script>
+<script src="/js/ui.js"></script>
+<script src="/js/views/admin.js"></script>
+<script src="/js/views/planer.js"></script>
+<script src="/js/views/monteur.js"></script>
+<script src="/js/app.js"></script>
+</body>
+</html>
