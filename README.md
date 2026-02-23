@@ -1,60 +1,116 @@
-# Helbling Montagerapport
+# Helbling Rapporte v2.0
 
-Digitaler Montagerapport als PWA – läuft komplett über GitHub, kein Backend nötig.
+Digitale Montagerapport-Verwaltung mit Rollen, Auftragsplanung und E-Mail-Versand.
 
-## Architektur
+---
 
+## Funktionsübersicht
+
+### Rollen
+| Rolle | Berechtigungen |
+|-------|---------------|
+| **Admin** | Benutzerverwaltung, Auswahlfelder konfigurieren, Artikel verwalten, alle Aufträge |
+| **Planer** | Aufträge erfassen (manuell + Excel-Import), Techniker zuweisen, Rapport per Mail versenden |
+| **Monteur** | Eigene Aufträge einsehen, ausgefüllte Rapporte speichern, Unterschrift einholen |
+
+---
+
+## Installation
+
+### Voraussetzungen
+- [Node.js](https://nodejs.org) Version 18 oder höher
+
+### Schritt 1: Projekt klonen / herunterladen
+```bash
+git clone <repository-url>
+cd helbling-rapporte
 ```
-Techniker-Handy (PWA)  →  GitHub API  →  GitHub Repo
-                                           └── /rapporte/
-                                               └── 2026-02-21_HB-0142_Müller/
-                                                   ├── rapport.json
-                                                   ├── rapport.md
-                                                   ├── foto_vorher_1.jpg
-                                                   ├── foto_nachher_1.jpg
-                                                   └── unterschrift.png
+
+### Schritt 2: Abhaengigkeiten installieren
+```bash
+npm install
 ```
 
-## Setup
+### Schritt 3: Konfiguration erstellen
+```bash
+cp .env.example .env
+```
+Dann `.env` mit einem Texteditor oeffnen und anpassen:
+- `SESSION_SECRET`: Beliebigen langen Zufallsstring eingeben
+- SMTP-Einstellungen fuer E-Mail-Versand (optional)
+- `UPLOADS_DIR`: Pfad zum Upload-Ordner (optional, fuer Google Drive)
 
-### 1. Repo erstellen
+### Schritt 4: Starten
+```bash
+npm start
+```
 
-Erstelle ein **privates** Repo auf GitHub, z.B. `helbling-rapporte`.
+Die Anwendung laeuft auf **http://localhost:3000**
 
-### 2. GitHub Pages aktivieren
+**Standard-Login:** `admin` / `admin123` *(bitte sofort aendern!)*
 
-Settings → Pages → Source: `main` branch, Ordner: `/ (root)`
+---
 
-### 3. Fine-grained Token erstellen
+## Google Drive Integration
 
-1. [GitHub Token erstellen](https://github.com/settings/personal-access-tokens/new)
-2. Name: `Montagerapport`
-3. Repo access: Nur `helbling-rapporte`
-4. Permissions: `Contents → Read and Write`
-5. Token kopieren
+Die einfachste Methode, Daten auf Google Drive zu speichern:
 
-### 4. PWA einrichten
+1. **Google Drive Desktop** installieren: https://drive.google.com/drive/downloads
+2. Einen Ordner in Google Drive erstellen, z.B. `Helbling/uploads`
+3. Den vollstaendigen lokalen Pfad dieses Ordners in der `.env` eintragen:
+   ```
+   UPLOADS_DIR=C:\Users\Max\Google Drive\Helbling\uploads
+   ```
+4. Alle hochgeladenen Dateien werden automatisch mit Google Drive synchronisiert.
 
-1. `index.html` und `manifest.json` ins Repo pushen
-2. PWA im Browser öffnen: `https://DEIN-USERNAME.github.io/helbling-rapporte/`
-3. Beim ersten Öffnen: Repo, Token und Techniker-Name eingeben
-4. "Zum Startbildschirm hinzufügen" → funktioniert wie eine App
+---
 
-## Nutzung
+## E-Mail-Konfiguration (Outlook / Microsoft 365)
 
-- Rapport ausfüllen → Fotos machen → Kunde unterschreibt → Absenden
-- Alles wird als Dateien direkt ins GitHub-Repo committet
-- Entwürfe werden lokal gespeichert (💾-Button)
-- Bei jedem Rapport entsteht ein Ordner mit JSON, Markdown, Fotos und Unterschrift
+In der `.env` Datei:
+```
+SMTP_HOST=smtp.office365.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=rapport@ihre-firma.ch
+SMTP_PASS=ihr-passwort
+```
 
-## Sicherheit
+> **Hinweis**: Bei Microsoft 365 mit aktivierter Multi-Faktor-Authentifizierung ein **App-Passwort** verwenden.
 
-- Token wird nur lokal auf dem Gerät gespeichert (localStorage)
-- Fine-grained Token hat nur Zugriff auf das eine Repo
-- Repo sollte **privat** sein
+---
 
-## Optional: OneDrive-Sync
+## Bedienung
 
-Falls die Rapporte zusätzlich auf OneDrive landen sollen:
-- GitHub Action einrichten die bei jedem Push den `/rapporte/`-Ordner synct
-- Oder: Microsoft Power Automate Workflow der das GitHub-Repo überwacht
+### Als Planer
+1. **Neuer Auftrag**: `Auftraege` > `+ Neuer Auftrag`
+   - Kunde auswaehlen oder neu anlegen
+   - Pflichtfelder ausfuellen (Kunde, Besteller, Montageadresse, Datum, Arbeit)
+   - Monteur zuweisen und Reihenfolge festlegen
+   - Anhaenge und Fotos hochladen
+2. **Excel-Import**: `Excel Import`
+   - Spalten: `Kunde`, `Montagedatum`, `Montageadresse`, `Besteller`, `Bemerkungen`
+3. **Rapport versenden**: Auftrag oeffnen > `Per E-Mail`
+
+### Als Monteur
+1. Auftraege erscheinen sortiert nach Datum und Reihenfolge
+2. Auftrag oeffnen > Arbeiten, Material, Zeiten ausfuellen
+3. Kundenunterschrift auf dem Bildschirm unterschreiben lassen
+4. `Speichern und Abschicken`
+
+### Als Admin
+- **Benutzer**: Neue Benutzer anlegen, Passwoerter setzen, Rollen vergeben
+- **Einstellungen**:
+  - **Auswahlfelder**: Optionen fuer Arbeit, Ausgefuehrte Arbeiten, Material, Halteringe, Schluessel verwalten
+  - **Artikel**: Artikelstamm pflegen
+  - **Kunden**: Kundenstamm verwalten
+
+---
+
+## Datensicherung
+
+Die SQLite-Datenbank liegt unter `db/rapporte.db`. Diese Datei regelmaessig sichern!
+
+```bash
+cp db/rapporte.db db/rapporte_backup_$(date +%Y%m%d).db
+```
