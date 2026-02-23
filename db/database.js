@@ -178,11 +178,131 @@ function seedDefaults(db) {
   const custExists = db.prepare("SELECT id FROM customers LIMIT 1").get();
   if (!custExists) {
     const customers = [
-      ['Muster AG', 'Musterstrasse 1, 8000 Zürich', 'Hans Muster', 'hmuster@muster.ch', '044 123 45 67'],
-      ['Beispiel GmbH', 'Beispielweg 5, 3000 Bern', 'Anna Beispiel', 'a.beispiel@beispiel.ch', '031 234 56 78'],
+      ['Muster AG',              'Musterstrasse 1, 8000 Zürich',          'Hans Muster',     'hmuster@muster.ch',            '044 123 45 67'],
+      ['Beispiel GmbH',          'Beispielweg 5, 3000 Bern',              'Anna Beispiel',   'a.beispiel@beispiel.ch',       '031 234 56 78'],
+      ['Bachmann Immobilien AG', 'Bahnhofstrasse 12, 8001 Zürich',        'Peter Bachmann',  'p.bachmann@bachmann-immo.ch',  '044 200 11 22'],
+      ['Klinik Sonnenhügel',     'Sonnenhügelweg 3, 8400 Winterthur',     'Dr. Eva Meier',   'e.meier@klinik-sh.ch',         '052 300 44 55'],
+      ['Migros Verteilzentrum',  'Industriestrasse 88, 4600 Olten',       'Beat Frei',       'b.frei@migros.ch',             '062 311 22 33'],
+      ['Gemeinde Küsnacht',      'Obere Dorfstrasse 32, 8700 Küsnacht',   'Urs Keller',      'u.keller@kueseacht.ch',        '044 913 11 00'],
+      ['Hotel Bellevue',         'Seepromenade 1, 6006 Luzern',           'Sandra Brunner',  's.brunner@bellevue.ch',        '041 420 00 10'],
     ];
     const ic = db.prepare(`INSERT INTO customers (name, address, contact_name, contact_email, contact_phone) VALUES (?,?,?,?,?)`);
     customers.forEach(c => ic.run(...c));
+  }
+
+  // Demo monteure
+  const monteureData = [
+    { username: 'thomas.mueller', full_name: 'Thomas Müller',  email: 't.mueller@helbling.ch' },
+    { username: 'stefan.weber',   full_name: 'Stefan Weber',    email: 's.weber@helbling.ch'   },
+    { username: 'markus.huber',   full_name: 'Markus Huber',    email: 'm.huber@helbling.ch'   },
+    { username: 'daniel.schmid',  full_name: 'Daniel Schmid',   email: 'd.schmid@helbling.ch'  },
+  ];
+  const monteureExist = db.prepare("SELECT id FROM users WHERE role = 'monteur' LIMIT 1").get();
+  if (!monteureExist) {
+    const monHash = bcrypt.hashSync('monteur123', 10);
+    const iUser = db.prepare(`INSERT OR IGNORE INTO users (username, password_hash, full_name, email, role) VALUES (?,?,?,?,'monteur')`);
+    for (const m of monteureData) iUser.run(m.username, monHash, m.full_name, m.email);
+    console.log('  👷 Demo-Monteure erstellt (Passwort: monteur123)');
+  }
+
+  // Demo orders
+  const ordersExist = db.prepare("SELECT id FROM orders LIMIT 1").get();
+  if (!ordersExist) {
+    const adminId   = db.prepare("SELECT id FROM users WHERE role='admin' LIMIT 1").get()?.id ?? 1;
+    const customers = db.prepare("SELECT id, name FROM customers").all();
+    const monteure  = db.prepare("SELECT id, full_name FROM users WHERE role='monteur'").all();
+
+    function pad2(n) { return String(n).padStart(2, '0'); }
+    function dateStr(offsetDays) {
+      const d = new Date();
+      d.setDate(d.getDate() + offsetDays);
+      return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+    }
+    function rnd(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+    const installAddresses = [
+      'Rosengartenstrasse 4, 8037 Zürich',      'Rebbergstrasse 17, 8049 Zürich',
+      'Oberwiesenstrasse 9, 8400 Winterthur',   'Brühlgasse 22, 9000 St. Gallen',
+      'Mühlegasse 3, 6300 Zug',                 'Austrasse 14, 4051 Basel',
+      'Belpstrasse 33, 3007 Bern',              'Schlossgasse 8, 5000 Aarau',
+      'Hauptstrasse 56, 8200 Schaffhausen',     'Löwenstrasse 11, 8001 Zürich',
+      'Industriestrasse 7, 8952 Schlieren',     'Birmensdorferstrasse 201, 8003 Zürich',
+      'Winterthurerstrasse 92, 8006 Zürich',    'Albisriederstrasse 5, 8047 Zürich',
+      'Forchstrasse 55, 8032 Zürich',           'Seestrasse 123, 8703 Erlenbach',
+      'Bergstrasse 44, 8810 Horgen',            'Zugerstrasse 18, 8810 Horgen',
+      'Dorfstrasse 3, 8906 Bonstetten',         'Haldenstrasse 27, 8157 Dielsdorf',
+    ];
+
+    const workTypeOpts    = ['["montage"]','["service"]','["reparatur"]','["montage","service"]','["montage","reparatur"]'];
+    const executedOpts    = ['["montage_inkl_kern"]','["montage_exkl_kern"]','["reparatur"]','["wartung_service"]','["montage_inkl_kern","mont_alarm"]'];
+    const orderers        = ['Hans Muster','Anna Leuenberger','Beat Frei','Sandra Brunner'];
+    const contacts        = ['Hausmeister Ruedi','Sekretariat','Herr Keller','Frau Müller'];
+    const arrivals        = ['07:00','08:00','09:00','10:00','13:00','14:00'];
+    const notesPlanerOpts = ['Bitte Ankunftszeit bestätigen.','Parkplatz vorhanden, Zufahrt über Hinterhof.','Schlüssel beim Hauswart abholen.',null,null];
+    const timesFrom       = ['07:00','07:30','08:00','08:30','09:00'];
+    const timesTo         = ['15:00','15:30','16:00','16:30','17:00'];
+
+    const orderDefs = [
+      // geplant (zukünftig, kein Monteur)
+      { status:'geplant',         offset: 3,  withMonteur:false },
+      { status:'geplant',         offset: 5,  withMonteur:false },
+      { status:'geplant',         offset: 7,  withMonteur:false },
+      { status:'geplant',         offset:10,  withMonteur:false },
+      { status:'geplant',         offset:12,  withMonteur:false },
+      { status:'geplant',         offset:14,  withMonteur:false },
+      { status:'geplant',         offset:18,  withMonteur:false },
+      { status:'geplant',         offset:21,  withMonteur:false },
+      // in_bearbeitung (heute/morgen)
+      { status:'in_bearbeitung',  offset: 0,  withMonteur:true  },
+      { status:'in_bearbeitung',  offset: 1,  withMonteur:true  },
+      { status:'in_bearbeitung',  offset: 1,  withMonteur:true  },
+      { status:'in_bearbeitung',  offset: 2,  withMonteur:true  },
+      // abgeschlossen (Vergangenheit)
+      { status:'abgeschlossen',   offset: -1, withMonteur:true  },
+      { status:'abgeschlossen',   offset: -2, withMonteur:true  },
+      { status:'abgeschlossen',   offset: -3, withMonteur:true  },
+      { status:'abgeschlossen',   offset: -5, withMonteur:true  },
+      { status:'abgeschlossen',   offset: -7, withMonteur:true  },
+      { status:'abgeschlossen',   offset: -9, withMonteur:true  },
+      { status:'abgeschlossen',   offset:-12, withMonteur:true  },
+      { status:'abgeschlossen',   offset:-15, withMonteur:true  },
+    ];
+
+    const iOrder = db.prepare(`
+      INSERT INTO orders (
+        order_number, status, sort_order,
+        customer_id, customer_name,
+        installation_address, orderer, on_site_contact,
+        arrival_time, planned_date, latest_date,
+        work_types, notes_planer,
+        executed_work, work_date, work_time_from, work_time_to,
+        technician_name, technician_block,
+        assigned_to, created_by
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    `);
+
+    orderDefs.forEach((def, i) => {
+      const cust    = customers[i % customers.length];
+      const monteur = def.withMonteur ? monteure[i % monteure.length] : null;
+      const planned = dateStr(def.offset);
+      const latest  = dateStr(def.offset + 5);
+      iOrder.run(
+        `H-${1001 + i}`, def.status, i + 1,
+        cust.id, cust.name,
+        installAddresses[i], rnd(orderers), rnd(contacts),
+        rnd(arrivals), planned, latest,
+        rnd(workTypeOpts), rnd(notesPlanerOpts),
+        def.withMonteur ? rnd(executedOpts) : '[]',
+        def.withMonteur ? planned : null,
+        def.withMonteur ? rnd(timesFrom) : null,
+        def.withMonteur ? rnd(timesTo)   : null,
+        def.withMonteur ? monteur.full_name : null,
+        def.withMonteur ? 'A' : null,
+        monteur?.id ?? null,
+        adminId
+      );
+    });
+    console.log('  📋 20 Demo-Montagen erstellt (H-1001 bis H-1020)');
   }
 }
 
