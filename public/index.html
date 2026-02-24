@@ -2,7 +2,10 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0f1117" media="(prefers-color-scheme: dark)">
   <title>Helbling Rapporte</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -33,6 +36,18 @@
 
 <!-- ── App Shell ───────────────────────────────────────────────────────── -->
 <div id="app-shell" class="hidden">
+
+  <!-- Mobile header (phone only) -->
+  <header id="mobile-header">
+    <div class="mh-brand">
+      <span class="mh-logo-badge">HR</span>
+      <span class="mh-page-title" id="mobile-title">Rapporte</span>
+    </div>
+    <button class="mh-avatar" id="mobile-user-btn" title="Passwort ändern">
+      <span id="mobile-user-initial">?</span>
+    </button>
+  </header>
+
   <!-- Sidebar -->
   <aside id="sidebar">
     <div class="logo">

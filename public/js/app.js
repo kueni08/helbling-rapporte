@@ -39,6 +39,13 @@ const App = {
     document.getElementById('nav-role').textContent = UI.roleName(App.state.role);
     document.getElementById('nav-logout').onclick = App.logout;
 
+    // Mobile header user initial + avatar button
+    const initial = (App.state.fullName || '?').charAt(0).toUpperCase();
+    const mobileInitial = document.getElementById('mobile-user-initial');
+    if (mobileInitial) mobileInitial.textContent = initial;
+    const mobileBtn = document.getElementById('mobile-user-btn');
+    if (mobileBtn) mobileBtn.onclick = () => App.navigate('change-password');
+
     App.buildNav();
     App.navigate(App.defaultView());
   },
@@ -91,6 +98,18 @@ const App = {
     document.querySelectorAll('#nav-menu a').forEach(a => {
       a.classList.toggle('active', a.dataset.view === viewId);
     });
+
+    // Update mobile header title
+    const titles = {
+      'monteur-orders':  'Meine Aufträge',
+      'planer-orders':   'Aufträge',
+      'admin-orders':    'Alle Aufträge',
+      'admin-users':     'Benutzer',
+      'admin-settings':  'Einstellungen',
+      'change-password': 'Passwort ändern',
+    };
+    const titleEl = document.getElementById('mobile-title');
+    if (titleEl) titleEl.textContent = titles[viewId] || 'Rapporte';
 
     switch(viewId) {
       case 'monteur-orders':  MonteurViews.renderMyOrders(); break;
