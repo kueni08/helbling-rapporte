@@ -1,6 +1,6 @@
 const router = require('express').Router();
 const bcrypt = require('bcryptjs');
-const { getDb } = require('../db/database');
+const { getDb } = require('../lib/database');
 const { requireLogin } = require('../middleware/auth');
 
 // POST /api/auth/login

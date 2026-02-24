@@ -1,5 +1,5 @@
 const router = require('express').Router();
-const { getDb } = require('../db/database');
+const { getDb } = require('../lib/database');
 const { requireLogin, requireRole } = require('../middleware/auth');
 
 // GET /api/settings/options  – all active options grouped by field_name
