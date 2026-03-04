@@ -73,7 +73,8 @@ const App = {
     }
 
     if (role === 'planer' || role === 'admin') {
-      navItems.push({ id: 'planer-orders', icon: '📋', label: 'Aufträge' });
+      navItems.push({ id: 'planer-orders',   icon: '📋', label: 'Aufträge' });
+      navItems.push({ id: 'planer-anfragen', icon: '📩', label: 'Kundenanfragen' });
     }
 
     if (role === 'admin') {
@@ -101,23 +102,25 @@ const App = {
 
     // Update mobile header title
     const titles = {
-      'monteur-orders':  'Meine Aufträge',
-      'planer-orders':   'Aufträge',
-      'admin-orders':    'Alle Aufträge',
-      'admin-users':     'Benutzer',
-      'admin-settings':  'Einstellungen',
-      'change-password': 'Passwort ändern',
+      'monteur-orders':   'Meine Aufträge',
+      'planer-orders':    'Aufträge',
+      'planer-anfragen':  'Kundenanfragen',
+      'admin-orders':     'Alle Aufträge',
+      'admin-users':      'Benutzer',
+      'admin-settings':   'Einstellungen',
+      'change-password':  'Passwort ändern',
     };
     const titleEl = document.getElementById('mobile-title');
     if (titleEl) titleEl.textContent = titles[viewId] || 'Rapporte';
 
     switch(viewId) {
-      case 'monteur-orders':  MonteurViews.renderMyOrders(); break;
-      case 'planer-orders':   PlanerViews.renderOrders(); break;
-      case 'admin-orders':    PlanerViews.renderOrders(); break;
-      case 'admin-users':     AdminViews.renderUsers(); break;
-      case 'admin-settings':  AdminViews.renderSettings(); break;
-      case 'change-password': App.renderChangePassword(); break;
+      case 'monteur-orders':   MonteurViews.renderMyOrders(); break;
+      case 'planer-orders':    PlanerViews.renderOrders(); break;
+      case 'planer-anfragen':  PlanerViews.renderAnfragen(); break;
+      case 'admin-orders':     PlanerViews.renderOrders(); break;
+      case 'admin-users':      AdminViews.renderUsers(); break;
+      case 'admin-settings':   AdminViews.renderSettings(); break;
+      case 'change-password':  App.renderChangePassword(); break;
     }
   },
 

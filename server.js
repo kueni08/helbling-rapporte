@@ -39,6 +39,13 @@ app.use('/api/orders',   require('./routes/orders'));
 app.use('/api/settings', require('./routes/settings'));
 app.use('/api/files',    require('./routes/files'));
 app.use('/api/email',    require('./routes/email'));
+app.use('/api/anfrage',  require('./routes/anfrage'));  // public customer form submit
+app.use('/api/anfragen', require('./routes/anfrage'));  // admin list/manage
+
+// Public customer inquiry form
+app.get('/anfrage', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'anfrage.html'));
+});
 
 // Serve the SPA for any non-API route
 app.get('*', (req, res) => {

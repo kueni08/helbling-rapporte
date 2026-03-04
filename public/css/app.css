@@ -253,6 +253,10 @@ tbody td { padding: 12px; font-size: 13px; }
 .badge-orange { background: rgba(251,191,36,.2); color: var(--warn); }
 .badge-red    { background: rgba(248,113,113,.2); color: var(--danger); }
 .badge-gray   { background: var(--bg3); color: var(--text2); }
+/* Anfragen-Status */
+.badge-warn   { background: rgba(251,191,36,.2); color: var(--warn); }
+.badge-info   { background: rgba(74,124,255,.2);  color: var(--accent); }
+.badge-ok     { background: rgba(52,211,153,.2);  color: var(--success); }
 
 /* ── Toast notifications ─────────────────────────────────────────────────── */
 #toast-container {
