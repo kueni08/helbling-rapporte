@@ -513,6 +513,108 @@ const PlanerViews = {
     } catch(e) { UI.toast(e.message,'error'); }
   },
 
+  // ── Kundenanfragen ──────────────────────────────────────────────────────
+  async renderAnfragen() {
+    const el = document.getElementById('main-content');
+    el.innerHTML = `
+      <div class="page-header">
+        <h2>📩 Kundenanfragen</h2>
+        <button class="btn btn-ghost" onclick="PlanerViews.copyAnfrageLink()">🔗 Formular-Link kopieren</button>
+      </div>
+      <div class="card"><div id="anfragen-list">Lade…</div></div>`;
+    await PlanerViews.loadAnfragenTable();
+  },
+
+  async loadAnfragenTable() {
+    let rows;
+    try { rows = await API.getAnfragen(); }
+    catch(e) { document.getElementById('anfragen-list').innerHTML = `<p class="text-danger">${UI.esc(e.message)}</p>`; return; }
+
+    const statusBadge = s => ({
+      neu:            '<span class="badge badge-warn">Neu</span>',
+      in_bearbeitung: '<span class="badge badge-info">In Bearbeitung</span>',
+      erledigt:       '<span class="badge badge-ok">Erledigt</span>',
+    }[s] || s);
+
+    const el = document.getElementById('anfragen-list');
+    if (!el) return;
+    el.innerHTML = rows.length ? `<table>
+      <thead><tr>
+        <th>Datum</th><th>Name / Firma</th><th>Ort</th><th>Art</th><th>Termin</th><th>Status</th><th></th>
+      </tr></thead>
+      <tbody>
+      ${rows.map(a => `<tr>
+        <td>${UI.fmtDate(a.created_at?.split('T')[0] || a.created_at?.substring(0,10))}</td>
+        <td>
+          <strong>${UI.esc(a.vorname)} ${UI.esc(a.nachname)}</strong>
+          ${a.firma ? `<br><span class="text-muted text-sm">${UI.esc(a.firma)}</span>` : ''}
+        </td>
+        <td>${UI.esc(a.plz)} ${UI.esc(a.ort)}</td>
+        <td>${UI.esc(a.art_der_arbeit || '–')}</td>
+        <td>${a.wunschtermin ? UI.fmtDate(a.wunschtermin) : '–'}</td>
+        <td>${statusBadge(a.status)}</td>
+        <td class="text-right" style="white-space:nowrap">
+          <button class="btn btn-ghost btn-sm" onclick="PlanerViews.renderAnfrageDetail(${a.id})">Ansicht</button>
+          ${a.status !== 'erledigt' ? `<button class="btn btn-primary btn-sm" onclick="PlanerViews.doConvert(${a.id})">→ Auftrag</button>` : `<span class="text-muted text-sm">Auftrag erstellt</span>`}
+        </td>
+      </tr>`).join('')}
+      </tbody></table>` : '<p class="text-muted text-sm">Noch keine Anfragen eingegangen.</p>';
+  },
+
+  async renderAnfrageDetail(id) {
+    let a;
+    try { a = await API.getAnfrage(id); }
+    catch(e) { UI.toast(e.message, 'error'); return; }
+
+    const fv = v => v ? UI.esc(String(v)) : '<span class="text-muted">–</span>';
+    const yn = v => v ? 'Ja' : 'Nein';
+
+    UI.modal(`Anfrage von ${a.vorname} ${a.nachname}`,
+      `<div style="max-height:60vh;overflow-y:auto">
+        <table class="detail-table" style="width:100%;border-collapse:collapse;font-size:13px">
+          <tr><td colspan="2" style="padding:6px 0 2px;font-weight:700;color:var(--accent);font-size:11px;text-transform:uppercase;letter-spacing:.06em">Kontaktdaten</td></tr>
+          <tr><td style="width:160px;color:var(--text2);padding:4px 0">Firma</td><td>${fv(a.firma)}</td></tr>
+          <tr><td style="color:var(--text2);padding:4px 0">Name</td><td>${fv(a.vorname)} ${fv(a.nachname)}</td></tr>
+          <tr><td style="color:var(--text2);padding:4px 0">E-Mail</td><td><a href="mailto:${UI.esc(a.email)}">${fv(a.email)}</a></td></tr>
+          <tr><td style="color:var(--text2);padding:4px 0">Telefon</td><td><a href="tel:${UI.esc(a.telefon)}">${fv(a.telefon)}</a></td></tr>
+          <tr><td colspan="2" style="padding:12px 0 2px;font-weight:700;color:var(--accent);font-size:11px;text-transform:uppercase;letter-spacing:.06em">Montageadresse</td></tr>
+          <tr><td style="color:var(--text2);padding:4px 0">Adresse</td><td>${fv(a.strasse)}, ${fv(a.plz)} ${fv(a.ort)}</td></tr>
+          <tr><td colspan="2" style="padding:12px 0 2px;font-weight:700;color:var(--accent);font-size:11px;text-transform:uppercase;letter-spacing:.06em">Objekt & Sibox</td></tr>
+          <tr><td style="color:var(--text2);padding:4px 0">Objektart</td><td>${fv(a.objektart)}</td></tr>
+          <tr><td style="color:var(--text2);padding:4px 0">Art der Arbeit</td><td>${fv(a.art_der_arbeit)}</td></tr>
+          <tr><td style="color:var(--text2);padding:4px 0">Anzahl Türen</td><td>${fv(a.anzahl_tueren)}</td></tr>
+          <tr><td style="color:var(--text2);padding:4px 0">Zylinder (ca.)</td><td>${fv(a.anzahl_zylinder)}</td></tr>
+          <tr><td style="color:var(--text2);padding:4px 0">Schlüssel (ca.)</td><td>${fv(a.anzahl_schluessel)}</td></tr>
+          <tr><td style="color:var(--text2);padding:4px 0">Bestehendes System</td><td>${yn(a.bestehendes_system)}</td></tr>
+          <tr><td colspan="2" style="padding:12px 0 2px;font-weight:700;color:var(--accent);font-size:11px;text-transform:uppercase;letter-spacing:.06em">Terminwunsch</td></tr>
+          <tr><td style="color:var(--text2);padding:4px 0">Wunschtermin</td><td>${a.wunschtermin ? UI.fmtDate(a.wunschtermin) : '–'}</td></tr>
+          <tr><td style="color:var(--text2);padding:4px 0">Alternativtermin</td><td>${a.alternativtermin ? UI.fmtDate(a.alternativtermin) : '–'}</td></tr>
+          <tr><td style="color:var(--text2);padding:4px 0">Präferenz</td><td>${fv(a.terminpraeferenz)}</td></tr>
+          ${a.bemerkungen ? `<tr><td colspan="2" style="padding:12px 0 2px;font-weight:700;color:var(--accent);font-size:11px;text-transform:uppercase;letter-spacing:.06em">Bemerkungen</td></tr>
+          <tr><td colspan="2" style="padding:4px 0;white-space:pre-wrap">${fv(a.bemerkungen)}</td></tr>` : ''}
+        </table>
+      </div>`,
+      `<button class="btn btn-ghost" onclick="UI.closeModal()">Schliessen</button>
+       ${a.status !== 'erledigt' ? `<button class="btn btn-primary" onclick="UI.closeModal();PlanerViews.doConvert(${a.id})">→ Zu Auftrag konvertieren</button>` : ''}`
+    );
+  },
+
+  async doConvert(id) {
+    if (!await UI.confirm('Anfrage in einen neuen Auftrag umwandeln?')) return;
+    try {
+      const res = await API.convertAnfrage(id);
+      UI.toast(`Auftrag ${res.order_number} erstellt`, 'success', 4000);
+      await PlanerViews.loadAnfragenTable();
+    } catch(e) { UI.toast(e.message, 'error'); }
+  },
+
+  copyAnfrageLink() {
+    const url = `${location.origin}/anfrage`;
+    navigator.clipboard.writeText(url)
+      .then(() => UI.toast('Link kopiert: ' + url, 'success', 4000))
+      .catch(() => UI.toast('Link: ' + url, 'info', 6000));
+  },
+
   // ── Excel Import ────────────────────────────────────────────────────────
   openImport() {
     UI.modal('Excel Import',

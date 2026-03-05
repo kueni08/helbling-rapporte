@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sibox Montage Anfrage – Helbling</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #f4f6fb;
+      --white:   #ffffff;
+      --border:  #d8dde8;
+      --accent:  #1a4fa0;
+      --accent2: #1240880;
+      --text:    #1a1f2e;
+      --text2:   #5a6480;
+      --danger:  #c0392b;
+      --success: #27ae60;
+      --radius:  10px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', system-ui, sans-serif;
+      font-size: 15px;
+      line-height: 1.6;
+      min-height: 100vh;
+      padding-bottom: 60px;
+    }
+
+    /* ── Header ── */
+    .site-header {
+      background: var(--accent);
+      color: #fff;
+      padding: 18px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .site-header .brand { font-size: 20px; font-weight: 700; }
+    .site-header .sub   { font-size: 13px; opacity: .75; }
+
+    /* ── Container ── */
+    .container {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 32px 20px;
+    }
+
+    .intro-card {
+      background: var(--accent);
+      color: #fff;
+      border-radius: var(--radius);
+      padding: 24px 28px;
+      margin-bottom: 28px;
+    }
+    .intro-card h1 { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+    .intro-card p  { font-size: 14px; opacity: .85; line-height: 1.6; }
+
+    /* ── Cards & Sections ── */
+    .card {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px 28px;
+      margin-bottom: 20px;
+    }
+    .card-title {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--accent);
+      margin-bottom: 18px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #e8edf7;
+    }
+
+    /* ── Grid & Fields ── */
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .form-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+    .full { grid-column: 1 / -1; }
+
+    .field { display: flex; flex-direction: column; gap: 5px; }
+    label  { font-size: 13px; font-weight: 600; color: var(--text2); }
+    label .req { color: var(--danger); margin-left: 2px; }
+
+    input[type="text"],
+    input[type="email"],
+    input[type="tel"],
+    input[type="date"],
+    input[type="number"],
+    select,
+    textarea {
+      border: 1.5px solid var(--border);
+      border-radius: 7px;
+      padding: 10px 13px;
+      font-family: inherit;
+      font-size: 14px;
+      color: var(--text);
+      background: #fff;
+      transition: border-color .15s;
+      outline: none;
+      width: 100%;
+    }
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(26,79,160,.12);
+    }
+    textarea { min-height: 100px; resize: vertical; }
+    select   { cursor: pointer; }
+
+    /* ── Radio / Checkbox groups ── */
+    .choice-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 4px;
+    }
+    .choice-item {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      background: #f4f6fb;
+      border: 1.5px solid var(--border);
+      border-radius: 7px;
+      padding: 8px 14px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: border-color .15s, background .15s;
+      user-select: none;
+    }
+    .choice-item:has(input:checked) {
+      border-color: var(--accent);
+      background: #e8edf7;
+      color: var(--accent);
+    }
+    .choice-item input { accent-color: var(--accent); }
+
+    /* ── Submit button ── */
+    .btn-submit {
+      display: block;
+      width: 100%;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius);
+      padding: 15px;
+      font-family: inherit;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background .15s;
+      margin-top: 8px;
+    }
+    .btn-submit:hover { background: #153e80; }
+    .btn-submit:disabled { background: #9baacb; cursor: not-allowed; }
+
+    /* ── Messages ── */
+    .alert {
+      border-radius: var(--radius);
+      padding: 14px 18px;
+      margin-bottom: 20px;
+      font-size: 14px;
+    }
+    .alert-error   { background: #fdecea; border: 1px solid #f5c6c2; color: #922b21; }
+    .alert-success { background: #eafaf1; border: 1px solid #a9dfbf; color: #1e6b3c; }
+    .hidden { display: none !important; }
+
+    /* ── Success Screen ── */
+    #success-screen {
+      text-align: center;
+      padding: 60px 20px;
+    }
+    #success-screen .icon { font-size: 64px; margin-bottom: 20px; }
+    #success-screen h2 { font-size: 24px; margin-bottom: 12px; color: var(--success); }
+    #success-screen p  { color: var(--text2); max-width: 440px; margin: 0 auto; }
+
+    /* ── Footer ── */
+    .form-footer {
+      text-align: center;
+      font-size: 12px;
+      color: var(--text2);
+      margin-top: 28px;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 580px) {
+      .form-grid, .form-grid.cols-3 { grid-template-columns: 1fr; }
+      .card { padding: 18px 16px; }
+    }
+  </style>
+</head>
+<body>
+
+<header class="site-header">
+  <div>
+    <div class="brand">Helbling</div>
+    <div class="sub">Schlüssel- & Sicherheitstechnik</div>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- Intro -->
+  <div class="intro-card">
+    <h1>Sibox Montage Anfrage</h1>
+    <p>Bitte füllen Sie das Formular vollständig aus. Wir melden uns so schnell wie möglich bei Ihnen, um einen Termin zu vereinbaren.</p>
+  </div>
+
+  <!-- Fehlermeldung -->
+  <div id="error-msg" class="alert alert-error hidden"></div>
+
+  <!-- Formular -->
+  <form id="anfrage-form">
+
+    <!-- 1. Kontaktdaten -->
+    <div class="card">
+      <div class="card-title">Kontaktdaten</div>
+      <div class="form-grid">
+        <div class="field full">
+          <label>Firma <span style="font-weight:400;color:var(--text2)">(optional)</span></label>
+          <input type="text" name="firma" placeholder="Muster AG">
+        </div>
+        <div class="field">
+          <label>Vorname <span class="req">*</span></label>
+          <input type="text" name="vorname" required placeholder="Hans">
+        </div>
+        <div class="field">
+          <label>Nachname <span class="req">*</span></label>
+          <input type="text" name="nachname" required placeholder="Muster">
+        </div>
+        <div class="field">
+          <label>E-Mail <span class="req">*</span></label>
+          <input type="email" name="email" required placeholder="hans.muster@beispiel.ch">
+        </div>
+        <div class="field">
+          <label>Telefon <span class="req">*</span></label>
+          <input type="tel" name="telefon" required placeholder="044 123 45 67">
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. Montageadresse -->
+    <div class="card">
+      <div class="card-title">Montageadresse</div>
+      <div class="form-grid">
+        <div class="field full">
+          <label>Strasse und Hausnummer <span class="req">*</span></label>
+          <input type="text" name="strasse" required placeholder="Musterstrasse 12">
+        </div>
+        <div class="field">
+          <label>PLZ <span class="req">*</span></label>
+          <input type="text" name="plz" required placeholder="8000" maxlength="10">
+        </div>
+        <div class="field">
+          <label>Ort <span class="req">*</span></label>
+          <input type="text" name="ort" required placeholder="Zürich">
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. Objekt & Sibox-Details -->
+    <div class="card">
+      <div class="card-title">Objekt & Sibox-Details</div>
+      <div class="form-grid">
+
+        <div class="field full">
+          <label>Objektart</label>
+          <div class="choice-group">
+            <label class="choice-item"><input type="radio" name="objektart" value="Einfamilienhaus"> Einfamilienhaus</label>
+            <label class="choice-item"><input type="radio" name="objektart" value="Mehrfamilienhaus"> Mehrfamilienhaus</label>
+            <label class="choice-item"><input type="radio" name="objektart" value="Gewerbe"> Gewerbe</label>
+            <label class="choice-item"><input type="radio" name="objektart" value="Industrie"> Industrie</label>
+            <label class="choice-item"><input type="radio" name="objektart" value="Öffentlich"> Öffentlich</label>
+            <label class="choice-item"><input type="radio" name="objektart" value="Andere"> Andere</label>
+          </div>
+        </div>
+
+        <div class="field full">
+          <label>Art der Arbeit</label>
+          <div class="choice-group">
+            <label class="choice-item"><input type="radio" name="art_der_arbeit" value="Neuinstallation"> Neuinstallation</label>
+            <label class="choice-item"><input type="radio" name="art_der_arbeit" value="Erweiterung"> Erweiterung</label>
+            <label class="choice-item"><input type="radio" name="art_der_arbeit" value="Reparatur"> Reparatur</label>
+            <label class="choice-item"><input type="radio" name="art_der_arbeit" value="Service/Wartung"> Service / Wartung</label>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Anzahl Türen / Zugangspunkte</label>
+          <input type="number" name="anzahl_tueren" min="1" max="999" placeholder="z.B. 3">
+        </div>
+        <div class="field">
+          <!-- spacer -->
+        </div>
+
+        <div class="field">
+          <label>Anzahl Zylinder (Schätzung)</label>
+          <input type="number" name="anzahl_zylinder" min="1" max="999" placeholder="z.B. 4">
+        </div>
+        <div class="field">
+          <label>Anzahl Schlüssel (Schätzung)</label>
+          <input type="number" name="anzahl_schluessel" min="1" max="999" placeholder="z.B. 6">
+        </div>
+
+        <div class="field full">
+          <label>Bestehendes Sibox-System vorhanden?</label>
+          <div class="choice-group">
+            <label class="choice-item"><input type="radio" name="bestehendes_system" value="1"> Ja</label>
+            <label class="choice-item"><input type="radio" name="bestehendes_system" value="0" checked> Nein</label>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- 4. Terminwunsch -->
+    <div class="card">
+      <div class="card-title">Terminwunsch</div>
+      <div class="form-grid">
+        <div class="field">
+          <label>Wunschtermin</label>
+          <input type="date" name="wunschtermin">
+        </div>
+        <div class="field">
+          <label>Alternativtermin</label>
+          <input type="date" name="alternativtermin">
+        </div>
+        <div class="field full">
+          <label>Terminpräferenz</label>
+          <div class="choice-group">
+            <label class="choice-item"><input type="radio" name="terminpraeferenz" value="Vormittag"> Vormittag</label>
+            <label class="choice-item"><input type="radio" name="terminpraeferenz" value="Nachmittag"> Nachmittag</label>
+            <label class="choice-item"><input type="radio" name="terminpraeferenz" value="Ganzer Tag"> Ganzer Tag</label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. Bemerkungen -->
+    <div class="card">
+      <div class="card-title">Zusätzliche Informationen</div>
+      <div class="field">
+        <label>Bemerkungen / Spezielle Anforderungen</label>
+        <textarea name="bemerkungen" placeholder="Bitte beschreiben Sie Ihre Situation oder spezielle Anforderungen…"></textarea>
+      </div>
+    </div>
+
+    <div class="card" style="background:#f4f6fb">
+      <p style="font-size:13px;color:var(--text2);margin-bottom:16px">
+        Mit dem Absenden der Anfrage stimmen Sie zu, dass Helbling Ihre Kontaktdaten zur Bearbeitung dieser Anfrage verwenden darf.
+        Es gelten unsere Allgemeinen Geschäftsbedingungen.
+      </p>
+      <button type="submit" class="btn-submit" id="submit-btn">Anfrage absenden</button>
+    </div>
+
+  </form>
+
+  <!-- Erfolgs-Bestätigung -->
+  <div id="success-screen" class="hidden">
+    <div class="icon">✅</div>
+    <h2>Vielen Dank für Ihre Anfrage!</h2>
+    <p>Wir haben Ihre Anfrage erhalten und melden uns in Kürze bei Ihnen zur Terminvereinbarung.</p>
+  </div>
+
+  <div class="form-footer">
+    &copy; Helbling Schlüssel- & Sicherheitstechnik
+  </div>
+
+</div><!-- /container -->
+
+<script>
+  document.getElementById('anfrage-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const btn = document.getElementById('submit-btn');
+    const errEl = document.getElementById('error-msg');
+    errEl.classList.add('hidden');
+    btn.disabled = true;
+    btn.textContent = 'Wird gesendet…';
+
+    const fd = new FormData(this);
+    const data = {};
+    for (const [k, v] of fd.entries()) {
+      if (v !== '') data[k] = v;
+    }
+
+    // bestehendes_system als Boolean
+    data.bestehendes_system = data.bestehendes_system === '1';
+
+    try {
+      const res = await fetch('/api/anfrage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Fehler beim Absenden');
+
+      // Formular ausblenden, Bestätigung zeigen
+      document.getElementById('anfrage-form').classList.add('hidden');
+      document.getElementById('success-screen').classList.remove('hidden');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    } catch (err) {
+      errEl.textContent = err.message;
+      errEl.classList.remove('hidden');
+      btn.disabled = false;
+      btn.textContent = 'Anfrage absenden';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  });
+
+  // Mindestzukunft für Datumfelder setzen
+  const today = new Date().toISOString().split('T')[0];
+  document.querySelectorAll('input[type="date"]').forEach(d => d.min = today);
+</script>
+</body>
+</html>

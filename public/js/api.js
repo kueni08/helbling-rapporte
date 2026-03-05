@@ -67,4 +67,11 @@ const API = {
   // Email
   sendEmail:      (d)     => API.post('/api/email/send', d),
   emailStatus:    ()      => API.get('/api/email/config-status'),
+
+  // Kundenanfragen
+  getAnfragen:         ()      => API.get('/api/anfragen'),
+  getAnfrage:          (id)    => API.get(`/api/anfragen/${id}`),
+  setAnfrageStatus:    (id, s) => API.put(`/api/anfragen/${id}/status`, { status: s }),
+  convertAnfrage:      (id)    => API.post(`/api/anfragen/${id}/convert`),
+  deleteAnfrage:       (id)    => API.delete(`/api/anfragen/${id}`),
 };
