@@ -68,10 +68,16 @@ const API = {
   sendEmail:      (d)     => API.post('/api/email/send', d),
   emailStatus:    ()      => API.get('/api/email/config-status'),
 
+  // Settings – Article Import
+  importArticles: (form) => API.upload('/api/settings/articles/import', form),
+
   // Kundenanfragen
-  getAnfragen:         ()      => API.get('/api/anfragen'),
-  getAnfrage:          (id)    => API.get(`/api/anfragen/${id}`),
-  setAnfrageStatus:    (id, s) => API.put(`/api/anfragen/${id}/status`, { status: s }),
-  convertAnfrage:      (id)    => API.post(`/api/anfragen/${id}/convert`),
-  deleteAnfrage:       (id)    => API.delete(`/api/anfragen/${id}`),
+  getAnfragen:         ()         => API.get('/api/anfragen'),
+  getAnfrage:          (id)       => API.get(`/api/anfragen/${id}`),
+  updateAnfrage:       (id, d)    => API.put(`/api/anfragen/${id}`, d),
+  setAnfrageStatus:    (id, s)    => API.put(`/api/anfragen/${id}/status`, { status: s }),
+  generateAnfrageToken:(id)       => API.post(`/api/anfragen/${id}/generate-token`),
+  linkAnfrageOrder:    (id, oid)  => API.post(`/api/anfragen/${id}/link-order`, { order_id: oid }),
+  convertAnfrage:      (id)       => API.post(`/api/anfragen/${id}/convert`),
+  deleteAnfrage:       (id)       => API.delete(`/api/anfragen/${id}`),
 };

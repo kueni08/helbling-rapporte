@@ -3,22 +3,22 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sibox Montage Anfrage – Helbling</title>
+  <title>Sibox Montage Anfrage – Helbling & Co. AG</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:      #f4f6fb;
+      --bg:      #f0f2f7;
       --white:   #ffffff;
       --border:  #d8dde8;
       --accent:  #1a4fa0;
-      --accent2: #1240880;
       --text:    #1a1f2e;
       --text2:   #5a6480;
       --danger:  #c0392b;
-      --success: #27ae60;
+      --success: #18a058;
+      --warn:    #d48a00;
       --radius:  10px;
     }
 
@@ -32,192 +32,272 @@
       padding-bottom: 60px;
     }
 
-    /* ── Header ── */
+    /* ── Logo Header ── */
     .site-header {
-      background: var(--accent);
-      color: #fff;
-      padding: 18px 24px;
+      background: var(--white);
+      border-bottom: 2px solid #e0e5ef;
+      padding: 12px 24px;
+    }
+    .logo-wrap {
+      max-width: 720px;
+      margin: 0 auto;
       display: flex;
       align-items: center;
+      justify-content: space-between;
       gap: 16px;
+      flex-wrap: wrap;
     }
-    .site-header .brand { font-size: 20px; font-weight: 700; }
-    .site-header .sub   { font-size: 13px; opacity: .75; }
+    .logo-left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .logo-he {
+      width: 52px; height: 52px;
+      background: #1a4fa0;
+      border-radius: 4px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .logo-he svg { width: 38px; height: 38px; }
+    .logo-text .company { font-size: 18px; font-weight: 800; color: var(--text); letter-spacing: -.3px; }
+    .logo-text .address { font-size: 11px; color: var(--text2); line-height: 1.5; margin-top: 1px; }
+    .logo-right {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 4px;
+    }
+    .brand-sibox {
+      font-size: 17px; font-weight: 800; letter-spacing: -.5px;
+    }
+    .brand-sibox .si { color: #cc0000; }
+    .brand-sibox .box { color: #1a1f2e; }
+    .brand-sibox .ch { color: #1a1f2e; font-weight: 400; font-size: 14px; }
+    .brand-sibox sup { font-size: 9px; vertical-align: super; }
+    .brand-facette {
+      font-size: 12px; font-weight: 700; letter-spacing: .5px; color: #1a1f2e;
+    }
+    .brand-facette .star { color: #cc0000; font-size: 13px; }
 
     /* ── Container ── */
     .container {
       max-width: 720px;
       margin: 0 auto;
-      padding: 32px 20px;
+      padding: 28px 20px;
     }
+
+    /* ── Status Banner ── */
+    .status-banner {
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+    }
+    .status-banner .icon { font-size: 24px; flex-shrink: 0; }
+    .status-banner h3 { font-size: 15px; font-weight: 700; margin-bottom: 3px; }
+    .status-banner p { font-size: 13px; opacity: .85; }
+    .status-banner.versendet   { background: #e8edf7; border: 1px solid #b8c8e8; color: var(--accent); }
+    .status-banner.ausgefüllt  { background: #fff8e6; border: 1px solid #f0cc80; color: #7a4800; }
+    .status-banner.erledigt    { background: #eafaf1; border: 1px solid #a9dfbf; color: #1e6b3c; }
+    .status-banner.geplant     { background: #eafaf1; border: 1px solid #a9dfbf; color: #1e6b3c; }
 
     .intro-card {
       background: var(--accent);
       color: #fff;
       border-radius: var(--radius);
-      padding: 24px 28px;
-      margin-bottom: 28px;
+      padding: 22px 28px;
+      margin-bottom: 24px;
     }
-    .intro-card h1 { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
-    .intro-card p  { font-size: 14px; opacity: .85; line-height: 1.6; }
+    .intro-card h1 { font-size: 20px; font-weight: 700; margin-bottom: 6px; }
+    .intro-card p  { font-size: 13px; opacity: .88; line-height: 1.6; }
 
     /* ── Cards & Sections ── */
     .card {
       background: var(--white);
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: 24px 28px;
-      margin-bottom: 20px;
+      padding: 22px 26px;
+      margin-bottom: 18px;
     }
     .card-title {
-      font-size: 13px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: .06em;
+      font-size: 12px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .07em;
       color: var(--accent);
-      margin-bottom: 18px;
-      padding-bottom: 10px;
+      margin-bottom: 16px; padding-bottom: 10px;
       border-bottom: 2px solid #e8edf7;
     }
 
     /* ── Grid & Fields ── */
-    .form-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
-    }
-    .form-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
     .full { grid-column: 1 / -1; }
 
     .field { display: flex; flex-direction: column; gap: 5px; }
-    label  { font-size: 13px; font-weight: 600; color: var(--text2); }
+    label  { font-size: 12px; font-weight: 600; color: var(--text2); }
     label .req { color: var(--danger); margin-left: 2px; }
 
-    input[type="text"],
-    input[type="email"],
-    input[type="tel"],
-    input[type="date"],
-    input[type="number"],
-    select,
-    textarea {
+    input[type="text"], input[type="email"], input[type="tel"],
+    input[type="date"], input[type="number"], select, textarea {
       border: 1.5px solid var(--border);
       border-radius: 7px;
       padding: 10px 13px;
-      font-family: inherit;
-      font-size: 14px;
-      color: var(--text);
-      background: #fff;
+      font-family: inherit; font-size: 14px;
+      color: var(--text); background: #fff;
       transition: border-color .15s;
-      outline: none;
-      width: 100%;
+      outline: none; width: 100%;
     }
     input:focus, select:focus, textarea:focus {
       border-color: var(--accent);
-      box-shadow: 0 0 0 3px rgba(26,79,160,.12);
+      box-shadow: 0 0 0 3px rgba(26,79,160,.1);
     }
-    textarea { min-height: 100px; resize: vertical; }
-    select   { cursor: pointer; }
+    textarea { min-height: 90px; resize: vertical; }
 
-    /* ── Radio / Checkbox groups ── */
-    .choice-group {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 4px;
-    }
+    /* ── Choice groups ── */
+    .choice-group { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
     .choice-item {
-      display: flex;
-      align-items: center;
-      gap: 7px;
-      background: #f4f6fb;
-      border: 1.5px solid var(--border);
-      border-radius: 7px;
-      padding: 8px 14px;
-      cursor: pointer;
-      font-size: 13px;
-      font-weight: 500;
+      display: flex; align-items: center; gap: 7px;
+      background: var(--bg); border: 1.5px solid var(--border);
+      border-radius: 7px; padding: 7px 13px;
+      cursor: pointer; font-size: 13px; font-weight: 500;
       transition: border-color .15s, background .15s;
       user-select: none;
     }
     .choice-item:has(input:checked) {
-      border-color: var(--accent);
-      background: #e8edf7;
-      color: var(--accent);
+      border-color: var(--accent); background: #e8edf7; color: var(--accent);
     }
     .choice-item input { accent-color: var(--accent); }
 
-    /* ── Submit button ── */
-    .btn-submit {
-      display: block;
-      width: 100%;
-      background: var(--accent);
-      color: #fff;
-      border: none;
-      border-radius: var(--radius);
-      padding: 15px;
-      font-family: inherit;
-      font-size: 16px;
-      font-weight: 700;
+    /* ── File upload zone ── */
+    .upload-zone {
+      border: 2px dashed var(--border);
+      border-radius: 9px;
+      padding: 24px 20px;
+      text-align: center;
       cursor: pointer;
-      transition: background .15s;
-      margin-top: 8px;
+      transition: border-color .15s, background .15s;
+      background: var(--bg);
+    }
+    .upload-zone:hover, .upload-zone.drag-over {
+      border-color: var(--accent);
+      background: rgba(26,79,160,.04);
+    }
+    .upload-zone .upload-icon { font-size: 28px; margin-bottom: 8px; }
+    .upload-zone p { font-size: 13px; color: var(--text2); }
+    .upload-zone strong { color: var(--accent); }
+    .upload-zone input[type="file"] { display: none; }
+    .file-list-preview { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+    .file-preview-item {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--white); border: 1px solid var(--border);
+      border-radius: 6px; padding: 8px 12px;
+      font-size: 12px;
+    }
+    .file-preview-item .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .file-preview-item .size { color: var(--text2); flex-shrink: 0; }
+    .file-preview-item .remove-btn {
+      background: none; border: none; cursor: pointer;
+      color: var(--danger); font-size: 14px; padding: 0 2px;
+    }
+
+    /* ── Submit ── */
+    .btn-submit {
+      display: block; width: 100%;
+      background: var(--accent); color: #fff;
+      border: none; border-radius: var(--radius);
+      padding: 14px; font-family: inherit;
+      font-size: 16px; font-weight: 700;
+      cursor: pointer; transition: background .15s; margin-top: 8px;
     }
     .btn-submit:hover { background: #153e80; }
     .btn-submit:disabled { background: #9baacb; cursor: not-allowed; }
+    .btn-secondary {
+      display: inline-block;
+      background: var(--bg); color: var(--text);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 20px; font-family: inherit;
+      font-size: 14px; font-weight: 600;
+      cursor: pointer; margin-top: 8px; margin-right: 8px;
+      transition: border-color .15s;
+    }
+    .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
 
     /* ── Messages ── */
-    .alert {
-      border-radius: var(--radius);
-      padding: 14px 18px;
-      margin-bottom: 20px;
-      font-size: 14px;
-    }
+    .alert { border-radius: var(--radius); padding: 12px 16px; margin-bottom: 18px; font-size: 14px; }
     .alert-error   { background: #fdecea; border: 1px solid #f5c6c2; color: #922b21; }
     .alert-success { background: #eafaf1; border: 1px solid #a9dfbf; color: #1e6b3c; }
     .hidden { display: none !important; }
 
     /* ── Success Screen ── */
     #success-screen {
-      text-align: center;
-      padding: 60px 20px;
+      text-align: center; padding: 50px 20px;
     }
-    #success-screen .icon { font-size: 64px; margin-bottom: 20px; }
-    #success-screen h2 { font-size: 24px; margin-bottom: 12px; color: var(--success); }
-    #success-screen p  { color: var(--text2); max-width: 440px; margin: 0 auto; }
+    #success-screen .icon { font-size: 56px; margin-bottom: 16px; }
+    #success-screen h2 { font-size: 22px; margin-bottom: 10px; color: var(--success); }
+    #success-screen p { color: var(--text2); max-width: 420px; margin: 0 auto 12px; }
+    .token-link-box {
+      background: var(--bg); border: 1.5px solid var(--border);
+      border-radius: var(--radius); padding: 14px 18px;
+      margin: 16px auto; max-width: 500px;
+      text-align: left;
+    }
+    .token-link-box label { font-size: 11px; font-weight: 700; color: var(--text2); text-transform: uppercase; letter-spacing: .06em; display: block; margin-bottom: 6px; }
+    .token-link-box .link-text { font-size: 12px; color: var(--accent); word-break: break-all; }
 
     /* ── Footer ── */
-    .form-footer {
-      text-align: center;
-      font-size: 12px;
-      color: var(--text2);
-      margin-top: 28px;
-    }
+    .form-footer { text-align: center; font-size: 11px; color: var(--text2); margin-top: 24px; }
 
     /* ── Responsive ── */
     @media (max-width: 580px) {
-      .form-grid, .form-grid.cols-3 { grid-template-columns: 1fr; }
-      .card { padding: 18px 16px; }
+      .form-grid { grid-template-columns: 1fr; }
+      .card { padding: 16px 14px; }
+      .logo-right { display: none; }
     }
   </style>
 </head>
 <body>
 
+<!-- ── Logo Header ── -->
 <header class="site-header">
-  <div>
-    <div class="brand">Helbling</div>
-    <div class="sub">Schlüssel- & Sicherheitstechnik</div>
+  <div class="logo-wrap">
+    <div class="logo-left">
+      <div class="logo-he">
+        <svg viewBox="0 0 38 38" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <text x="4" y="28" font-family="Arial Black, sans-serif" font-size="26" font-weight="900" fill="white">HE</text>
+        </svg>
+      </div>
+      <div class="logo-text">
+        <div class="company">Helbling &amp; Co. AG</div>
+        <div class="address">
+          Buechstrasse 2 · CH-8645 Jona<br>
+          Tel. 055 220 88 88 · www.helbling.net
+        </div>
+      </div>
+    </div>
+    <div class="logo-right">
+      <div class="brand-sibox">
+        <span class="si">SIBOX</span><sup>®</sup><span class="ch">.ch</span>
+      </div>
+      <div class="brand-facette">
+        FACETTE<span class="star">★</span>STAR<sup style="font-size:8px">®</sup>
+      </div>
+    </div>
   </div>
 </header>
 
 <div class="container">
 
+  <!-- Status-Banner (wird per JS befüllt, wenn Token-Modus) -->
+  <div id="status-banner" class="hidden"></div>
+
   <!-- Intro -->
-  <div class="intro-card">
+  <div class="intro-card" id="intro-card">
     <h1>Sibox Montage Anfrage</h1>
-    <p>Bitte füllen Sie das Formular vollständig aus. Wir melden uns so schnell wie möglich bei Ihnen, um einen Termin zu vereinbaren.</p>
+    <p>Bitte füllen Sie das Formular vollständig aus. Wir melden uns so schnell wie möglich bei Ihnen zur Terminvereinbarung.</p>
   </div>
 
-  <!-- Fehlermeldung -->
   <div id="error-msg" class="alert alert-error hidden"></div>
 
   <!-- Formular -->
@@ -245,7 +325,7 @@
         </div>
         <div class="field">
           <label>Telefon <span class="req">*</span></label>
-          <input type="tel" name="telefon" required placeholder="044 123 45 67">
+          <input type="tel" name="telefon" required placeholder="055 220 88 88">
         </div>
       </div>
     </div>
@@ -260,20 +340,19 @@
         </div>
         <div class="field">
           <label>PLZ <span class="req">*</span></label>
-          <input type="text" name="plz" required placeholder="8000" maxlength="10">
+          <input type="text" name="plz" required placeholder="8645" maxlength="10">
         </div>
         <div class="field">
           <label>Ort <span class="req">*</span></label>
-          <input type="text" name="ort" required placeholder="Zürich">
+          <input type="text" name="ort" required placeholder="Jona">
         </div>
       </div>
     </div>
 
     <!-- 3. Objekt & Sibox-Details -->
     <div class="card">
-      <div class="card-title">Objekt & Sibox-Details</div>
+      <div class="card-title">Objekt &amp; Sibox-Details</div>
       <div class="form-grid">
-
         <div class="field full">
           <label>Objektart</label>
           <div class="choice-group">
@@ -285,7 +364,6 @@
             <label class="choice-item"><input type="radio" name="objektart" value="Andere"> Andere</label>
           </div>
         </div>
-
         <div class="field full">
           <label>Art der Arbeit</label>
           <div class="choice-group">
@@ -295,15 +373,11 @@
             <label class="choice-item"><input type="radio" name="art_der_arbeit" value="Service/Wartung"> Service / Wartung</label>
           </div>
         </div>
-
         <div class="field">
           <label>Anzahl Türen / Zugangspunkte</label>
           <input type="number" name="anzahl_tueren" min="1" max="999" placeholder="z.B. 3">
         </div>
-        <div class="field">
-          <!-- spacer -->
-        </div>
-
+        <div class="field"><!-- spacer --></div>
         <div class="field">
           <label>Anzahl Zylinder (Schätzung)</label>
           <input type="number" name="anzahl_zylinder" min="1" max="999" placeholder="z.B. 4">
@@ -312,7 +386,6 @@
           <label>Anzahl Schlüssel (Schätzung)</label>
           <input type="number" name="anzahl_schluessel" min="1" max="999" placeholder="z.B. 6">
         </div>
-
         <div class="field full">
           <label>Bestehendes Sibox-System vorhanden?</label>
           <div class="choice-group">
@@ -320,7 +393,6 @@
             <label class="choice-item"><input type="radio" name="bestehendes_system" value="0" checked> Nein</label>
           </div>
         </div>
-
       </div>
     </div>
 
@@ -356,9 +428,25 @@
       </div>
     </div>
 
-    <div class="card" style="background:#f4f6fb">
-      <p style="font-size:13px;color:var(--text2);margin-bottom:16px">
-        Mit dem Absenden der Anfrage stimmen Sie zu, dass Helbling Ihre Kontaktdaten zur Bearbeitung dieser Anfrage verwenden darf.
+    <!-- 6. Dateianhänge -->
+    <div class="card">
+      <div class="card-title">Dokumente &amp; Fotos (optional)</div>
+      <p style="font-size:13px;color:var(--text2);margin-bottom:14px">
+        Sie können Grundrisse, Fotos oder andere Dokumente anhängen (max. 10 Dateien, je max. 20 MB).
+      </p>
+      <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()">
+        <div class="upload-icon">📎</div>
+        <p>Dateien hier ablegen oder <strong>klicken zum Auswählen</strong></p>
+        <p style="font-size:11px;margin-top:4px">PDF, Bilder, Word, Excel</p>
+        <input type="file" id="file-input" multiple accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.xlsx,.xls,.doc,.docx">
+      </div>
+      <div class="file-list-preview" id="file-list-preview"></div>
+    </div>
+
+    <!-- 7. Submit -->
+    <div class="card" style="background:var(--bg)">
+      <p style="font-size:12px;color:var(--text2);margin-bottom:14px">
+        Mit dem Absenden stimmen Sie zu, dass Helbling &amp; Co. AG Ihre Kontaktdaten zur Bearbeitung dieser Anfrage verwenden darf.
         Es gelten unsere Allgemeinen Geschäftsbedingungen.
       </p>
       <button type="submit" class="btn-submit" id="submit-btn">Anfrage absenden</button>
@@ -371,15 +459,202 @@
     <div class="icon">✅</div>
     <h2>Vielen Dank für Ihre Anfrage!</h2>
     <p>Wir haben Ihre Anfrage erhalten und melden uns in Kürze bei Ihnen zur Terminvereinbarung.</p>
+    <p style="margin-top:8px">Über den folgenden Link können Sie Ihre Anfrage jederzeit wieder aufrufen und bearbeiten:</p>
+    <div class="token-link-box" id="token-link-box" style="display:none">
+      <label>Ihr persönlicher Formular-Link</label>
+      <div class="link-text" id="token-link-text"></div>
+      <button onclick="copyTokenLink()" style="margin-top:8px;background:none;border:1px solid var(--border);border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;color:var(--accent)">🔗 Link kopieren</button>
+    </div>
   </div>
 
   <div class="form-footer">
-    &copy; Helbling Schlüssel- & Sicherheitstechnik
+    &copy; Helbling &amp; Co. AG · Buechstrasse 2 · CH-8645 Jona · www.helbling.net
   </div>
 
 </div><!-- /container -->
 
 <script>
+  // ── Token detection ──────────────────────────────────────────────────────
+  const pathParts = window.location.pathname.split('/');
+  const tokenIdx = pathParts.indexOf('f');
+  const TOKEN = tokenIdx !== -1 ? pathParts[tokenIdx + 1] : null;
+  let existingInquiry = null;
+
+  function fmtDate(s) {
+    if (!s) return '';
+    const d = new Date(s + 'T12:00:00');
+    return d.toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  }
+
+  function fmtBytes(b) {
+    if (b < 1024) return b + ' B';
+    if (b < 1024*1024) return (b/1024).toFixed(1) + ' KB';
+    return (b/1024/1024).toFixed(1) + ' MB';
+  }
+
+  // ── File Upload Handling ─────────────────────────────────────────────────
+  const fileInput = document.getElementById('file-input');
+  const fileListEl = document.getElementById('file-list-preview');
+  const uploadZone = document.getElementById('upload-zone');
+  let selectedFiles = [];
+
+  fileInput.addEventListener('change', () => {
+    addFiles([...fileInput.files]);
+    fileInput.value = '';
+  });
+
+  uploadZone.addEventListener('dragover', e => {
+    e.preventDefault();
+    uploadZone.classList.add('drag-over');
+  });
+  uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+  uploadZone.addEventListener('drop', e => {
+    e.preventDefault();
+    uploadZone.classList.remove('drag-over');
+    addFiles([...e.dataTransfer.files]);
+  });
+
+  function addFiles(files) {
+    const allowed = ['pdf','jpg','jpeg','png','gif','webp','xlsx','xls','doc','docx'];
+    files.forEach(f => {
+      const ext = f.name.split('.').pop().toLowerCase();
+      if (!allowed.includes(ext)) return;
+      if (selectedFiles.length >= 10) return;
+      selectedFiles.push(f);
+    });
+    renderFileList();
+  }
+
+  function removeFile(i) {
+    selectedFiles.splice(i, 1);
+    renderFileList();
+  }
+
+  function renderFileList() {
+    fileListEl.innerHTML = selectedFiles.map((f, i) => `
+      <div class="file-preview-item">
+        <span>📄</span>
+        <span class="name">${escHtml(f.name)}</span>
+        <span class="size">${fmtBytes(f.size)}</span>
+        <button type="button" class="remove-btn" onclick="removeFile(${i})">✕</button>
+      </div>
+    `).join('');
+  }
+
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ── Token mode: pre-fill form ─────────────────────────────────────────────
+  async function loadTokenForm() {
+    if (!TOKEN) return;
+
+    try {
+      const res = await fetch(`/api/anfrage/token/${TOKEN}`);
+      if (!res.ok) {
+        document.getElementById('error-msg').textContent = 'Formular nicht gefunden oder Link ungültig.';
+        document.getElementById('error-msg').classList.remove('hidden');
+        return;
+      }
+      existingInquiry = await res.json();
+      prefillForm(existingInquiry);
+      showStatusBanner(existingInquiry);
+
+      // Update intro text
+      document.getElementById('intro-card').querySelector('h1').textContent = 'Ihre Anfrage bearbeiten';
+      document.getElementById('intro-card').querySelector('p').textContent =
+        'Sie können Ihre Angaben aktualisieren und erneut absenden.';
+      document.getElementById('submit-btn').textContent = 'Änderungen speichern';
+    } catch(e) {
+      console.error(e);
+    }
+  }
+
+  function prefillForm(data) {
+    const form = document.getElementById('anfrage-form');
+    const set = (name, val) => {
+      const el = form.elements[name];
+      if (!el || val === null || val === undefined) return;
+      if (el.type === 'radio' || el.tagName === 'SELECT') {
+        // find matching radio
+        const radios = form.querySelectorAll(`[name="${name}"]`);
+        radios.forEach(r => { if (String(r.value) === String(val)) r.checked = true; });
+      } else {
+        el.value = val || '';
+      }
+    };
+
+    set('firma', data.firma);
+    set('vorname', data.vorname);
+    set('nachname', data.nachname);
+    set('email', data.email);
+    set('telefon', data.telefon);
+    set('strasse', data.strasse);
+    set('plz', data.plz);
+    set('ort', data.ort);
+    set('objektart', data.objektart);
+    set('art_der_arbeit', data.art_der_arbeit);
+    set('anzahl_tueren', data.anzahl_tueren);
+    set('anzahl_zylinder', data.anzahl_zylinder);
+    set('anzahl_schluessel', data.anzahl_schluessel);
+    set('bestehendes_system', data.bestehendes_system ? '1' : '0');
+    set('wunschtermin', data.wunschtermin);
+    set('alternativtermin', data.alternativtermin);
+    set('terminpraeferenz', data.terminpraeferenz);
+    set('bemerkungen', data.bemerkungen);
+
+    // Show existing attachments
+    if (data.attachments && data.attachments.length > 0) {
+      const listEl = document.getElementById('file-list-preview');
+      listEl.innerHTML = `<p style="font-size:12px;color:var(--text2);margin-bottom:6px">Bereits hochgeladene Dateien:</p>` +
+        data.attachments.map(a => `
+          <div class="file-preview-item">
+            <span>📄</span>
+            <span class="name">${escHtml(a.original_name)}</span>
+            ${a.file_size ? `<span class="size">${fmtBytes(a.file_size)}</span>` : ''}
+          </div>
+        `).join('');
+    }
+  }
+
+  function showStatusBanner(data) {
+    const bannerEl = document.getElementById('status-banner');
+    const statusMap = {
+      neu:         null,
+      versendet:   { icon: '📋', cls: 'versendet', title: 'Formular erhalten', text: 'Wir haben Ihre Anfrage erhalten und bearbeiten Sie.' },
+      'ausgefüllt':{ icon: '✅', cls: 'ausgefüllt', title: 'Formular ausgefüllt', text: 'Vielen Dank. Wir werden uns in Kürze bei Ihnen melden.' },
+      erledigt:    { icon: '✅', cls: 'erledigt', title: 'Anfrage erledigt', text: 'Ihre Anfrage wurde bearbeitet.' },
+    };
+
+    // Check linked order status
+    if (data.orderStatus === 'geplant' && data.orderDate) {
+      bannerEl.innerHTML = `
+        <div class="status-banner geplant">
+          <div class="icon">📅</div>
+          <div>
+            <h3>Montagetermin geplant</h3>
+            <p>Wir haben einen Montagetermin für Sie reserviert: <strong>${fmtDate(data.orderDate)}</strong></p>
+          </div>
+        </div>`;
+      bannerEl.classList.remove('hidden');
+      return;
+    }
+
+    const s = statusMap[data.status];
+    if (!s) return;
+
+    bannerEl.innerHTML = `
+      <div class="status-banner ${s.cls}">
+        <div class="icon">${s.icon}</div>
+        <div>
+          <h3>${s.title}</h3>
+          <p>${s.text}</p>
+        </div>
+      </div>`;
+    bannerEl.classList.remove('hidden');
+  }
+
+  // ── Form Submit ─────────────────────────────────────────────────────────
   document.getElementById('anfrage-form').addEventListener('submit', async function(e) {
     e.preventDefault();
 
@@ -390,40 +665,62 @@
     btn.textContent = 'Wird gesendet…';
 
     const fd = new FormData(this);
-    const data = {};
-    for (const [k, v] of fd.entries()) {
-      if (v !== '') data[k] = v;
-    }
 
-    // bestehendes_system als Boolean
-    data.bestehendes_system = data.bestehendes_system === '1';
+    // Add selected files
+    selectedFiles.forEach(f => fd.append('attachments', f));
 
     try {
-      const res = await fetch('/api/anfrage', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Fehler beim Absenden');
+      let res, json;
+      if (TOKEN) {
+        // Update existing via token
+        res = await fetch(`/api/anfrage/token/${TOKEN}`, { method: 'PUT', body: fd });
+        json = await res.json();
+        if (!res.ok) throw new Error(json.error || 'Fehler beim Speichern');
 
-      // Formular ausblenden, Bestätigung zeigen
-      document.getElementById('anfrage-form').classList.add('hidden');
-      document.getElementById('success-screen').classList.remove('hidden');
+        // Show success
+        document.getElementById('anfrage-form').classList.add('hidden');
+        document.getElementById('success-screen').classList.remove('hidden');
+        document.getElementById('success-screen').querySelector('h2').textContent = 'Änderungen gespeichert!';
+        document.getElementById('success-screen').querySelector('p').textContent =
+          'Ihre Angaben wurden erfolgreich aktualisiert.';
+      } else {
+        // New submission
+        res = await fetch('/api/anfrage', { method: 'POST', body: fd });
+        json = await res.json();
+        if (!res.ok) throw new Error(json.error || 'Fehler beim Absenden');
+
+        // Show token link
+        document.getElementById('anfrage-form').classList.add('hidden');
+        document.getElementById('success-screen').classList.remove('hidden');
+        if (json.token) {
+          const linkUrl = `${window.location.origin}/anfrage/f/${json.token}`;
+          document.getElementById('token-link-box').style.display = '';
+          document.getElementById('token-link-text').textContent = linkUrl;
+          window._tokenLink = linkUrl;
+        }
+      }
+
       window.scrollTo({ top: 0, behavior: 'smooth' });
-
     } catch (err) {
       errEl.textContent = err.message;
       errEl.classList.remove('hidden');
       btn.disabled = false;
-      btn.textContent = 'Anfrage absenden';
+      btn.textContent = TOKEN ? 'Änderungen speichern' : 'Anfrage absenden';
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   });
 
-  // Mindestzukunft für Datumfelder setzen
+  function copyTokenLink() {
+    if (window._tokenLink) {
+      navigator.clipboard.writeText(window._tokenLink).then(() => alert('Link kopiert!'));
+    }
+  }
+
+  // ── Init ─────────────────────────────────────────────────────────────────
   const today = new Date().toISOString().split('T')[0];
   document.querySelectorAll('input[type="date"]').forEach(d => d.min = today);
+
+  loadTokenForm();
 </script>
 </body>
 </html>

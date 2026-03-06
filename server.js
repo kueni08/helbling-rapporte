@@ -42,8 +42,11 @@ app.use('/api/email',    require('./routes/email'));
 app.use('/api/anfrage',  require('./routes/anfrage'));  // public customer form submit
 app.use('/api/anfragen', require('./routes/anfrage'));  // admin list/manage
 
-// Public customer inquiry form
+// Public customer inquiry form (new submission + token-based edit)
 app.get('/anfrage', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'anfrage.html'));
+});
+app.get('/anfrage/f/:token', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'anfrage.html'));
 });
 

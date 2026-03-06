@@ -163,14 +163,16 @@ const AdminViews = {
     const articles = await API.getArticles();
     document.getElementById('settings-content').innerHTML = `
       <div class="card">
-        <div class="card-title">Artikel
+        <div class="card-title" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span style="flex:1">Artikel</span>
+          <button class="btn btn-ghost btn-sm" onclick="AdminViews.openArticleImport()">📥 Excel Import</button>
           <button class="btn btn-primary btn-sm" onclick="AdminViews.openArticleModal()">+ Artikel</button>
         </div>
         <div class="table-wrap"><table>
           <thead><tr><th>Nr.</th><th>Name</th><th>Beschreibung</th><th>Einheit</th><th></th></tr></thead>
           <tbody id="articles-body">
           ${articles.map(a => `<tr>
-            <td>${UI.esc(a.article_number||'–')}</td>
+            <td><code>${UI.esc(a.article_number||'–')}</code></td>
             <td>${UI.esc(a.name)}</td>
             <td>${UI.esc(a.description||'–')}</td>
             <td>${UI.esc(a.unit)}</td>
@@ -182,6 +184,34 @@ const AdminViews = {
           </tbody>
         </table></div>
       </div>`;
+  },
+
+  openArticleImport() {
+    UI.modal('Artikel Excel-Import',
+      `<p class="text-muted text-sm mb-3">
+        Unterstützte Spalten: <code>Artikel-Code</code>, <code>Artikelname</code>, <code>Einheit</code>, <code>Beschreibung</code><br>
+        Bestehende Artikel (gleiche Artikelnummer) werden aktualisiert.
+      </p>
+      <div class="field">
+        <label>Excel-Datei (.xlsx/.xls)</label>
+        <input type="file" id="article-import-file" accept=".xlsx,.xls">
+      </div>`,
+      `<button class="btn btn-ghost" onclick="UI.closeModal()">Abbrechen</button>
+       <button class="btn btn-primary" onclick="AdminViews.runArticleImport()">Importieren</button>`
+    );
+  },
+
+  async runArticleImport() {
+    const file = document.getElementById('article-import-file')?.files[0];
+    if (!file) { UI.toast('Bitte Datei wählen', 'error'); return; }
+    const form = new FormData();
+    form.append('file', file);
+    try {
+      UI.closeModal();
+      const result = await API.importArticles(form);
+      UI.toast(`${result.imported} Artikel importiert${result.skipped ? `, ${result.skipped} übersprungen` : ''}`, 'success', 5000);
+      await AdminViews.showSettingsTab('articles');
+    } catch(e) { UI.toast(e.message, 'error'); }
   },
 
   async openArticleModal(id) {
