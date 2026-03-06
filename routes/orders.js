@@ -224,6 +224,7 @@ router.delete('/:id', requireRole('admin'), (req, res) => {
 });
 
 // POST /api/orders/import  – Excel import (planer + admin)
+// Unterstützt Standard-Format und Lieferschein-Format (LS2603015-x)
 router.post('/import', requireRole('admin', 'planer'), upload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Keine Datei' });
   try {
@@ -234,24 +235,103 @@ router.post('/import', requireRole('admin', 'planer'), upload.single('file'), (r
     const db = getDb();
     const inserted = [];
 
+    // Detect Lieferschein-Format: has column "ID (Lieferschein-Artikel)"
+    const isLS = rows.length > 0 && (
+      'ID (Lieferschein-Artikel)' in rows[0] ||
+      'Artikel-Code (Lieferschein-Artikel)' in rows[0]
+    );
+
     const tx = db.transaction(() => {
-      rows.forEach(row => {
-        const orderNumber = genOrderNumber(db);
-        // Map common Excel column names (flexible)
-        const planned_date = row['Montagedatum'] || row['planned_date'] || row['Datum'] || null;
-        const customer_name = row['Kunde'] || row['customer_name'] || row['Kundenname'] || null;
-        const installation_address = row['Montageadresse'] || row['installation_address'] || null;
-        const orderer = row['Besteller'] || row['orderer'] || null;
-        const notes_planer = row['Bemerkungen'] || row['notes'] || null;
+      if (isLS) {
+        // ── Lieferschein-Format ─────────────────────────────────────────
+        // Group rows by order ID (column "ID")
+        const orderMap = new Map();
+        rows.forEach(row => {
+          const orderId = String(row['ID'] || '').trim();
+          if (!orderId) return;
 
-        const result = db.prepare(`
-          INSERT INTO orders (order_number, status, customer_name, installation_address,
-            orderer, planned_date, notes_planer, created_by, work_types)
-          VALUES (?,?,?,?,?,?,?,?,?)
-        `).run(orderNumber, 'geplant', customer_name, installation_address, orderer, planned_date, notes_planer, req.session.userId, '[]');
+          if (!orderMap.has(orderId)) {
+            // Parse date from Excel serial or string
+            let planned_date = null;
+            const rawDate = row['Datum'];
+            if (rawDate) {
+              if (typeof rawDate === 'number') {
+                // Excel serial date
+                const d = XLSX.SSF.parse_date_code(rawDate);
+                planned_date = `${d.y}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`;
+              } else {
+                const s = String(rawDate).trim();
+                // Try DD.MM.YYYY or YYYY-MM-DD
+                const m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+                if (m) planned_date = `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+                else if (/^\d{4}-\d{2}-\d{2}/.test(s)) planned_date = s.substring(0,10);
+              }
+            }
 
-        inserted.push({ id: result.lastInsertRowid, order_number: orderNumber, customer_name });
-      });
+            orderMap.set(orderId, {
+              source_id: orderId,
+              customer_name: String(row['Unternehmen'] || row['Kunde'] || '').trim() || null,
+              on_site_contact: String(row['Kontaktperson des Unternehmens'] || '').trim() || null,
+              planned_date,
+              notes_planer: String(row['Abteilung'] || '').trim() || null,
+              items: []
+            });
+          }
+
+          // Add article if present
+          const artCode = String(row['Artikel-Code (Lieferschein-Artikel)'] || '').trim();
+          const artName = String(row['Artikelname (Lieferschein-Artikel)'] || '').trim();
+          const qty = parseFloat(row['Anzahl (Lieferschein-Artikel)'] || 1) || 1;
+          const unit = String(row['Einheit (Lieferschein-Artikel)'] || row['Lagermaßeinheit (Lieferschein-Artikel)'] || 'Stk.').trim();
+
+          if (artName || artCode) {
+            orderMap.get(orderId).items.push({
+              name: artName || artCode,
+              article_number: artCode || null,
+              quantity: qty,
+              unit: unit || 'Stk.'
+            });
+          }
+        });
+
+        orderMap.forEach(orderData => {
+          const orderNumber = genOrderNumber(db);
+          const result = db.prepare(`
+            INSERT INTO orders (order_number, status, customer_name, on_site_contact,
+              planned_date, notes_planer, items_table, created_by, work_types)
+            VALUES (?,?,?,?,?,?,?,?,?)
+          `).run(
+            orderNumber, 'geplant',
+            orderData.customer_name,
+            orderData.on_site_contact,
+            orderData.planned_date,
+            orderData.notes_planer ? `Import-Ref: ${orderData.source_id}\n${orderData.notes_planer}` : `Import-Ref: ${orderData.source_id}`,
+            JSON.stringify(orderData.items),
+            req.session.userId,
+            '[]'
+          );
+          inserted.push({ id: result.lastInsertRowid, order_number: orderNumber, customer_name: orderData.customer_name, items: orderData.items.length });
+        });
+
+      } else {
+        // ── Standard-Format ─────────────────────────────────────────────
+        rows.forEach(row => {
+          const orderNumber = genOrderNumber(db);
+          const planned_date = row['Montagedatum'] || row['planned_date'] || row['Datum'] || null;
+          const customer_name = row['Kunde'] || row['customer_name'] || row['Kundenname'] || null;
+          const installation_address = row['Montageadresse'] || row['installation_address'] || null;
+          const orderer = row['Besteller'] || row['orderer'] || null;
+          const notes_planer = row['Bemerkungen'] || row['notes'] || null;
+
+          const result = db.prepare(`
+            INSERT INTO orders (order_number, status, customer_name, installation_address,
+              orderer, planned_date, notes_planer, created_by, work_types)
+            VALUES (?,?,?,?,?,?,?,?,?)
+          `).run(orderNumber, 'geplant', customer_name, installation_address, orderer, planned_date, notes_planer, req.session.userId, '[]');
+
+          inserted.push({ id: result.lastInsertRowid, order_number: orderNumber, customer_name });
+        });
+      }
     });
     tx();
 

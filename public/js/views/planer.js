@@ -38,8 +38,21 @@ const PlanerViews = {
   },
 
   _allOrders: [],
+  _sortCol: 'planned_date',
+  _sortDir: 'asc',
+
   async loadOrdersTable() {
     this._allOrders = await API.getOrders();
+    PlanerViews.applyFilter();
+  },
+
+  toggleSort(col) {
+    if (PlanerViews._sortCol === col) {
+      PlanerViews._sortDir = PlanerViews._sortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+      PlanerViews._sortCol = col;
+      PlanerViews._sortDir = 'asc';
+    }
     PlanerViews.applyFilter();
   },
 
@@ -48,37 +61,121 @@ const PlanerViews = {
     const date   = document.getElementById('filter-date')?.value || '';
     const search = (document.getElementById('filter-search')?.value || '').toLowerCase();
 
-    let orders = PlanerViews._allOrders;
+    let orders = [...PlanerViews._allOrders];
     if (status) orders = orders.filter(o => o.status === status);
     if (date)   orders = orders.filter(o => (o.planned_date||'').startsWith(date));
     if (search) orders = orders.filter(o =>
       (o.order_number||'').toLowerCase().includes(search) ||
       (o.customer_name||o.cust_name||'').toLowerCase().includes(search) ||
-      (o.installation_address||'').toLowerCase().includes(search)
+      (o.installation_address||'').toLowerCase().includes(search) ||
+      (o.assigned_name||'').toLowerCase().includes(search)
     );
+
+    // Sort
+    const col = PlanerViews._sortCol;
+    const dir = PlanerViews._sortDir === 'asc' ? 1 : -1;
+    orders.sort((a, b) => {
+      let va = a[col] || '', vb = b[col] || '';
+      if (typeof va === 'string') va = va.toLowerCase();
+      if (typeof vb === 'string') vb = vb.toLowerCase();
+      return va < vb ? -dir : va > vb ? dir : 0;
+    });
 
     const el = document.getElementById('orders-list');
     if (!el) return;
+
+    const sortTh = (label, colId) => {
+      const isActive = PlanerViews._sortCol === colId;
+      const cls = isActive ? (PlanerViews._sortDir === 'asc' ? 'sortable sort-asc' : 'sortable sort-desc') : 'sortable';
+      return `<th class="${cls}" onclick="PlanerViews.toggleSort('${colId}')">${label}</th>`;
+    };
+
     el.innerHTML = orders.length ? `<table>
       <thead><tr>
-        <th>Nr.</th><th>Kunde</th><th>Montageadresse</th>
-        <th>Montagedatum</th><th>Techniker</th><th>Status</th><th></th>
+        ${sortTh('Nr.','order_number')}
+        ${sortTh('Kunde','customer_name')}
+        ${sortTh('Montageadresse','installation_address')}
+        ${sortTh('Datum','planned_date')}
+        ${sortTh('Techniker','assigned_name')}
+        ${sortTh('Status','status')}
+        <th></th>
       </tr></thead>
       <tbody>
       ${orders.map(o => `<tr>
         <td><code>${UI.esc(o.order_number)}</code></td>
-        <td>${UI.esc(o.customer_name || o.cust_name || '–')}</td>
-        <td>${UI.esc(o.installation_address || '–')}</td>
-        <td>${UI.fmtDate(o.planned_date)}</td>
+        <td class="inline-edit-cell" onclick="PlanerViews.inlineEdit(event,${o.id},'customer_name','${UI.esc(o.customer_name||o.cust_name||'')}')">${UI.esc(o.customer_name || o.cust_name || '–')}</td>
+        <td class="inline-edit-cell" onclick="PlanerViews.inlineEdit(event,${o.id},'installation_address','${UI.esc(o.installation_address||'')}')">${UI.esc(o.installation_address || '–')}</td>
+        <td class="inline-edit-cell" onclick="PlanerViews.inlineEdit(event,${o.id},'planned_date','${UI.esc(o.planned_date||'')}','date')">${UI.fmtDate(o.planned_date)}</td>
         <td>${UI.esc(o.assigned_name || '–')}</td>
-        <td>${UI.statusBadge(o.status)}</td>
-        <td class="text-right">
+        <td class="inline-edit-cell" onclick="PlanerViews.inlineEditStatus(event,${o.id},'${o.status}')">${UI.statusBadge(o.status)}</td>
+        <td class="text-right" style="white-space:nowrap">
           <button class="btn btn-ghost btn-sm" onclick="PlanerViews.renderOrderDetail(${o.id})">Ansicht</button>
-          <button class="btn btn-ghost btn-sm" onclick="PlanerViews.renderOrderForm(${o.id})">Bearbeiten</button>
+          <button class="btn btn-ghost btn-sm" onclick="PlanerViews.renderOrderForm(${o.id})">Bearb.</button>
           <button class="btn btn-danger btn-sm" onclick="PlanerViews.deleteOrder(${o.id})">✕</button>
         </td>
       </tr>`).join('')}
       </tbody></table>` : '<p class="text-muted text-sm">Keine Aufträge gefunden.</p>';
+  },
+
+  // ── Inline Editing ──────────────────────────────────────────────────────
+  async inlineEdit(e, orderId, field, currentVal, inputType = 'text') {
+    e.stopPropagation();
+    const td = e.currentTarget;
+    if (td.querySelector('.inline-edit-input')) return; // already editing
+
+    const orig = td.innerHTML;
+    td.innerHTML = `<input class="inline-edit-input" type="${inputType}" value="${UI.esc(currentVal)}" id="ie-${orderId}-${field}">`;
+    const inp = td.querySelector('.inline-edit-input');
+    inp.focus();
+    if (inputType === 'text') inp.select();
+
+    const save = async () => {
+      const val = inp.value.trim();
+      try {
+        await API.updateOrder(orderId, { [field]: val });
+        const idx = PlanerViews._allOrders.findIndex(o => o.id === orderId);
+        if (idx >= 0) PlanerViews._allOrders[idx][field] = val;
+        PlanerViews.applyFilter();
+      } catch(err) {
+        td.innerHTML = orig;
+        UI.toast(err.message, 'error');
+      }
+    };
+
+    inp.addEventListener('blur', save);
+    inp.addEventListener('keydown', ev => {
+      if (ev.key === 'Enter') { ev.preventDefault(); inp.blur(); }
+      if (ev.key === 'Escape') { td.innerHTML = orig; }
+    });
+  },
+
+  async inlineEditStatus(e, orderId, currentStatus) {
+    e.stopPropagation();
+    const td = e.currentTarget;
+    if (td.querySelector('select')) return;
+
+    const statuses = ['geplant','in_bearbeitung','abgeschlossen'];
+    td.innerHTML = `<select class="inline-edit-input" style="width:130px">
+      ${statuses.map(s => `<option value="${s}" ${s===currentStatus?'selected':''}>${UI.statusName(s)}</option>`).join('')}
+    </select>`;
+    const sel = td.querySelector('select');
+    sel.focus();
+
+    const save = async () => {
+      const val = sel.value;
+      try {
+        await API.updateOrder(orderId, { status: val });
+        const idx = PlanerViews._allOrders.findIndex(o => o.id === orderId);
+        if (idx >= 0) PlanerViews._allOrders[idx].status = val;
+        PlanerViews.applyFilter();
+      } catch(err) {
+        PlanerViews.applyFilter();
+        UI.toast(err.message, 'error');
+      }
+    };
+
+    sel.addEventListener('change', () => sel.blur());
+    sel.addEventListener('blur', save);
   },
 
   async deleteOrder(id) {
@@ -521,7 +618,7 @@ const PlanerViews = {
         <h2>📩 Kundenanfragen</h2>
         <button class="btn btn-ghost" onclick="PlanerViews.copyAnfrageLink()">🔗 Formular-Link kopieren</button>
       </div>
-      <div class="card"><div id="anfragen-list">Lade…</div></div>`;
+      <div class="card"><div class="table-wrap"><div id="anfragen-list">Lade…</div></div></div>`;
     await PlanerViews.loadAnfragenTable();
   },
 
@@ -530,21 +627,23 @@ const PlanerViews = {
     try { rows = await API.getAnfragen(); }
     catch(e) { document.getElementById('anfragen-list').innerHTML = `<p class="text-danger">${UI.esc(e.message)}</p>`; return; }
 
-    const statusBadge = s => ({
+    const anfrageBadge = s => ({
       neu:            '<span class="badge badge-warn">Neu</span>',
-      in_bearbeitung: '<span class="badge badge-info">In Bearbeitung</span>',
+      versendet:      '<span class="badge badge-info">Versendet</span>',
+      'ausgefüllt':   '<span class="badge badge-orange">Ausgefüllt</span>',
+      in_bearbeitung: '<span class="badge badge-blue">In Bearbeitung</span>',
       erledigt:       '<span class="badge badge-ok">Erledigt</span>',
-    }[s] || s);
+    }[s] || `<span class="badge badge-gray">${s}</span>`);
 
     const el = document.getElementById('anfragen-list');
     if (!el) return;
     el.innerHTML = rows.length ? `<table>
       <thead><tr>
-        <th>Datum</th><th>Name / Firma</th><th>Ort</th><th>Art</th><th>Termin</th><th>Status</th><th></th>
+        <th>Datum</th><th>Name / Firma</th><th>Ort</th><th>Art</th><th>Termin</th><th>Status</th><th>Auftrag</th><th></th>
       </tr></thead>
       <tbody>
       ${rows.map(a => `<tr>
-        <td>${UI.fmtDate(a.created_at?.split('T')[0] || a.created_at?.substring(0,10))}</td>
+        <td style="white-space:nowrap">${UI.fmtDate(a.created_at?.split('T')[0] || a.created_at?.substring(0,10))}</td>
         <td>
           <strong>${UI.esc(a.vorname)} ${UI.esc(a.nachname)}</strong>
           ${a.firma ? `<br><span class="text-muted text-sm">${UI.esc(a.firma)}</span>` : ''}
@@ -552,10 +651,13 @@ const PlanerViews = {
         <td>${UI.esc(a.plz)} ${UI.esc(a.ort)}</td>
         <td>${UI.esc(a.art_der_arbeit || '–')}</td>
         <td>${a.wunschtermin ? UI.fmtDate(a.wunschtermin) : '–'}</td>
-        <td>${statusBadge(a.status)}</td>
+        <td>${anfrageBadge(a.status)}</td>
+        <td>${a.order_number ? `<code>${UI.esc(a.order_number)}</code>${a.order_status ? ' ' + UI.statusBadge(a.order_status) : ''}` : '–'}</td>
         <td class="text-right" style="white-space:nowrap">
           <button class="btn btn-ghost btn-sm" onclick="PlanerViews.renderAnfrageDetail(${a.id})">Ansicht</button>
-          ${a.status !== 'erledigt' ? `<button class="btn btn-primary btn-sm" onclick="PlanerViews.doConvert(${a.id})">→ Auftrag</button>` : `<span class="text-muted text-sm">Auftrag erstellt</span>`}
+          <button class="btn btn-ghost btn-sm" onclick="PlanerViews.editAnfrage(${a.id})">✏️</button>
+          <button class="btn btn-ghost btn-sm" onclick="PlanerViews.sendAnfrageLink(${a.id})" title="Formular-Link generieren & kopieren">🔗</button>
+          ${a.status !== 'erledigt' ? `<button class="btn btn-primary btn-sm" onclick="PlanerViews.doConvert(${a.id})">→ Auftrag</button>` : ''}
         </td>
       </tr>`).join('')}
       </tbody></table>` : '<p class="text-muted text-sm">Noch keine Anfragen eingegangen.</p>';
@@ -569,34 +671,139 @@ const PlanerViews = {
     const fv = v => v ? UI.esc(String(v)) : '<span class="text-muted">–</span>';
     const yn = v => v ? 'Ja' : 'Nein';
 
+    const tokenUrl = a.token ? `${location.origin}/anfrage/f/${a.token}` : null;
+
     UI.modal(`Anfrage von ${a.vorname} ${a.nachname}`,
       `<div style="max-height:60vh;overflow-y:auto">
-        <table class="detail-table" style="width:100%;border-collapse:collapse;font-size:13px">
-          <tr><td colspan="2" style="padding:6px 0 2px;font-weight:700;color:var(--accent);font-size:11px;text-transform:uppercase;letter-spacing:.06em">Kontaktdaten</td></tr>
-          <tr><td style="width:160px;color:var(--text2);padding:4px 0">Firma</td><td>${fv(a.firma)}</td></tr>
-          <tr><td style="color:var(--text2);padding:4px 0">Name</td><td>${fv(a.vorname)} ${fv(a.nachname)}</td></tr>
-          <tr><td style="color:var(--text2);padding:4px 0">E-Mail</td><td><a href="mailto:${UI.esc(a.email)}">${fv(a.email)}</a></td></tr>
-          <tr><td style="color:var(--text2);padding:4px 0">Telefon</td><td><a href="tel:${UI.esc(a.telefon)}">${fv(a.telefon)}</a></td></tr>
-          <tr><td colspan="2" style="padding:12px 0 2px;font-weight:700;color:var(--accent);font-size:11px;text-transform:uppercase;letter-spacing:.06em">Montageadresse</td></tr>
-          <tr><td style="color:var(--text2);padding:4px 0">Adresse</td><td>${fv(a.strasse)}, ${fv(a.plz)} ${fv(a.ort)}</td></tr>
-          <tr><td colspan="2" style="padding:12px 0 2px;font-weight:700;color:var(--accent);font-size:11px;text-transform:uppercase;letter-spacing:.06em">Objekt & Sibox</td></tr>
-          <tr><td style="color:var(--text2);padding:4px 0">Objektart</td><td>${fv(a.objektart)}</td></tr>
-          <tr><td style="color:var(--text2);padding:4px 0">Art der Arbeit</td><td>${fv(a.art_der_arbeit)}</td></tr>
-          <tr><td style="color:var(--text2);padding:4px 0">Anzahl Türen</td><td>${fv(a.anzahl_tueren)}</td></tr>
-          <tr><td style="color:var(--text2);padding:4px 0">Zylinder (ca.)</td><td>${fv(a.anzahl_zylinder)}</td></tr>
-          <tr><td style="color:var(--text2);padding:4px 0">Schlüssel (ca.)</td><td>${fv(a.anzahl_schluessel)}</td></tr>
-          <tr><td style="color:var(--text2);padding:4px 0">Bestehendes System</td><td>${yn(a.bestehendes_system)}</td></tr>
-          <tr><td colspan="2" style="padding:12px 0 2px;font-weight:700;color:var(--accent);font-size:11px;text-transform:uppercase;letter-spacing:.06em">Terminwunsch</td></tr>
-          <tr><td style="color:var(--text2);padding:4px 0">Wunschtermin</td><td>${a.wunschtermin ? UI.fmtDate(a.wunschtermin) : '–'}</td></tr>
-          <tr><td style="color:var(--text2);padding:4px 0">Alternativtermin</td><td>${a.alternativtermin ? UI.fmtDate(a.alternativtermin) : '–'}</td></tr>
-          <tr><td style="color:var(--text2);padding:4px 0">Präferenz</td><td>${fv(a.terminpraeferenz)}</td></tr>
-          ${a.bemerkungen ? `<tr><td colspan="2" style="padding:12px 0 2px;font-weight:700;color:var(--accent);font-size:11px;text-transform:uppercase;letter-spacing:.06em">Bemerkungen</td></tr>
-          <tr><td colspan="2" style="padding:4px 0;white-space:pre-wrap">${fv(a.bemerkungen)}</td></tr>` : ''}
+        ${tokenUrl ? `<div style="background:var(--bg3);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px">
+          <strong style="color:var(--accent)">🔗 Kunden-Link:</strong>
+          <span style="color:var(--text2);word-break:break-all"> ${tokenUrl}</span>
+          <button onclick="navigator.clipboard.writeText('${tokenUrl}').then(()=>UI.toast('Link kopiert','success'))" style="margin-left:8px;background:none;border:1px solid var(--border);border-radius:4px;padding:2px 8px;font-size:11px;cursor:pointer;color:var(--accent)">Kopieren</button>
+        </div>` : ''}
+        ${a.order_number ? `<div style="background:rgba(26,79,160,.08);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px">
+          <strong>Verknüpfter Auftrag:</strong> ${UI.esc(a.order_number)} — ${UI.statusBadge(a.order_status||'')}
+          ${a.order_planned_date ? ` · <strong>Datum:</strong> ${UI.fmtDate(a.order_planned_date)}` : ''}
+        </div>` : ''}
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          ${[
+            ['Kontaktdaten',''],
+            ['Firma', a.firma],
+            ['Name', `${a.vorname} ${a.nachname}`],
+            ['E-Mail', a.email ? `<a href="mailto:${UI.esc(a.email)}">${fv(a.email)}</a>` : '–'],
+            ['Telefon', a.telefon ? `<a href="tel:${UI.esc(a.telefon)}">${fv(a.telefon)}</a>` : '–'],
+            ['Montageadresse',''],
+            ['Adresse', `${a.strasse}, ${a.plz} ${a.ort}`],
+            ['Objekt & Sibox',''],
+            ['Objektart', a.objektart],
+            ['Art der Arbeit', a.art_der_arbeit],
+            ['Anzahl Türen', a.anzahl_tueren],
+            ['Zylinder (ca.)', a.anzahl_zylinder],
+            ['Schlüssel (ca.)', a.anzahl_schluessel],
+            ['Bestehendes System', yn(a.bestehendes_system)],
+            ['Terminwunsch',''],
+            ['Wunschtermin', a.wunschtermin ? UI.fmtDate(a.wunschtermin) : '–'],
+            ['Alternativtermin', a.alternativtermin ? UI.fmtDate(a.alternativtermin) : '–'],
+            ['Präferenz', a.terminpraeferenz],
+            ...(a.bemerkungen ? [['Bemerkungen', a.bemerkungen]] : []),
+          ].map(([l,v]) => v === '' ?
+            `<tr><td colspan="2" style="padding:12px 0 4px;font-weight:700;color:var(--accent);font-size:10px;text-transform:uppercase;letter-spacing:.07em">${l}</td></tr>` :
+            `<tr><td style="width:150px;color:var(--text2);padding:4px 0;font-size:12px">${l}</td><td style="padding:4px 0">${v ? String(v).includes('<') ? v : fv(v) : '<span class="text-muted">–</span>'}</td></tr>`
+          ).join('')}
         </table>
+        ${a.attachments?.length ? `<div style="margin-top:14px"><strong style="font-size:12px;color:var(--text2)">Anhänge</strong>
+          ${a.attachments.map(att => `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px">
+            <span>📄</span>
+            <a href="/api/anfragen/${a.id}/attachment/${att.filename}" target="_blank">${UI.esc(att.original_name)}</a>
+          </div>`).join('')}
+        </div>` : ''}
       </div>`,
       `<button class="btn btn-ghost" onclick="UI.closeModal()">Schliessen</button>
-       ${a.status !== 'erledigt' ? `<button class="btn btn-primary" onclick="UI.closeModal();PlanerViews.doConvert(${a.id})">→ Zu Auftrag konvertieren</button>` : ''}`
+       <button class="btn btn-ghost" onclick="UI.closeModal();PlanerViews.editAnfrage(${a.id})">✏️ Bearbeiten</button>
+       ${a.status !== 'erledigt' ? `<button class="btn btn-primary" onclick="UI.closeModal();PlanerViews.doConvert(${a.id})">→ Zu Auftrag</button>` : ''}`
     );
+  },
+
+  async editAnfrage(id) {
+    let a;
+    try { a = await API.getAnfrage(id); }
+    catch(e) { UI.toast(e.message, 'error'); return; }
+
+    UI.modal(`Anfrage bearbeiten – ${a.vorname} ${a.nachname}`,
+      `<div style="max-height:65vh;overflow-y:auto">
+        <div class="form-grid">
+          <div class="field"><label>Firma</label><input type="text" id="ea-firma" value="${UI.esc(a.firma||'')}"></div>
+          <div class="field"><!-- spacer --></div>
+          <div class="field"><label>Vorname *</label><input type="text" id="ea-vorname" value="${UI.esc(a.vorname||'')}"></div>
+          <div class="field"><label>Nachname *</label><input type="text" id="ea-nachname" value="${UI.esc(a.nachname||'')}"></div>
+          <div class="field"><label>E-Mail *</label><input type="email" id="ea-email" value="${UI.esc(a.email||'')}"></div>
+          <div class="field"><label>Telefon *</label><input type="tel" id="ea-telefon" value="${UI.esc(a.telefon||'')}"></div>
+          <div class="field span-2"><label>Strasse *</label><input type="text" id="ea-strasse" value="${UI.esc(a.strasse||'')}"></div>
+          <div class="field"><label>PLZ *</label><input type="text" id="ea-plz" value="${UI.esc(a.plz||'')}"></div>
+          <div class="field"><label>Ort *</label><input type="text" id="ea-ort" value="${UI.esc(a.ort||'')}"></div>
+          <div class="field"><label>Objektart</label>
+            <select id="ea-objektart">
+              <option value="">–</option>
+              ${['Einfamilienhaus','Mehrfamilienhaus','Gewerbe','Industrie','Öffentlich','Andere'].map(v => `<option ${a.objektart===v?'selected':''}>${v}</option>`).join('')}
+            </select>
+          </div>
+          <div class="field"><label>Art der Arbeit</label>
+            <select id="ea-art">
+              <option value="">–</option>
+              ${['Neuinstallation','Erweiterung','Reparatur','Service/Wartung'].map(v => `<option ${a.art_der_arbeit===v?'selected':''}>${v}</option>`).join('')}
+            </select>
+          </div>
+          <div class="field"><label>Anzahl Türen</label><input type="number" id="ea-tueren" value="${a.anzahl_tueren||''}"></div>
+          <div class="field"><label>Anzahl Zylinder</label><input type="number" id="ea-zylinder" value="${a.anzahl_zylinder||''}"></div>
+          <div class="field"><label>Anzahl Schlüssel</label><input type="number" id="ea-schluessel" value="${a.anzahl_schluessel||''}"></div>
+          <div class="field"><!-- spacer --></div>
+          <div class="field"><label>Wunschtermin</label><input type="date" id="ea-wunsch" value="${UI.esc(a.wunschtermin||'')}"></div>
+          <div class="field"><label>Alternativtermin</label><input type="date" id="ea-alt" value="${UI.esc(a.alternativtermin||'')}"></div>
+          <div class="field span-2"><label>Bemerkungen</label><textarea id="ea-bemerkungen">${UI.esc(a.bemerkungen||'')}</textarea></div>
+        </div>
+      </div>`,
+      `<button class="btn btn-ghost" onclick="UI.closeModal()">Abbrechen</button>
+       <button class="btn btn-primary" onclick="PlanerViews.saveAnfrage(${id})">Speichern</button>`
+    );
+  },
+
+  async saveAnfrage(id) {
+    const g = (s) => document.getElementById(s)?.value?.trim() || null;
+    const data = {
+      firma: g('ea-firma'),
+      vorname: g('ea-vorname'),
+      nachname: g('ea-nachname'),
+      email: g('ea-email'),
+      telefon: g('ea-telefon'),
+      strasse: g('ea-strasse'),
+      plz: g('ea-plz'),
+      ort: g('ea-ort'),
+      objektart: g('ea-objektart'),
+      art_der_arbeit: g('ea-art'),
+      anzahl_tueren: g('ea-tueren') ? parseInt(g('ea-tueren')) : null,
+      anzahl_zylinder: g('ea-zylinder') ? parseInt(g('ea-zylinder')) : null,
+      anzahl_schluessel: g('ea-schluessel') ? parseInt(g('ea-schluessel')) : null,
+      wunschtermin: g('ea-wunsch'),
+      alternativtermin: g('ea-alt'),
+      bemerkungen: g('ea-bemerkungen'),
+    };
+    try {
+      await API.updateAnfrage(id, data);
+      UI.closeModal();
+      UI.toast('Anfrage gespeichert', 'success');
+      await PlanerViews.loadAnfragenTable();
+    } catch(e) { UI.toast(e.message, 'error'); }
+  },
+
+  async sendAnfrageLink(id) {
+    try {
+      const res = await API.generateAnfrageToken(id);
+      const url = res.url || `${location.origin}/anfrage/f/${res.token}`;
+      await navigator.clipboard.writeText(url);
+      UI.toast('Kunden-Link kopiert! Status → Versendet', 'success', 5000);
+      await PlanerViews.loadAnfragenTable();
+    } catch(e) {
+      UI.toast(e.message || 'Fehler beim Generieren des Links', 'error');
+    }
   },
 
   async doConvert(id) {
@@ -617,8 +824,11 @@ const PlanerViews = {
 
   // ── Excel Import ────────────────────────────────────────────────────────
   openImport() {
-    UI.modal('Excel Import',
-      `<p class="text-muted text-sm mb-3">Unterstützte Spalten: <code>Kunde</code>, <code>Montagedatum</code>, <code>Montageadresse</code>, <code>Besteller</code>, <code>Bemerkungen</code></p>
+    UI.modal('Excel Import – Aufträge',
+      `<p class="text-muted text-sm mb-3">
+        <strong>Standard-Format:</strong> Spalten: <code>Kunde</code>, <code>Montagedatum</code>, <code>Montageadresse</code>, <code>Besteller</code>, <code>Bemerkungen</code><br>
+        <strong>Lieferschein-Format:</strong> Spalten: <code>ID</code>, <code>Unternehmen</code>, <code>Datum</code>, <code>Abteilung</code>, <code>Artikel-Code (Lieferschein-Artikel)</code>, <code>Artikelname (Lieferschein-Artikel)</code>, <code>Anzahl (Lieferschein-Artikel)</code>, <code>Einheit (Lieferschein-Artikel)</code>
+      </p>
        <div class="field">
          <label>Excel-Datei (.xlsx/.xls)</label>
          <input type="file" id="import-file" accept=".xlsx,.xls">
@@ -644,7 +854,11 @@ const PlanerViews = {
 };
 
 // ── Extend UI helper ──────────────────────────────────────────────────────
-UI.statusName = s => ({ geplant:'Geplant', in_bearbeitung:'In Bearbeitung', abgeschlossen:'Abgeschlossen', archiviert:'Archiviert' }[s] || s);
+UI.statusName = s => ({
+  geplant:'Geplant', in_bearbeitung:'In Bearbeitung',
+  abgeschlossen:'Abgeschlossen', archiviert:'Archiviert',
+  versendet:'Versendet', 'ausgefüllt':'Ausgefüllt',
+}[s] || s);
 
 UI.toggleSection = function(header) {
   header.classList.toggle('open');

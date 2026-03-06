@@ -1,6 +1,9 @@
 const router = require('express').Router();
 const { getDb } = require('../lib/database');
 const { requireLogin, requireRole } = require('../middleware/auth');
+const XLSX = require('xlsx');
+const multer = require('multer');
+const uploadMem = multer({ storage: multer.memoryStorage() });
 
 // GET /api/settings/options  – all active options grouped by field_name
 router.get('/options', requireLogin, (req, res) => {
@@ -80,6 +83,50 @@ router.put('/articles/:id', requireRole('admin'), (req, res) => {
 router.delete('/articles/:id', requireRole('admin'), (req, res) => {
   getDb().prepare('UPDATE articles SET active = 0 WHERE id = ?').run(req.params.id);
   res.json({ ok: true });
+});
+
+// POST /api/settings/articles/import  – Excel-Import (admin)
+router.post('/articles/import', requireRole('admin'), uploadMem.single('file'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Keine Datei' });
+  try {
+    const wb = XLSX.read(req.file.buffer, { type: 'buffer' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+
+    const db = getDb();
+    let imported = 0, skipped = 0;
+
+    const tx = db.transaction(() => {
+      rows.forEach(row => {
+        const article_number = String(row['Artikel-Code'] || row['Artikelnummer'] || row['article_number'] || '').trim();
+        const name = String(row['Artikelname'] || row['Name'] || row['name'] || '').trim();
+        const unit = String(row['Einheit'] || row['unit'] || 'Stk.').trim() || 'Stk.';
+        const description = String(row['Beschreibung'] || row['description'] || '').trim() || null;
+
+        if (!name) { skipped++; return; }
+
+        // Check if article_number already exists
+        if (article_number) {
+          const existing = db.prepare('SELECT id FROM articles WHERE article_number = ? AND active = 1').get(article_number);
+          if (existing) {
+            db.prepare('UPDATE articles SET name = ?, unit = ?, description = ? WHERE id = ?')
+              .run(name, unit, description, existing.id);
+            imported++;
+            return;
+          }
+        }
+
+        db.prepare('INSERT INTO articles (article_number, name, description, unit) VALUES (?,?,?,?)')
+          .run(article_number || null, name, description, unit);
+        imported++;
+      });
+    });
+    tx();
+
+    res.json({ imported, skipped });
+  } catch (e) {
+    res.status(422).json({ error: `Import-Fehler: ${e.message}` });
+  }
 });
 
 // ── Customers ────────────────────────────────────────────────────────────────
