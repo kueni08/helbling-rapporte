@@ -70,8 +70,10 @@ const API = {
   sendEmail:      (d)     => API.post('/api/email/send', d),
   emailStatus:    ()      => API.get('/api/email/config-status'),
 
-  // Settings – Article Import
+  // Settings – Article Import & SMTP
   importArticles: (form) => API.upload('/api/settings/articles/import', form),
+  getSmtp:        ()     => API.get('/api/settings/smtp'),
+  saveSmtp:       (d)    => API.put('/api/settings/smtp', d),
 
   // Kundenanfragen
   getAnfragen:         ()         => API.get('/api/anfragen'),

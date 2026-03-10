@@ -49,6 +49,7 @@ function formatOrder(o) {
     executed_work:      parseJSON(o.executed_work, []),
     items_table:        parseJSON(o.items_table, []),
     additional_material:parseJSON(o.additional_material, []),
+    extra_material:     parseJSON(o.extra_material, []),
     rings_data:         parseJSON(o.rings_data, {}),
     keys_data:          parseJSON(o.keys_data, {}),
   };
@@ -157,6 +158,7 @@ router.put('/:id', requireLogin, (req, res) => {
     db.prepare(`
       UPDATE orders SET
         executed_work = ?, items_table = ?, additional_material = ?,
+        extra_material = ?, extra_aufwand = ?, extra_argumentation = ?,
         notes_monteur = ?, rings_data = ?, keys_data = ?,
         work_date = ?, work_time_from = ?, work_time_to = ?,
         technician_name = ?, technician_block = ?, signature_data = ?,
@@ -167,6 +169,9 @@ router.put('/:id', requireLogin, (req, res) => {
       JSON.stringify(b.executed_work || []),
       JSON.stringify(b.items_table || []),
       JSON.stringify(b.additional_material || []),
+      JSON.stringify(b.extra_material || []),
+      b.extra_aufwand != null ? parseFloat(b.extra_aufwand) || null : null,
+      b.extra_argumentation || null,
       b.notes_monteur || null,
       JSON.stringify(b.rings_data || {}),
       JSON.stringify(b.keys_data || {}),
@@ -189,6 +194,7 @@ router.put('/:id', requireLogin, (req, res) => {
         arrival_time = ?, planned_date = ?, latest_date = ?,
         work_types = ?, notes_planer = ?, assigned_to = ?, sort_order = ?,
         executed_work = ?, items_table = ?, additional_material = ?,
+        extra_material = ?, extra_aufwand = ?, extra_argumentation = ?,
         notes_monteur = ?, rings_data = ?, keys_data = ?,
         work_date = ?, work_time_from = ?, work_time_to = ?,
         technician_name = ?, technician_block = ?, signature_data = ?,
@@ -213,6 +219,9 @@ router.put('/:id', requireLogin, (req, res) => {
       JSON.stringify(b.executed_work ?? parseJSON(order.executed_work, [])),
       JSON.stringify(b.items_table ?? parseJSON(order.items_table, [])),
       JSON.stringify(b.additional_material ?? parseJSON(order.additional_material, [])),
+      JSON.stringify(b.extra_material ?? parseJSON(order.extra_material, [])),
+      b.extra_aufwand != null ? parseFloat(b.extra_aufwand) || null : order.extra_aufwand,
+      b.extra_argumentation !== undefined ? b.extra_argumentation || null : order.extra_argumentation,
       b.notes_monteur ?? order.notes_monteur,
       JSON.stringify(b.rings_data ?? parseJSON(order.rings_data, {})),
       JSON.stringify(b.keys_data ?? parseJSON(order.keys_data, {})),
@@ -228,6 +237,7 @@ router.put('/:id', requireLogin, (req, res) => {
   }
 
   res.json(formatOrder(db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id)));
+
 });
 
 // PATCH /api/orders/reorder  – update sort_order for monteur day view

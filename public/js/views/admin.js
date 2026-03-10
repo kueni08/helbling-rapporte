@@ -98,10 +98,11 @@ const AdminViews = {
   async renderSettings() {
     const el = document.getElementById('main-content');
     el.innerHTML = `<div class="page-header"><h2>⚙️ Einstellungen</h2></div>
-      <div id="settings-tabs" class="flex gap-2 mb-3">
-        <button class="btn btn-ghost btn-sm active-tab" onclick="AdminViews.showSettingsTab('options')">Auswahlfelder</button>
+      <div id="settings-tabs" class="flex gap-2 mb-3 flex-wrap">
+        <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('options')">Auswahlfelder</button>
         <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('articles')">Artikel</button>
         <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('customers')">Kunden</button>
+        <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('email')">✉️ E-Mail</button>
       </div>
       <div id="settings-content"></div>`;
     await AdminViews.showSettingsTab('options');
@@ -109,10 +110,11 @@ const AdminViews = {
 
   async showSettingsTab(tab) {
     document.querySelectorAll('#settings-tabs .btn').forEach(b => b.classList.remove('btn-primary'));
-    document.querySelectorAll('#settings-tabs .btn')[['options','articles','customers'].indexOf(tab)]?.classList.add('btn-primary');
+    document.querySelectorAll('#settings-tabs .btn')[['options','articles','customers','email'].indexOf(tab)]?.classList.add('btn-primary');
     if (tab === 'options')    await AdminViews.renderOptions();
     if (tab === 'articles')   await AdminViews.renderArticles();
     if (tab === 'customers')  await AdminViews.renderCustomers();
+    if (tab === 'email')      await AdminViews.renderEmailSettings();
   },
 
   async renderOptions() {
@@ -316,5 +318,60 @@ const AdminViews = {
       UI.closeModal(); UI.toast('Kunde gespeichert', 'success');
       await AdminViews.showSettingsTab('customers');
     } catch (e) { UI.toast(e.message, 'error'); }
+  },
+
+  // ── E-Mail / SMTP Einstellungen ──────────────────────────────────────────
+  async renderEmailSettings() {
+    let cfg = {};
+    try { cfg = await API.getSmtp(); } catch(e) {}
+
+    document.getElementById('settings-content').innerHTML = `
+      <div class="card">
+        <div class="card-title">✉️ Outlook / SMTP Einstellungen</div>
+        <p class="text-muted text-sm mb-3">
+          Für Microsoft 365 / Outlook: Host <code>smtp.office365.com</code>, Port <code>587</code>.<br>
+          Passwort wird verschlüsselt gespeichert. Beim Speichern ohne neues Passwort bleibt das bisherige erhalten.
+        </p>
+        <div class="form-grid">
+          <div class="field">
+            <label>SMTP Host</label>
+            <input type="text" id="smtp-host" value="${UI.esc(cfg.host||'smtp.office365.com')}" placeholder="smtp.office365.com">
+          </div>
+          <div class="field">
+            <label>Port</label>
+            <input type="number" id="smtp-port" value="${UI.esc(String(cfg.port||'587'))}" placeholder="587">
+          </div>
+          <div class="field">
+            <label>Benutzername (E-Mail-Adresse)</label>
+            <input type="email" id="smtp-user" value="${UI.esc(cfg.user||'')}" placeholder="name@firma.ch">
+          </div>
+          <div class="field">
+            <label>Passwort ${cfg.pass ? '(gespeichert – leer lassen zum Behalten)' : ''}</label>
+            <input type="password" id="smtp-pass" placeholder="${cfg.pass ? '••••••••' : 'Passwort eingeben'}" autocomplete="new-password">
+          </div>
+          <div class="field span-2">
+            <label>Absender-Adresse (From) – optional, Standard = Benutzername</label>
+            <input type="email" id="smtp-from" value="${UI.esc(cfg.from||'')}" placeholder="rapporte@firma.ch">
+          </div>
+        </div>
+        <div class="flex gap-2 mt-3">
+          <button class="btn btn-primary" onclick="AdminViews.saveSmtpSettings()">Speichern</button>
+        </div>
+      </div>`;
+  },
+
+  async saveSmtpSettings() {
+    const d = {
+      host: document.getElementById('smtp-host').value.trim(),
+      port: document.getElementById('smtp-port').value.trim(),
+      user: document.getElementById('smtp-user').value.trim(),
+      pass: document.getElementById('smtp-pass').value,
+      from: document.getElementById('smtp-from').value.trim(),
+    };
+    try {
+      await API.saveSmtp(d);
+      UI.toast('SMTP-Einstellungen gespeichert', 'success');
+      await AdminViews.renderEmailSettings();
+    } catch(e) { UI.toast(e.message, 'error'); }
   },
 };

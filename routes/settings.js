@@ -129,6 +129,31 @@ router.post('/articles/import', requireRole('admin'), uploadMem.single('file'), 
   }
 });
 
+// ── SMTP / E-Mail Einstellungen ───────────────────────────────────────────────
+router.get('/smtp', requireRole('admin'), (req, res) => {
+  const db = getDb();
+  const get = k => db.prepare('SELECT value FROM settings WHERE key = ?').get(k)?.value;
+  res.json({
+    host: get('smtp_host') || process.env.SMTP_HOST || 'smtp.office365.com',
+    port: get('smtp_port') || process.env.SMTP_PORT || '587',
+    user: get('smtp_user') || process.env.SMTP_USER || '',
+    pass: (get('smtp_pass') || process.env.SMTP_PASS) ? '***' : '',
+    from: get('smtp_from') || '',
+  });
+});
+
+router.put('/smtp', requireRole('admin'), (req, res) => {
+  const db = getDb();
+  const upsert = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
+  const { host, port, user, pass, from } = req.body;
+  if (host !== undefined) upsert.run('smtp_host', host);
+  if (port !== undefined) upsert.run('smtp_port', String(port));
+  if (user !== undefined) upsert.run('smtp_user', user);
+  if (pass && pass !== '***') upsert.run('smtp_pass', pass);
+  if (from !== undefined) upsert.run('smtp_from', from);
+  res.json({ ok: true });
+});
+
 // ── Customers ────────────────────────────────────────────────────────────────
 router.get('/customers', requireLogin, (req, res) => {
   res.json(getDb().prepare('SELECT * FROM customers ORDER BY name').all());

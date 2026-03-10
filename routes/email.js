@@ -7,16 +7,26 @@ const { requireLogin } = require('../middleware/auth');
 
 const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(__dirname, '..', 'uploads');
 
+function getSmtpConfig() {
+  const db = getDb();
+  const get = k => db.prepare('SELECT value FROM settings WHERE key = ?').get(k)?.value;
+  return {
+    host: get('smtp_host') || process.env.SMTP_HOST || 'smtp.office365.com',
+    port: parseInt(get('smtp_port') || process.env.SMTP_PORT || '587'),
+    user: get('smtp_user') || process.env.SMTP_USER,
+    pass: get('smtp_pass') || process.env.SMTP_PASS,
+    from: get('smtp_from') || '',
+  };
+}
+
 function getTransporter() {
+  const cfg = getSmtpConfig();
   return nodemailer.createTransport({
-    host:   process.env.SMTP_HOST   || 'smtp.office365.com',
-    port:   parseInt(process.env.SMTP_PORT || '587'),
-    secure: process.env.SMTP_SECURE === 'true',
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-    tls: { ciphers: 'SSLv3' }
+    host:   cfg.host,
+    port:   cfg.port,
+    secure: cfg.port === 465,
+    auth:   { user: cfg.user, pass: cfg.pass },
+    tls:    { ciphers: 'SSLv3' }
   });
 }
 
@@ -93,8 +103,9 @@ router.post('/send', requireLogin, async (req, res) => {
   const { orderId, to, subject } = req.body;
   if (!orderId || !to) return res.status(400).json({ error: 'orderId und to erforderlich' });
 
-  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-    return res.status(503).json({ error: 'E-Mail nicht konfiguriert (SMTP_USER/SMTP_PASS fehlen in .env)' });
+  const smtpCfg = getSmtpConfig();
+  if (!smtpCfg.user || !smtpCfg.pass) {
+    return res.status(503).json({ error: 'E-Mail nicht konfiguriert – bitte SMTP-Einstellungen in Einstellungen → E-Mail speichern' });
   }
 
   const db = getDb();
@@ -128,7 +139,7 @@ router.post('/send', requireLogin, async (req, res) => {
 
     const transporter = getTransporter();
     await transporter.sendMail({
-      from:    `"Helbling Rapporte" <${process.env.SMTP_USER}>`,
+      from:    `"Helbling Rapporte" <${smtpCfg.from || smtpCfg.user}>`,
       to,
       subject: subject || `Montagerapport ${order.order_number} – ${order.customer_name || ''}`,
       html:    buildHtmlReport(parsedOrder, attachments, []),
@@ -144,10 +155,11 @@ router.post('/send', requireLogin, async (req, res) => {
 
 // GET /api/email/config-status
 router.get('/config-status', requireLogin, (req, res) => {
+  const cfg = getSmtpConfig();
   res.json({
-    configured: !!(process.env.SMTP_USER && process.env.SMTP_PASS),
-    host: process.env.SMTP_HOST || 'smtp.office365.com',
-    user: process.env.SMTP_USER || null
+    configured: !!(cfg.user && cfg.pass),
+    host: cfg.host,
+    user: cfg.user || null
   });
 });
 
