@@ -62,6 +62,13 @@ router.put('/:id', requireRole('admin'), (req, res) => {
   res.json(db.prepare(`SELECT ${FIELDS} FROM users WHERE id = ?`).get(req.params.id));
 });
 
+// DELETE /api/users/inactive  (admin only – permanently delete all inactive users)
+router.delete('/inactive', requireRole('admin'), (req, res) => {
+  const db = getDb();
+  const result = db.prepare('DELETE FROM users WHERE active = 0 AND id != ?').run(req.session.userId);
+  res.json({ ok: true, deleted: result.changes });
+});
+
 // DELETE /api/users/:id  (admin only – soft delete)
 router.delete('/:id', requireRole('admin'), (req, res) => {
   if (parseInt(req.params.id) === req.session.userId) {

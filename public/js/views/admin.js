@@ -6,7 +6,10 @@ const AdminViews = {
     const el = document.getElementById('main-content');
     el.innerHTML = `<div class="page-header">
       <h2>👥 Benutzerverwaltung</h2>
-      <button class="btn btn-primary" onclick="AdminViews.openUserModal()">+ Benutzer erstellen</button>
+      <div class="flex gap-2">
+        <button class="btn btn-danger" onclick="AdminViews.deleteInactiveUsers()">🗑 Inaktive löschen</button>
+        <button class="btn btn-primary" onclick="AdminViews.openUserModal()">+ Benutzer erstellen</button>
+      </div>
     </div><div class="card"><div class="table-wrap"><div id="users-table-body">Lade…</div></div></div>`;
     await AdminViews.loadUsersTable();
   },
@@ -80,6 +83,15 @@ const AdminViews = {
     if (!await UI.confirm('Benutzer wirklich deaktivieren?')) return;
     try { await API.deleteUser(id); UI.toast('Benutzer deaktiviert', 'success'); await AdminViews.loadUsersTable(); }
     catch (e) { UI.toast(e.message, 'error'); }
+  },
+
+  async deleteInactiveUsers() {
+    if (!await UI.confirm('Alle inaktiven Benutzer dauerhaft löschen?')) return;
+    try {
+      const res = await API.deleteInactiveUsers();
+      UI.toast(`${res.deleted} Benutzer gelöscht`, 'success');
+      await AdminViews.loadUsersTable();
+    } catch (e) { UI.toast(e.message, 'error'); }
   },
 
   // ── Multiselect Settings ────────────────────────────────────────────────

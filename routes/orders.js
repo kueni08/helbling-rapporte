@@ -4,6 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const { getDb } = require('../lib/database');
 const { requireLogin, requireRole } = require('../middleware/auth');
+const { v4: uuidv4 } = require('uuid');
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -12,6 +13,28 @@ function genOrderNumber(db) {
   const last = db.prepare(`SELECT order_number FROM orders WHERE order_number LIKE ? ORDER BY id DESC LIMIT 1`).get(`${year}-%`);
   const seq = last ? (parseInt(last.order_number.split('-')[1]) + 1) : 1;
   return `${year}-${String(seq).padStart(4, '0')}`;
+}
+
+// Strip HTML tags from address fields (e.g. <br> → ", ")
+function stripHtml(s) {
+  return String(s || '')
+    .replace(/<br\s*\/?>/gi, ', ')
+    .replace(/<[^>]+>/g, '')
+    .replace(/,\s*,/g, ', ')
+    .replace(/,\s*$/, '')
+    .replace(/^\s*,\s*/, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+// Parse Swiss address "Strasse NR, PLZ ORT" → { strasse, plz, ort }
+function parseAddress(raw) {
+  const addr = stripHtml(raw);
+  if (!addr) return { strasse: '', plz: '', ort: '' };
+  // Look for 4-digit Swiss PLZ
+  const m = addr.match(/(.+?),?\s*(\d{4})\s+([A-ZÄÖÜa-zäöü][^\n,]+)/);
+  if (m) return { strasse: m[1].trim(), plz: m[2], ort: m[3].replace(/,.*$/, '').trim() };
+  return { strasse: addr, plz: '', ort: '' };
 }
 
 function parseJSON(v, fallback) {
@@ -217,10 +240,55 @@ router.patch('/reorder', requireRole('admin', 'planer'), (req, res) => {
   res.json({ ok: true });
 });
 
-// DELETE /api/orders/:id (admin only)
-router.delete('/:id', requireRole('admin'), (req, res) => {
+// DELETE /api/orders/:id (admin + planer)
+router.delete('/:id', requireRole('admin', 'planer'), (req, res) => {
   getDb().prepare("UPDATE orders SET status = 'archiviert' WHERE id = ?").run(req.params.id);
   res.json({ ok: true });
+});
+
+// POST /api/orders/:id/customer-form  – Kunden-Link für Auftrag generieren
+router.post('/:id/customer-form', requireRole('admin', 'planer'), (req, res) => {
+  const db = getDb();
+  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
+  if (!order) return res.status(404).json({ error: 'Auftrag nicht gefunden' });
+
+  // Check if already linked inquiry exists
+  const existing = db.prepare(
+    'SELECT id, token FROM customer_inquiries WHERE linked_order_id = ? OR converted_to_order_id = ? LIMIT 1'
+  ).get(order.id, order.id);
+
+  if (existing && existing.token) {
+    const baseUrl = req.protocol + '://' + req.get('host');
+    return res.json({ ok: true, token: existing.token, url: `${baseUrl}/anfrage/f/${existing.token}`, inquiry_id: existing.id });
+  }
+
+  // Parse customer_name into vorname/nachname
+  const nameParts = (order.customer_name || 'Kunde').trim().split(/\s+/);
+  const vorname = nameParts.length > 1 ? nameParts[0] : '';
+  const nachname = nameParts.length > 1 ? nameParts.slice(1).join(' ') : nameParts[0];
+
+  // Parse installation_address
+  const { strasse, plz, ort } = parseAddress(order.installation_address || '');
+  const token = uuidv4().replace(/-/g, '');
+
+  const result = db.prepare(`
+    INSERT INTO customer_inquiries (
+      token, status,
+      vorname, nachname, email, telefon,
+      strasse, plz, ort,
+      linked_order_id,
+      bemerkungen
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?)
+  `).run(
+    token, 'versendet',
+    vorname, nachname, '', '',
+    strasse || order.installation_address || '', plz || '', ort || '',
+    order.id,
+    `Auftrag: ${order.order_number || order.id}`
+  );
+
+  const baseUrl = req.protocol + '://' + req.get('host');
+  res.json({ ok: true, token, url: `${baseUrl}/anfrage/f/${token}`, inquiry_id: result.lastInsertRowid });
 });
 
 // POST /api/orders/import  – Excel import (planer + admin)
@@ -244,68 +312,85 @@ router.post('/import', requireRole('admin', 'planer'), upload.single('file'), (r
     const tx = db.transaction(() => {
       if (isLS) {
         // ── Lieferschein-Format ─────────────────────────────────────────
-        // Group rows by order ID (column "ID")
-        const orderMap = new Map();
+        // Rows with non-empty ID = new order header (also contains first article)
+        // Rows with empty ID = article continuation rows for the current order
+        const orders = [];
+        let current = null;
+
+        function parseLSDate(rawDate) {
+          if (!rawDate) return null;
+          if (typeof rawDate === 'number') {
+            const d = XLSX.SSF.parse_date_code(rawDate);
+            return `${d.y}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`;
+          }
+          const s = String(rawDate).trim().substring(0, 10);
+          if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+          const m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+          if (m) return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+          return null;
+        }
+
         rows.forEach(row => {
           const orderId = String(row['ID'] || '').trim();
-          if (!orderId) return;
 
-          if (!orderMap.has(orderId)) {
-            // Parse date from Excel serial or string
-            let planned_date = null;
-            const rawDate = row['Datum'];
-            if (rawDate) {
-              if (typeof rawDate === 'number') {
-                // Excel serial date
-                const d = XLSX.SSF.parse_date_code(rawDate);
-                planned_date = `${d.y}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`;
-              } else {
-                const s = String(rawDate).trim();
-                // Try DD.MM.YYYY or YYYY-MM-DD
-                const m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
-                if (m) planned_date = `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
-                else if (/^\d{4}-\d{2}-\d{2}/.test(s)) planned_date = s.substring(0,10);
-              }
-            }
-
-            orderMap.set(orderId, {
+          if (orderId) {
+            // New order header row
+            current = {
               source_id: orderId,
-              customer_name: String(row['Unternehmen'] || row['Kunde'] || '').trim() || null,
-              on_site_contact: String(row['Kontaktperson des Unternehmens'] || '').trim() || null,
-              planned_date,
-              notes_planer: String(row['Abteilung'] || '').trim() || null,
+              // Use "Kundenname" (actual customer name) preferring over "Unternehmen" (Helbling)
+              customer_name: String(row['Kundenname'] || row['Unternehmen'] || row['Kunde'] || '').trim() || null,
+              orderer: String(row['Kontaktperson des Unternehmens'] || '').trim() || null,
+              on_site_contact: String(row['Kontakt'] || '').trim() || null,
+              // Lieferadresse = Montageadresse (strip HTML <br> tags)
+              installation_address: stripHtml(row['Lieferadresse'] || ''),
+              // Rechnungsadresse = Kundenadresse
+              customer_address: stripHtml(row['Rechnungsadresse'] || ''),
+              planned_date: parseLSDate(row['Datum']),
+              abteilung: String(row['Abteilung'] || '').trim(),
               items: []
-            });
+            };
+            orders.push(current);
           }
 
-          // Add article if present
+          if (!current) return; // No header yet, skip
+
+          // Collect article from this row (present in both header and continuation rows)
           const artCode = String(row['Artikel-Code (Lieferschein-Artikel)'] || '').trim();
           const artName = String(row['Artikelname (Lieferschein-Artikel)'] || '').trim();
-          const qty = parseFloat(row['Anzahl (Lieferschein-Artikel)'] || 1) || 1;
-          const unit = String(row['Einheit (Lieferschein-Artikel)'] || row['Lagermaßeinheit (Lieferschein-Artikel)'] || 'Stk.').trim();
+          const qty = parseFloat(String(row['Anzahl (Lieferschein-Artikel)']).replace(',', '.')) || 1;
+          const unit = String(row['Einheit (Lieferschein-Artikel)'] || 'Stk.').trim() || 'Stk.';
 
-          if (artName || artCode) {
-            orderMap.get(orderId).items.push({
+          if (artCode || artName) {
+            current.items.push({
               name: artName || artCode,
               article_number: artCode || null,
               quantity: qty,
-              unit: unit || 'Stk.'
+              unit
             });
           }
         });
 
-        orderMap.forEach(orderData => {
+        orders.forEach(orderData => {
           const orderNumber = genOrderNumber(db);
+          const notesParts = [];
+          if (orderData.source_id) notesParts.push(`Import-Ref: ${orderData.source_id}`);
+          if (orderData.abteilung) notesParts.push(`Abteilung: ${orderData.abteilung}`);
+
           const result = db.prepare(`
-            INSERT INTO orders (order_number, status, customer_name, on_site_contact,
-              planned_date, notes_planer, items_table, created_by, work_types)
-            VALUES (?,?,?,?,?,?,?,?,?)
+            INSERT INTO orders (
+              order_number, status, customer_name, customer_address,
+              installation_address, orderer, on_site_contact,
+              planned_date, notes_planer, items_table, created_by, work_types
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
           `).run(
             orderNumber, 'geplant',
             orderData.customer_name,
-            orderData.on_site_contact,
+            orderData.customer_address || null,
+            orderData.installation_address || null,
+            orderData.orderer || null,
+            orderData.on_site_contact || null,
             orderData.planned_date,
-            orderData.notes_planer ? `Import-Ref: ${orderData.source_id}\n${orderData.notes_planer}` : `Import-Ref: ${orderData.source_id}`,
+            notesParts.join('\n') || null,
             JSON.stringify(orderData.items),
             req.session.userId,
             '[]'
