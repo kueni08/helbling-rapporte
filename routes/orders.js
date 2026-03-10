@@ -161,6 +161,7 @@ router.put('/:id', requireLogin, (req, res) => {
         extra_material = ?, extra_aufwand = ?, extra_argumentation = ?,
         notes_monteur = ?, rings_data = ?, keys_data = ?,
         work_date = ?, work_time_from = ?, work_time_to = ?,
+        travel_time = ?, travel_km = ?,
         technician_name = ?, technician_block = ?, signature_data = ?,
         agb_accepted = ?, status = ?,
         updated_at = datetime('now')
@@ -178,6 +179,8 @@ router.put('/:id', requireLogin, (req, res) => {
       b.work_date || null,
       b.work_time_from || null,
       b.work_time_to || null,
+      b.travel_time != null ? parseFloat(b.travel_time) || null : null,
+      b.travel_km != null ? parseInt(b.travel_km) || null : null,
       b.technician_name || null,
       b.technician_block || null,
       b.signature_data || null,
@@ -197,6 +200,7 @@ router.put('/:id', requireLogin, (req, res) => {
         extra_material = ?, extra_aufwand = ?, extra_argumentation = ?,
         notes_monteur = ?, rings_data = ?, keys_data = ?,
         work_date = ?, work_time_from = ?, work_time_to = ?,
+        travel_time = ?, travel_km = ?,
         technician_name = ?, technician_block = ?, signature_data = ?,
         agb_accepted = ?,
         updated_at = datetime('now')
@@ -228,6 +232,8 @@ router.put('/:id', requireLogin, (req, res) => {
       b.work_date ?? order.work_date,
       b.work_time_from ?? order.work_time_from,
       b.work_time_to ?? order.work_time_to,
+      b.travel_time != null ? parseFloat(b.travel_time) || null : order.travel_time,
+      b.travel_km != null ? parseInt(b.travel_km) || null : order.travel_km,
       b.technician_name ?? order.technician_name,
       b.technician_block ?? order.technician_block,
       b.signature_data ?? order.signature_data,
