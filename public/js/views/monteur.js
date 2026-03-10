@@ -1,10 +1,12 @@
 // ── Monteur Views ────────────────────────────────────────────────────────
 const MonteurViews = {
-  _options: null,
-  _sigPad:  null,
+  _options:  null,
+  _articles: null,
+  _sigPad:   null,
 
   async _loadMeta() {
-    if (!this._options) this._options = await API.getOptions();
+    if (!this._options)  this._options  = await API.getOptions();
+    if (!this._articles) this._articles = await API.getArticles();
   },
 
   // ── My Assignments List ─────────────────────────────────────────────────
@@ -160,15 +162,52 @@ const MonteurViews = {
             <button class="btn btn-ghost btn-sm mt-2" onclick="MonteurViews.addItemRow()">+ Zeile hinzufügen</button>
           </div>
 
-          <!-- Additional material -->
-          <div class="field mb-3">
-            <label>Zusätzliches Material</label>
-            ${UI.multiCheck('zusatz_material', opts.zusatz_material || [], order.additional_material || [])}
-          </div>
-
           <div class="field mb-3">
             <label>Bemerkungen</label>
             <textarea id="f-notes-monteur">${UI.esc(order.notes_monteur||'')}</textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- Nicht auf LS aufgeführt -->
+      <div class="card" id="extra-material-card" style="${(order.extra_material?.length || order.extra_aufwand) ? 'border:2px solid #d48a00;background:rgba(212,138,0,.05)' : ''}">
+        <div class="section-header open" onclick="UI.toggleSection(this)">
+          <h3 style="color:${(order.extra_material?.length || order.extra_aufwand) ? '#d48a00' : 'inherit'}">⚠️ Nicht auf LS aufgeführt</h3><span class="toggle">▶</span>
+        </div>
+        <div class="section-body">
+          <p class="text-sm text-muted mb-3">Zusätzliches Material und Mehraufwand, das nicht auf dem Lieferschein aufgeführt ist – wird in der Übersicht gelb hervorgehoben.</p>
+
+          <div class="field mb-3">
+            <label>Artikel hinzufügen</label>
+            <div class="flex gap-2">
+              <input type="text" id="extra-art-search" list="extra-art-list" placeholder="Artikel suchen…" style="flex:1"
+                autocomplete="off" oninput="MonteurViews.filterExtraArticles()">
+              <datalist id="extra-art-list">
+                ${(MonteurViews._articles||[]).map(a => `<option data-id="${a.id}" data-unit="${UI.esc(a.unit||'Stk.')}" value="${UI.esc(a.article_number ? a.article_number+' – '+a.name : a.name)}"></option>`).join('')}
+              </datalist>
+              <input type="number" id="extra-art-qty" value="1" min="0.01" step="0.1" style="width:80px" placeholder="Menge">
+              <button class="btn btn-primary btn-sm" onclick="MonteurViews.addExtraRow()">+ Hinzufügen</button>
+            </div>
+          </div>
+
+          <table class="items-table" id="extra-items-table" style="${(order.extra_material?.length) ? '' : 'display:none'}">
+            <thead><tr>
+              <th>Artikel</th><th style="width:80px">Menge</th><th style="width:70px">Einheit</th><th style="width:36px"></th>
+            </tr></thead>
+            <tbody id="extra-rows">
+              ${(order.extra_material||[]).map((item, i) => MonteurViews.extraRow(i, item)).join('')}
+            </tbody>
+          </table>
+
+          <div class="form-grid mt-3">
+            <div class="field">
+              <label>Mehraufwand (Std.)</label>
+              <input type="number" id="f-extra-aufwand" value="${UI.esc(String(order.extra_aufwand||''))}" min="0" step="0.25" placeholder="z.B. 1.5">
+            </div>
+            <div class="field">
+              <label>Argumentation / Begründung</label>
+              <input type="text" id="f-extra-argumentation" value="${UI.esc(order.extra_argumentation||'')}" placeholder="Grund für Mehraufwand…">
+            </div>
           </div>
         </div>
       </div>
@@ -301,7 +340,8 @@ const MonteurViews = {
     }, 50);
 
     window._monteurOrderId = orderId;
-    MonteurViews._itemCount = (order.items_table||[]).length;
+    MonteurViews._itemCount  = (order.items_table||[]).length;
+    MonteurViews._extraCount = (order.extra_material||[]).length;
   },
 
   _itemCount: 0,
@@ -322,6 +362,81 @@ const MonteurViews = {
 
   removeItemRow(i) {
     document.getElementById(`item-row-${i}`)?.remove();
+  },
+
+  // ── Extra Material (Nicht auf LS) ────────────────────────────────────────
+  _extraCount: 0,
+  extraRow(i, item = {}) {
+    return `<tr id="extra-row-${i}">
+      <td>${UI.esc(item.name||'')}${item.article_number ? `<br><code style="font-size:11px;color:var(--text2)">${UI.esc(item.article_number)}</code>` : ''}</td>
+      <td><input type="number" id="extra-qty-${i}" value="${UI.esc(String(item.quantity||'1'))}" min="0.01" step="0.1" style="width:70px"
+        data-unit="${UI.esc(item.unit||'Stk.')}" data-name="${UI.esc(item.name||'')}" data-artnr="${UI.esc(item.article_number||'')}"></td>
+      <td>${UI.esc(item.unit||'Stk.')}</td>
+      <td><button class="del-btn" onclick="MonteurViews.removeExtraRow(${i})">✕</button></td>
+    </tr>`;
+  },
+  removeExtraRow(i) {
+    document.getElementById(`extra-row-${i}`)?.remove();
+    MonteurViews._updateExtraHighlight();
+  },
+  filterExtraArticles() {
+    // Native datalist handles filtering; just highlight the card when items exist
+    MonteurViews._updateExtraHighlight();
+  },
+  addExtraRow() {
+    const searchEl = document.getElementById('extra-art-search');
+    const qtyEl    = document.getElementById('extra-art-qty');
+    const val      = searchEl?.value.trim();
+    if (!val) { UI.toast('Bitte Artikel eingeben', 'error'); return; }
+
+    // Find matching article from list
+    const articles = MonteurViews._articles || [];
+    const match = articles.find(a =>
+      val === (a.article_number ? a.article_number + ' – ' + a.name : a.name) ||
+      val.toLowerCase() === a.name.toLowerCase()
+    );
+
+    const qty  = parseFloat(qtyEl?.value) || 1;
+    const item = match
+      ? { name: match.name, article_number: match.article_number || null, quantity: qty, unit: match.unit || 'Stk.' }
+      : { name: val, article_number: null, quantity: qty, unit: 'Stk.' };
+
+    const tbody = document.getElementById('extra-rows');
+    const table = document.getElementById('extra-items-table');
+    if (table) table.style.display = '';
+    const i = MonteurViews._extraCount++;
+    tbody.insertAdjacentHTML('beforeend', MonteurViews.extraRow(i, item));
+    searchEl.value = '';
+    if (qtyEl) qtyEl.value = '1';
+    MonteurViews._updateExtraHighlight();
+  },
+  getExtraRows() {
+    const items = [];
+    document.querySelectorAll('#extra-rows tr').forEach(row => {
+      const id  = row.id.replace('extra-row-', '');
+      const inp = document.getElementById(`extra-qty-${id}`);
+      if (!inp) return;
+      items.push({
+        name:           inp.dataset.name,
+        article_number: inp.dataset.artnr || null,
+        quantity:       parseFloat(inp.value) || 1,
+        unit:           inp.dataset.unit || 'Stk.',
+      });
+    });
+    return items;
+  },
+  _updateExtraHighlight() {
+    const card   = document.getElementById('extra-material-card');
+    const h3     = card?.querySelector('h3');
+    const hasData = document.querySelectorAll('#extra-rows tr').length > 0 ||
+                    parseFloat(document.getElementById('f-extra-aufwand')?.value) > 0;
+    if (card) {
+      card.style.border    = hasData ? '2px solid #d48a00' : '';
+      card.style.background = hasData ? 'rgba(212,138,0,.05)' : '';
+    }
+    if (h3) h3.style.color = hasData ? '#d48a00' : '';
+    const tbl = document.getElementById('extra-items-table');
+    if (tbl) tbl.style.display = document.querySelectorAll('#extra-rows tr').length ? '' : 'none';
   },
 
   getItemRows() {
@@ -380,10 +495,13 @@ const MonteurViews = {
     const signatureData = MonteurViews._sigPad?.getData() || null;
 
     const data = {
-      executed_work:      UI.getMultiCheck('ausgefuehrte_arbeiten'),
-      items_table:        MonteurViews.getItemRows(),
-      additional_material:UI.getMultiCheck('zusatz_material'),
-      notes_monteur:      document.getElementById('f-notes-monteur')?.value.trim() || null,
+      executed_work:       UI.getMultiCheck('ausgefuehrte_arbeiten'),
+      items_table:         MonteurViews.getItemRows(),
+      additional_material: [],
+      extra_material:      MonteurViews.getExtraRows(),
+      extra_aufwand:       parseFloat(document.getElementById('f-extra-aufwand')?.value) || null,
+      extra_argumentation: document.getElementById('f-extra-argumentation')?.value.trim() || null,
+      notes_monteur:       document.getElementById('f-notes-monteur')?.value.trim() || null,
       rings_data: {
         type:  UI.getMultiCheck('halteringe')[0] || null,
         count: document.getElementById('f-rings-count')?.value || null,

@@ -101,19 +101,23 @@ const PlanerViews = {
         <th></th>
       </tr></thead>
       <tbody>
-      ${orders.map(o => `<tr>
-        <td><code>${UI.esc(o.order_number)}</code></td>
-        <td class="inline-edit-cell" onclick="PlanerViews.inlineEdit(event,${o.id},'customer_name','${UI.esc(o.customer_name||o.cust_name||'')}')">${UI.esc(o.customer_name || o.cust_name || '–')}</td>
-        <td class="inline-edit-cell" onclick="PlanerViews.inlineEdit(event,${o.id},'installation_address','${UI.esc(o.installation_address||'')}')">${UI.esc(o.installation_address || '–')}</td>
-        <td class="inline-edit-cell" onclick="PlanerViews.inlineEdit(event,${o.id},'planned_date','${UI.esc(o.planned_date||'')}','date')">${UI.fmtDate(o.planned_date)}</td>
-        <td>${UI.esc(o.assigned_name || '–')}</td>
-        <td class="inline-edit-cell" onclick="PlanerViews.inlineEditStatus(event,${o.id},'${o.status}')">${UI.statusBadge(o.status)}</td>
-        <td class="text-right" style="white-space:nowrap">
-          <button class="btn btn-ghost btn-sm" onclick="PlanerViews.renderOrderDetail(${o.id})">Ansicht</button>
-          <button class="btn btn-ghost btn-sm" onclick="PlanerViews.renderOrderForm(${o.id})">Bearb.</button>
-          <button class="btn btn-danger btn-sm" onclick="PlanerViews.deleteOrder(${o.id})">✕</button>
-        </td>
-      </tr>`).join('')}
+      ${orders.map(o => {
+        const hasExtra = (o.extra_material?.length > 0) || (o.extra_aufwand > 0);
+        const rowStyle = hasExtra ? 'background:rgba(212,138,0,.10);' : '';
+        return `<tr style="${rowStyle}">
+          <td><code>${UI.esc(o.order_number)}</code>${hasExtra ? ' <span title="Nicht auf LS aufgeführt" style="color:#d48a00;font-size:12px">⚠️</span>' : ''}</td>
+          <td class="inline-edit-cell" onclick="PlanerViews.inlineEdit(event,${o.id},'customer_name','${UI.esc(o.customer_name||o.cust_name||'')}')">${UI.esc(o.customer_name || o.cust_name || '–')}</td>
+          <td class="inline-edit-cell" onclick="PlanerViews.inlineEdit(event,${o.id},'installation_address','${UI.esc(o.installation_address||'')}')">${UI.esc(o.installation_address || '–')}</td>
+          <td class="inline-edit-cell" onclick="PlanerViews.inlineEdit(event,${o.id},'planned_date','${UI.esc(o.planned_date||'')}','date')">${UI.fmtDate(o.planned_date)}</td>
+          <td>${UI.esc(o.assigned_name || '–')}</td>
+          <td class="inline-edit-cell" onclick="PlanerViews.inlineEditStatus(event,${o.id},'${o.status}')">${UI.statusBadge(o.status)}</td>
+          <td class="text-right" style="white-space:nowrap">
+            <button class="btn btn-ghost btn-sm" onclick="PlanerViews.renderOrderDetail(${o.id})">Ansicht</button>
+            <button class="btn btn-ghost btn-sm" onclick="PlanerViews.renderOrderForm(${o.id})">Bearb.</button>
+            <button class="btn btn-danger btn-sm" onclick="PlanerViews.deleteOrder(${o.id})">✕</button>
+          </td>
+        </tr>`;
+      }).join('')}
       </tbody></table>` : '<p class="text-muted text-sm">Keine Aufträge gefunden.</p>';
   },
 
@@ -182,6 +186,35 @@ const PlanerViews = {
     if (!await UI.confirm('Auftrag archivieren?')) return;
     try { await API.deleteOrder(id); UI.toast('Auftrag archiviert', 'success'); await PlanerViews.loadOrdersTable(); }
     catch (e) { UI.toast(e.message, 'error'); }
+  },
+
+  // ── Planer: items table editor ───────────────────────────────────────────
+  _planerItemCount: 0,
+  planerItemRow(i, item = {}) {
+    return `<tr id="p-item-row-${i}">
+      <td><input type="text" id="p-item-name-${i}" value="${UI.esc(item.name||'')}" placeholder="Artikel / Beschreibung"></td>
+      <td><input type="number" id="p-item-qty-${i}" value="${UI.esc(String(item.quantity||'1'))}" min="0" step="0.1" style="width:70px"></td>
+      <td><input type="text" id="p-item-unit-${i}" value="${UI.esc(item.unit||'Stk.')}" style="width:60px"></td>
+      <td><button class="del-btn" onclick="PlanerViews.removePlanerItemRow(${i})">✕</button></td>
+    </tr>`;
+  },
+  addPlanerItemRow() {
+    const tbody = document.getElementById('p-items-rows');
+    if (!tbody) return;
+    const i = PlanerViews._planerItemCount++;
+    tbody.insertAdjacentHTML('beforeend', PlanerViews.planerItemRow(i));
+  },
+  removePlanerItemRow(i) { document.getElementById(`p-item-row-${i}`)?.remove(); },
+  getPlanerItemRows() {
+    const items = [];
+    document.querySelectorAll('#p-items-rows tr').forEach(row => {
+      const id = row.id.replace('p-item-row-', '');
+      const name = document.getElementById(`p-item-name-${id}`)?.value.trim();
+      const qty  = document.getElementById(`p-item-qty-${id}`)?.value;
+      const unit = document.getElementById(`p-item-unit-${id}`)?.value.trim();
+      if (name) items.push({ name, quantity: parseFloat(qty) || 1, unit: unit || 'Stk.' });
+    });
+    return items;
   },
 
   async sendOrderToCustomer(orderId) {
@@ -307,6 +340,23 @@ const PlanerViews = {
         </div>
       </div>
 
+      <div class="card">
+        <div class="section-header open" onclick="UI.toggleSection(this)">
+          <h3>📦 Material / Positionen (Lieferschein)</h3><span class="toggle">▶</span>
+        </div>
+        <div class="section-body">
+          <table class="items-table">
+            <thead><tr>
+              <th>Artikel / Beschreibung</th><th style="width:90px">Menge</th><th style="width:70px">Einheit</th><th style="width:36px"></th>
+            </tr></thead>
+            <tbody id="p-items-rows">
+              ${(order?.items_table||[]).map((item, i) => PlanerViews.planerItemRow(i, item)).join('')}
+            </tbody>
+          </table>
+          <button class="btn btn-ghost btn-sm mt-2" onclick="PlanerViews.addPlanerItemRow()">+ Zeile</button>
+        </div>
+      </div>
+
       ${order ? `
       <div class="card">
         <div class="section-header open" onclick="UI.toggleSection(this)">
@@ -317,6 +367,8 @@ const PlanerViews = {
         </div>
       </div>` : '<div class="card"><p class="text-muted text-sm">Anhänge können nach dem Erstellen des Auftrags hochgeladen werden.</p></div>'}
     `;
+
+    PlanerViews._planerItemCount = (order?.items_table||[]).length;
 
     if (order?.customer_id) {
       const cust = customers.find(c => c.id == order.customer_id);
@@ -476,6 +528,7 @@ const PlanerViews = {
       assigned_to:           document.getElementById('f-assigned-to').value || null,
       sort_order:            parseInt(document.getElementById('f-sort-order').value) || 0,
       status:                document.getElementById('f-status').value,
+      items_table:           PlanerViews.getPlanerItemRows(),
     };
 
     if (!data.customer_id && !data.customer_name) { UI.toast('Kunde erforderlich','error'); return; }
@@ -556,11 +609,23 @@ const PlanerViews = {
 
           ${order.items_table?.length ? `
           <div class="mt-3">
-            <p class="text-sm text-muted mb-2">Material / Positionen</p>
+            <p class="text-sm text-muted mb-2">Material / Positionen (Lieferschein)</p>
             <table class="items-table">
               <thead><tr><th>Artikel</th><th>Menge</th><th>Einheit</th></tr></thead>
               <tbody>${order.items_table.map(i => `<tr><td>${UI.esc(i.name)}</td><td>${UI.esc(i.quantity)}</td><td>${UI.esc(i.unit)}</td></tr>`).join('')}</tbody>
             </table>
+          </div>` : ''}
+
+          ${(order.extra_material?.length || order.extra_aufwand) ? `
+          <div class="mt-3" style="border:2px solid #d48a00;border-radius:8px;padding:12px;background:rgba(212,138,0,.06)">
+            <p class="text-sm mb-2" style="font-weight:700;color:#d48a00">⚠️ Nicht auf LS aufgeführt</p>
+            ${order.extra_material?.length ? `
+            <table class="items-table mb-2">
+              <thead><tr><th>Artikel</th><th>Menge</th><th>Einheit</th></tr></thead>
+              <tbody>${order.extra_material.map(i => `<tr><td>${UI.esc(i.name)}${i.article_number ? ` <code style="font-size:11px;color:var(--text2)">${UI.esc(i.article_number)}</code>` : ''}</td><td>${UI.esc(String(i.quantity))}</td><td>${UI.esc(i.unit)}</td></tr>`).join('')}</tbody>
+            </table>` : ''}
+            ${order.extra_aufwand ? `<div class="flex mb-1 gap-2"><span style="width:150px;font-size:12px;color:var(--text2);font-weight:600">Mehraufwand</span><span>${fv(order.extra_aufwand)} Std.</span></div>` : ''}
+            ${order.extra_argumentation ? `<div class="flex gap-2"><span style="width:150px;font-size:12px;color:var(--text2);font-weight:600">Argumentation</span><span>${fv(order.extra_argumentation)}</span></div>` : ''}
           </div>` : ''}
         </div>
       </div>
@@ -675,6 +740,7 @@ const PlanerViews = {
           <button class="btn btn-ghost btn-sm" onclick="PlanerViews.editAnfrage(${a.id})">✏️</button>
           <button class="btn btn-ghost btn-sm" onclick="PlanerViews.sendAnfrageLink(${a.id})" title="Formular-Link generieren & kopieren">🔗</button>
           ${a.status !== 'erledigt' ? `<button class="btn btn-primary btn-sm" onclick="PlanerViews.doConvert(${a.id})">→ Auftrag</button>` : ''}
+          <button class="btn btn-danger btn-sm" onclick="PlanerViews.deleteAnfrage(${a.id})">✕</button>
         </td>
       </tr>`).join('')}
       </tbody></table>` : '<p class="text-muted text-sm">Noch keine Anfragen eingegangen.</p>';
@@ -830,6 +896,12 @@ const PlanerViews = {
       UI.toast(`Auftrag ${res.order_number} erstellt`, 'success', 4000);
       await PlanerViews.loadAnfragenTable();
     } catch(e) { UI.toast(e.message, 'error'); }
+  },
+
+  async deleteAnfrage(id) {
+    if (!await UI.confirm('Anfrage dauerhaft löschen?')) return;
+    try { await API.deleteAnfrage(id); UI.toast('Anfrage gelöscht', 'success'); await PlanerViews.loadAnfragenTable(); }
+    catch(e) { UI.toast(e.message, 'error'); }
   },
 
   copyAnfrageLink() {

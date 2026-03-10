@@ -372,8 +372,8 @@ router.get('/:id/attachment/:filename', requireRole('admin', 'planer'), (req, re
   res.download(filePath, att.original_name);
 });
 
-// ── DELETE /api/anfragen/:id  – admin only ────────────────────────────────
-router.delete('/:id', requireRole('admin'), (req, res) => {
+// ── DELETE /api/anfragen/:id  – admin + planer ───────────────────────────
+router.delete('/:id', requireRole('admin', 'planer'), (req, res) => {
   const db = getDb();
   // Delete attached files
   const atts = db.prepare('SELECT filename FROM anfrage_attachments WHERE inquiry_id = ?').all(req.params.id);
