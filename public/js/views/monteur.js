@@ -261,6 +261,22 @@ const MonteurViews = {
           <h3>⏱ Zeiten & Techniker</h3><span class="toggle">▶</span>
         </div>
         <div class="section-body">
+
+          <!-- Start/Stop Timer -->
+          <div id="timer-box" style="background:var(--bg3);border-radius:8px;padding:14px 16px;margin-bottom:16px">
+            <div class="flex gap-3 align-items-center flex-wrap">
+              <div id="timer-display" style="font-size:22px;font-weight:700;font-family:monospace;letter-spacing:2px;min-width:90px">
+                ${MonteurViews._timerDisplay(orderId)}
+              </div>
+              <button id="timer-btn-start" class="btn btn-primary" onclick="MonteurViews.startTimer(${orderId})"
+                style="${MonteurViews._timerRunning(orderId) ? 'display:none' : ''}">▶ Arbeit starten</button>
+              <button id="timer-btn-stop" class="btn btn-danger" onclick="MonteurViews.stopTimer(${orderId})"
+                style="${MonteurViews._timerRunning(orderId) ? '' : 'display:none'}">⏹ Arbeit stoppen</button>
+              <button class="btn btn-ghost btn-sm" onclick="MonteurViews.resetTimer(${orderId})" title="Timer zurücksetzen">↺</button>
+              <span class="text-muted text-sm">Startet/stoppt Arbeitszeit automatisch</span>
+            </div>
+          </div>
+
           <div class="form-grid">
             <div class="field">
               <label>Datum <span class="req">*</span></label>
@@ -282,6 +298,23 @@ const MonteurViews = {
             <div class="field">
               <label>Blockschrift</label>
               <input type="text" id="f-block" value="${UI.esc(order.technician_block||'')}">
+            </div>
+          </div>
+
+          <!-- Fahrzeit & Kilometer – intern, erscheint nicht auf Rapport -->
+          <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+            <p class="text-sm text-muted mb-2" style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;font-weight:600">
+              Fahrzeit & Kilometer (intern – nicht auf Rapport)
+            </p>
+            <div class="form-grid">
+              <div class="field">
+                <label>Fahrzeit (Std.)</label>
+                <input type="number" id="f-travel-time" value="${UI.esc(String(order.travel_time||''))}" min="0" step="0.25" placeholder="z.B. 0.5">
+              </div>
+              <div class="field">
+                <label>Kilometer</label>
+                <input type="number" id="f-travel-km" value="${UI.esc(String(order.travel_km||''))}" min="0" step="1" placeholder="z.B. 45">
+              </div>
             </div>
           </div>
         </div>
@@ -342,6 +375,11 @@ const MonteurViews = {
     window._monteurOrderId = orderId;
     MonteurViews._itemCount  = (order.items_table||[]).length;
     MonteurViews._extraCount = (order.extra_material||[]).length;
+
+    // Resume timer if it was already running (page reload / navigation)
+    if (MonteurViews._timerRunning(orderId)) {
+      MonteurViews._startTimerInterval(orderId);
+    }
   },
 
   _itemCount: 0,
@@ -439,6 +477,94 @@ const MonteurViews = {
     if (tbl) tbl.style.display = document.querySelectorAll('#extra-rows tr').length ? '' : 'none';
   },
 
+  // ── Work Timer ──────────────────────────────────────────────────────────
+  _timerInterval: null,
+
+  _timerKey: (orderId) => `work_start_${orderId}`,
+
+  _timerRunning(orderId) {
+    return !!localStorage.getItem(MonteurViews._timerKey(orderId));
+  },
+
+  _timerDisplay(orderId) {
+    const key = MonteurViews._timerKey(orderId);
+    const startIso = localStorage.getItem(key);
+    if (!startIso) return '00:00:00';
+    const elapsed = Math.floor((Date.now() - new Date(startIso).getTime()) / 1000);
+    return MonteurViews._fmtElapsed(elapsed);
+  },
+
+  _fmtElapsed(sec) {
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = sec % 60;
+    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  },
+
+  _fmtTime(date) {
+    return `${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`;
+  },
+
+  startTimer(orderId) {
+    const key = MonteurViews._timerKey(orderId);
+    if (localStorage.getItem(key)) return; // already running
+    const now = new Date();
+    localStorage.setItem(key, now.toISOString());
+    // set work-from field
+    const fromEl = document.getElementById('f-work-from');
+    if (fromEl && !fromEl.value) fromEl.value = MonteurViews._fmtTime(now);
+    // set work-date
+    const dateEl = document.getElementById('f-work-date');
+    if (dateEl) dateEl.value = now.toISOString().split('T')[0];
+    // toggle buttons
+    document.getElementById('timer-btn-start').style.display = 'none';
+    document.getElementById('timer-btn-stop').style.display  = '';
+    // start interval
+    MonteurViews._startTimerInterval(orderId);
+  },
+
+  stopTimer(orderId) {
+    const key = MonteurViews._timerKey(orderId);
+    const startIso = localStorage.getItem(key);
+    if (!startIso) return;
+    const now  = new Date();
+    const start = new Date(startIso);
+    localStorage.removeItem(key);
+    clearInterval(MonteurViews._timerInterval);
+    MonteurViews._timerInterval = null;
+    // fill in work-to
+    const toEl = document.getElementById('f-work-to');
+    if (toEl) toEl.value = MonteurViews._fmtTime(now);
+    // update display to final elapsed
+    const elapsed = Math.floor((now - start) / 1000);
+    const display = document.getElementById('timer-display');
+    if (display) display.textContent = MonteurViews._fmtElapsed(elapsed);
+    // toggle buttons
+    document.getElementById('timer-btn-stop').style.display  = 'none';
+    document.getElementById('timer-btn-start').style.display = '';
+    UI.toast(`Arbeitszeit gestoppt: ${MonteurViews._fmtTime(start)} – ${MonteurViews._fmtTime(now)}`, 'success', 4000);
+  },
+
+  resetTimer(orderId) {
+    const key = MonteurViews._timerKey(orderId);
+    localStorage.removeItem(key);
+    clearInterval(MonteurViews._timerInterval);
+    MonteurViews._timerInterval = null;
+    const display = document.getElementById('timer-display');
+    if (display) display.textContent = '00:00:00';
+    document.getElementById('timer-btn-stop').style.display  = 'none';
+    document.getElementById('timer-btn-start').style.display = '';
+  },
+
+  _startTimerInterval(orderId) {
+    clearInterval(MonteurViews._timerInterval);
+    MonteurViews._timerInterval = setInterval(() => {
+      const display = document.getElementById('timer-display');
+      if (!display) { clearInterval(MonteurViews._timerInterval); return; }
+      display.textContent = MonteurViews._timerDisplay(orderId);
+    }, 1000);
+  },
+
   getItemRows() {
     const items = [];
     document.querySelectorAll('#items-rows tr').forEach(row => {
@@ -513,14 +639,16 @@ const MonteurViews = {
         id:    document.getElementById('f-keys-id')?.value.trim() || null,
         note:  document.getElementById('f-keys-note')?.value.trim() || null,
       },
-      work_date:       document.getElementById('f-work-date')?.value || null,
-      work_time_from:  document.getElementById('f-work-from')?.value || null,
-      work_time_to:    document.getElementById('f-work-to')?.value || null,
-      technician_name: document.getElementById('f-technician')?.value.trim() || null,
-      technician_block:document.getElementById('f-block')?.value.trim() || null,
-      signature_data:  signatureData,
-      agb_accepted:    true,
-      status:          document.getElementById('f-m-status')?.value || 'in_bearbeitung',
+      work_date:        document.getElementById('f-work-date')?.value || null,
+      work_time_from:   document.getElementById('f-work-from')?.value || null,
+      work_time_to:     document.getElementById('f-work-to')?.value || null,
+      travel_time:      parseFloat(document.getElementById('f-travel-time')?.value) || null,
+      travel_km:        parseInt(document.getElementById('f-travel-km')?.value) || null,
+      technician_name:  document.getElementById('f-technician')?.value.trim() || null,
+      technician_block: document.getElementById('f-block')?.value.trim() || null,
+      signature_data:   signatureData,
+      agb_accepted:     true,
+      status:           document.getElementById('f-m-status')?.value || 'in_bearbeitung',
     };
 
     if (!data.technician_name) { UI.toast('Techniker-Name erforderlich','error'); return; }
