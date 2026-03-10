@@ -184,6 +184,21 @@ const PlanerViews = {
     catch (e) { UI.toast(e.message, 'error'); }
   },
 
+  async sendOrderToCustomer(orderId) {
+    try {
+      const res = await API.orderCustomerForm(orderId);
+      const url = res.url;
+      await navigator.clipboard.writeText(url).catch(() => {});
+      UI.modal('Kundenformular-Link',
+        `<p class="mb-3">Der Formular-Link wurde in die Zwischenablage kopiert.</p>
+         <div style="background:var(--bg3);padding:10px;border-radius:6px;word-break:break-all;font-size:13px;font-family:monospace">${UI.esc(url)}</div>`,
+        `<button class="btn btn-primary" onclick="navigator.clipboard.writeText('${UI.esc(url)}');UI.toast('Link kopiert','success')">Nochmals kopieren</button>
+         <button class="btn btn-ghost" onclick="UI.closeModal()">Schliessen</button>`
+      );
+      UI.toast('Formular-Link erstellt und kopiert', 'success');
+    } catch (e) { UI.toast(e.message, 'error'); }
+  },
+
   // ── Order Form (Create / Edit) ──────────────────────────────────────────
   async renderOrderForm(orderId) {
     await this._loadMeta();
@@ -204,6 +219,7 @@ const PlanerViews = {
         </div>
         <div class="flex gap-2">
           ${order ? `<button class="btn btn-ghost" onclick="PlanerViews.renderOrderDetail(${orderId})">Vorschau</button>` : ''}
+          ${order ? `<button class="btn btn-ghost" onclick="PlanerViews.sendOrderToCustomer(${orderId})">📧 An Kunden senden</button>` : ''}
           <button class="btn btn-primary" onclick="PlanerViews.saveOrder(${orderId||'null'})">Speichern</button>
         </div>
       </div>
@@ -496,6 +512,7 @@ const PlanerViews = {
         <div class="flex gap-2">
           <button class="btn btn-ghost" onclick="window.print()">🖨 Drucken</button>
           <button class="btn btn-ghost" onclick="PlanerViews.openEmailModal(${order.id})">✉️ Per E-Mail</button>
+          <button class="btn btn-ghost" onclick="PlanerViews.sendOrderToCustomer(${order.id})">📧 An Kunden senden</button>
           <button class="btn btn-primary" onclick="PlanerViews.renderOrderForm(${order.id})">Bearbeiten</button>
         </div>
       </div>

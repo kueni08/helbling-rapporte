@@ -28,11 +28,12 @@ const API = {
   changePassword: (cur, n)=> API.post('/api/auth/change-password', { currentPassword: cur, newPassword: n }),
 
   // Users (admin)
-  getUsers:       ()      => API.get('/api/users'),
-  getMonteure:    ()      => API.get('/api/users/monteure'),
-  createUser:     (d)     => API.post('/api/users', d),
-  updateUser:     (id, d) => API.put(`/api/users/${id}`, d),
-  deleteUser:     (id)    => API.delete(`/api/users/${id}`),
+  getUsers:             ()      => API.get('/api/users'),
+  getMonteure:          ()      => API.get('/api/users/monteure'),
+  createUser:           (d)     => API.post('/api/users', d),
+  updateUser:           (id, d) => API.put(`/api/users/${id}`, d),
+  deleteUser:           (id)    => API.delete(`/api/users/${id}`),
+  deleteInactiveUsers:  ()      => API.delete('/api/users/inactive'),
 
   // Orders
   getOrders:      ()      => API.get('/api/orders'),
@@ -41,7 +42,8 @@ const API = {
   updateOrder:    (id, d) => API.put(`/api/orders/${id}`, d),
   deleteOrder:    (id)    => API.delete(`/api/orders/${id}`),
   reorderOrders:  (items) => API.patch('/api/orders/reorder', { items }),
-  importOrders:   (form)  => API.upload('/api/orders/import', form),
+  importOrders:        (form) => API.upload('/api/orders/import', form),
+  orderCustomerForm:   (id)   => API.post(`/api/orders/${id}/customer-form`),
 
   // Settings
   getOptions:         ()           => API.get('/api/settings/options'),
