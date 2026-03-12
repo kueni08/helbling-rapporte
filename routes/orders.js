@@ -55,6 +55,74 @@ function formatOrder(o) {
   };
 }
 
+// ── Excel Export ─────────────────────────────────────────────────────────
+// GET /api/orders/export  (planer + admin)
+router.get('/export', requireRole('admin', 'planer'), (req, res) => {
+  const db = getDb();
+  const { status, from, to } = req.query;
+  let sql = `SELECT o.*, u.full_name AS assigned_name FROM orders o
+             LEFT JOIN users u ON u.id = o.assigned_to
+             WHERE o.status != 'archiviert'`;
+  const params = [];
+  if (status) { sql += ` AND o.status = ?`; params.push(status); }
+  if (from)   { sql += ` AND o.planned_date >= ?`; params.push(from); }
+  if (to)     { sql += ` AND o.planned_date <= ?`; params.push(to); }
+  sql += ` ORDER BY o.planned_date DESC`;
+  const rows = db.prepare(sql).all(...params);
+
+  const data = rows.map(o => ({
+    'Auftragsnummer':     o.order_number,
+    'Projektnummer':      o.project_number || '',
+    'Status':             o.status,
+    'Kunde':              o.customer_name,
+    'Kundenadresse':      o.customer_address,
+    'Montageadresse':     o.installation_address,
+    'Besteller':          o.orderer,
+    'Kontakt vor Ort':    o.on_site_contact,
+    'Montagedatum':       o.planned_date,
+    'Sp\u00e4testes Datum':     o.latest_date,
+    'Arbeit':             (parseJSON(o.work_types, [])).join(', '),
+    'Techniker':          o.assigned_name || o.technician_name,
+    'Arbeitsdatum':       o.work_date,
+    'Arbeitszeit von':    o.work_time_from,
+    'Arbeitszeit bis':    o.work_time_to,
+    'Fahrzeit (Std.)':    o.travel_time,
+    'Kilometer':          o.travel_km,
+    'Bemerkungen Planer': o.notes_planer,
+    'Bemerkungen Monteur':o.notes_monteur,
+    'Material':           (parseJSON(o.items_table, [])).map(i => `${i.quantity}x ${i.name}`).join('; '),
+  }));
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(data);
+  XLSX.utils.book_append_sheet(wb, ws, 'Auftr\u00e4ge');
+  const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', 'attachment; filename="auftraege_export.xlsx"');
+  res.send(Buffer.from(buf));
+});
+
+// GET /api/orders/import-template  (planer + admin)
+router.get('/import-template', requireRole('admin', 'planer'), (req, res) => {
+  const headers = [
+    'ID', 'Nummernkreis', 'Kunde', 'Abteilung', 'Datum', 'Buchungszeit',
+    'Unternehmen', 'W\u00e4hrung', 'Wechselkurs', 'Preisliste', 'Preislistenw\u00e4hrung',
+    'Preislisten-Wechselkurs', 'Kontaktperson des Unternehmens', 'Status',
+    'Rechnungsadresse', 'Anweisungen', 'Projekt',
+    'ID (Lieferschein-Artikel)', 'Anzahl (Lieferschein-Artikel)',
+    'Artikel-Code (Lieferschein-Artikel)', 'Artikelname (Lieferschein-Artikel)',
+    'Einheit (Lieferschein-Artikel)', 'Lagerma\u00dfeinheit (Lieferschein-Artikel)',
+    'Ma\u00dfeinheit-Umrechnungsfaktor (Lieferschein-Artikel)'
+  ];
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet([headers]);
+  XLSX.utils.book_append_sheet(wb, ws, 'Vorlage');
+  const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', 'attachment; filename="import_vorlage.xlsx"');
+  res.send(Buffer.from(buf));
+});
+
 // GET /api/orders
 router.get('/', requireLogin, (req, res) => {
   const db = getDb();
@@ -119,8 +187,8 @@ router.post('/', requireRole('admin', 'planer'), (req, res) => {
       order_number, status, customer_id, customer_name, customer_address,
       installation_address, orderer, on_site_contact, arrival_time,
       planned_date, latest_date, work_types, notes_planer,
-      assigned_to, created_by, sort_order
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+      assigned_to, created_by, sort_order, project_number
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
   `).run(
     orderNumber,
     b.status || 'geplant',
@@ -137,7 +205,8 @@ router.post('/', requireRole('admin', 'planer'), (req, res) => {
     b.notes_planer || null,
     b.assigned_to || null,
     req.session.userId,
-    b.sort_order || 0
+    b.sort_order || 0,
+    b.project_number || null
   );
 
   res.status(201).json(formatOrder(db.prepare('SELECT * FROM orders WHERE id = ?').get(result.lastInsertRowid)));
@@ -196,6 +265,7 @@ router.put('/:id', requireLogin, (req, res) => {
         installation_address = ?, orderer = ?, on_site_contact = ?,
         arrival_time = ?, planned_date = ?, latest_date = ?,
         work_types = ?, notes_planer = ?, assigned_to = ?, sort_order = ?,
+        project_number = ?,
         executed_work = ?, items_table = ?, additional_material = ?,
         extra_material = ?, extra_aufwand = ?, extra_argumentation = ?,
         notes_monteur = ?, rings_data = ?, keys_data = ?,
@@ -220,6 +290,7 @@ router.put('/:id', requireLogin, (req, res) => {
       b.notes_planer ?? order.notes_planer,
       b.assigned_to ?? order.assigned_to,
       b.sort_order ?? order.sort_order,
+      b.project_number !== undefined ? b.project_number || null : order.project_number,
       JSON.stringify(b.executed_work ?? parseJSON(order.executed_work, [])),
       JSON.stringify(b.items_table ?? parseJSON(order.items_table, [])),
       JSON.stringify(b.additional_material ?? parseJSON(order.additional_material, [])),
@@ -308,7 +379,7 @@ router.post('/:id/customer-form', requireRole('admin', 'planer'), (req, res) => 
 });
 
 // POST /api/orders/import  – Excel import (planer + admin)
-// Unterstützt Standard-Format und Lieferschein-Format (LS2603015-x)
+// Unterstützt Standard-Format und Lieferschein-Format (ERPNext)
 router.post('/import', requireRole('admin', 'planer'), upload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Keine Datei' });
   try {
@@ -319,7 +390,7 @@ router.post('/import', requireRole('admin', 'planer'), upload.single('file'), (r
     const db = getDb();
     const inserted = [];
 
-    // Detect Lieferschein-Format: has column "ID (Lieferschein-Artikel)"
+    // Detect Lieferschein-Format: has column "ID (Lieferschein-Artikel)" or "Artikel-Code (Lieferschein-Artikel)"
     const isLS = rows.length > 0 && (
       'ID (Lieferschein-Artikel)' in rows[0] ||
       'Artikel-Code (Lieferschein-Artikel)' in rows[0]
@@ -327,9 +398,7 @@ router.post('/import', requireRole('admin', 'planer'), upload.single('file'), (r
 
     const tx = db.transaction(() => {
       if (isLS) {
-        // ── Lieferschein-Format ─────────────────────────────────────────
-        // Rows with non-empty ID = new order header (also contains first article)
-        // Rows with empty ID = article continuation rows for the current order
+        // ── Lieferschein-Format (ERPNext) ────────────────────────────────
         const orders = [];
         let current = null;
 
@@ -353,16 +422,16 @@ router.post('/import', requireRole('admin', 'planer'), upload.single('file'), (r
             // New order header row
             current = {
               source_id: orderId,
-              // Use "Kundenname" (actual customer name) preferring over "Unternehmen" (Helbling)
-              customer_name: String(row['Kundenname'] || row['Unternehmen'] || row['Kunde'] || '').trim() || null,
+              customer_name: String(row['Kunde'] || row['Kundenname'] || row['Unternehmen'] || '').trim() || null,
               orderer: String(row['Kontaktperson des Unternehmens'] || '').trim() || null,
               on_site_contact: String(row['Kontakt'] || '').trim() || null,
-              // Lieferadresse = Montageadresse (strip HTML <br> tags)
-              installation_address: stripHtml(row['Lieferadresse'] || ''),
+              // Anweisungen = Montageadresse (NEU), Fallback auf Lieferadresse
+              installation_address: stripHtml(row['Anweisungen'] || row['Lieferadresse'] || ''),
               // Rechnungsadresse = Kundenadresse
               customer_address: stripHtml(row['Rechnungsadresse'] || ''),
               planned_date: parseLSDate(row['Datum']),
               abteilung: String(row['Abteilung'] || '').trim(),
+              project_number: String(row['Projekt'] || '').trim() || null,
               items: []
             };
             orders.push(current);
@@ -381,7 +450,8 @@ router.post('/import', requireRole('admin', 'planer'), upload.single('file'), (r
               name: artName || artCode,
               article_number: artCode || null,
               quantity: qty,
-              unit
+              unit,
+              _source: 'planer'
             });
           }
         });
@@ -396,8 +466,9 @@ router.post('/import', requireRole('admin', 'planer'), upload.single('file'), (r
             INSERT INTO orders (
               order_number, status, customer_name, customer_address,
               installation_address, orderer, on_site_contact,
-              planned_date, notes_planer, items_table, created_by, work_types
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+              planned_date, notes_planer, items_table, created_by, work_types,
+              project_number
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
           `).run(
             orderNumber, 'geplant',
             orderData.customer_name,
@@ -409,9 +480,10 @@ router.post('/import', requireRole('admin', 'planer'), upload.single('file'), (r
             notesParts.join('\n') || null,
             JSON.stringify(orderData.items),
             req.session.userId,
-            '[]'
+            '[]',
+            orderData.project_number
           );
-          inserted.push({ id: result.lastInsertRowid, order_number: orderNumber, customer_name: orderData.customer_name, items: orderData.items.length });
+          inserted.push({ id: result.lastInsertRowid, order_number: orderNumber, project_number: orderData.project_number, customer_name: orderData.customer_name, items: orderData.items.length });
         });
 
       } else {
@@ -420,15 +492,16 @@ router.post('/import', requireRole('admin', 'planer'), upload.single('file'), (r
           const orderNumber = genOrderNumber(db);
           const planned_date = row['Montagedatum'] || row['planned_date'] || row['Datum'] || null;
           const customer_name = row['Kunde'] || row['customer_name'] || row['Kundenname'] || null;
-          const installation_address = row['Montageadresse'] || row['installation_address'] || null;
+          const installation_address = row['Montageadresse'] || row['Anweisungen'] || row['installation_address'] || null;
           const orderer = row['Besteller'] || row['orderer'] || null;
           const notes_planer = row['Bemerkungen'] || row['notes'] || null;
+          const project_number = row['Projekt'] || row['Projektnummer'] || null;
 
           const result = db.prepare(`
             INSERT INTO orders (order_number, status, customer_name, installation_address,
-              orderer, planned_date, notes_planer, created_by, work_types)
-            VALUES (?,?,?,?,?,?,?,?,?)
-          `).run(orderNumber, 'geplant', customer_name, installation_address, orderer, planned_date, notes_planer, req.session.userId, '[]');
+              orderer, planned_date, notes_planer, created_by, work_types, project_number)
+            VALUES (?,?,?,?,?,?,?,?,?,?)
+          `).run(orderNumber, 'geplant', customer_name, installation_address, orderer, planned_date, notes_planer, req.session.userId, '[]', project_number || null);
 
           inserted.push({ id: result.lastInsertRowid, order_number: orderNumber, customer_name });
         });
