@@ -20,6 +20,8 @@ const PlanerViews = {
           <button class="btn btn-ghost" onclick="window.location='/api/orders/import-template'">📄 Vorlage</button>
           <button class="btn btn-ghost" onclick="PlanerViews.openImport()">📥 Excel Import</button>
           <button class="btn btn-ghost" onclick="window.location='/api/orders/export'">📤 Excel Export</button>
+          <button class="btn btn-ghost" onclick="PlanerViews.openColSettings()">📊 Spalten</button>
+          <button class="btn btn-ghost" onclick="PlanerViews.printOrders()">🖨️ Drucken</button>
           <button class="btn btn-primary" onclick="PlanerViews.renderOrderForm()">+ Neuer Auftrag</button>
         </div>
       </div>
@@ -40,8 +42,18 @@ const PlanerViews = {
   },
 
   _allOrders: [],
+  _filteredOrders: [],
   _sortCol: 'planned_date',
   _sortDir: 'asc',
+  _visibleCols: null,
+
+  _getVisibleCols() {
+    if (!this._visibleCols) {
+      try { this._visibleCols = new Set(JSON.parse(localStorage.getItem('planer_cols') || '[]')); }
+      catch { this._visibleCols = new Set(); }
+    }
+    return this._visibleCols;
+  },
 
   async loadOrdersTable() {
     this._allOrders = await API.getOrders();
@@ -83,6 +95,8 @@ const PlanerViews = {
       return va < vb ? -dir : va > vb ? dir : 0;
     });
 
+    PlanerViews._filteredOrders = orders;
+
     const el = document.getElementById('orders-list');
     if (!el) return;
 
@@ -92,13 +106,19 @@ const PlanerViews = {
       return `<th class="${cls}" onclick="PlanerViews.toggleSort('${colId}')">${label}</th>`;
     };
 
+    const cols = PlanerViews._getVisibleCols();
+
     el.innerHTML = orders.length ? `<table>
       <thead><tr>
         ${sortTh('Nr.','order_number')}
+        ${cols.has('project_number') ? sortTh('Projekt','project_number') : ''}
         ${sortTh('Kunde','customer_name')}
         ${sortTh('Montageadresse','installation_address')}
         ${sortTh('Datum','planned_date')}
+        ${cols.has('latest_date') ? sortTh('Spätestens','latest_date') : ''}
         ${sortTh('Techniker','assigned_name')}
+        ${cols.has('sort_order') ? `<th>Reihenf.</th>` : ''}
+        ${cols.has('notes_planer') ? `<th>Bemerkungen</th>` : ''}
         ${sortTh('Status','status')}
         <th></th>
       </tr></thead>
@@ -106,12 +126,18 @@ const PlanerViews = {
       ${orders.map(o => {
         const hasExtra = (o.extra_material?.length > 0) || (o.extra_aufwand > 0);
         const rowStyle = hasExtra ? 'background:rgba(212,138,0,.10);' : '';
+        const totalFiles = (o.attachment_count || 0) + (o.photo_count || 0);
+        const attachBadge = totalFiles > 0 ? ` <span title="${totalFiles} Anhänge/Fotos" style="color:#555;font-size:11px;font-weight:600">📎${totalFiles}</span>` : '';
         return `<tr style="${rowStyle}">
-          <td><code>${UI.esc(o.order_number)}</code>${hasExtra ? ' <span title="Nicht auf LS aufgeführt" style="color:#d48a00;font-size:12px">⚠️</span>' : ''}</td>
+          <td><code>${UI.esc(o.order_number)}</code>${attachBadge}${hasExtra ? ' <span title="Nicht auf LS aufgeführt" style="color:#d48a00;font-size:12px">⚠️</span>' : ''}</td>
+          ${cols.has('project_number') ? `<td style="font-size:12px;color:var(--accent)">${UI.esc(o.project_number||'')}</td>` : ''}
           <td class="inline-edit-cell" onclick="PlanerViews.inlineEdit(event,${o.id},'customer_name','${UI.esc(o.customer_name||o.cust_name||'')}')">${UI.esc(o.customer_name || o.cust_name || '–')}</td>
           <td class="inline-edit-cell" onclick="PlanerViews.inlineEdit(event,${o.id},'installation_address','${UI.esc(o.installation_address||'')}')">${UI.esc(o.installation_address || '–')}</td>
           <td class="inline-edit-cell" onclick="PlanerViews.inlineEdit(event,${o.id},'planned_date','${UI.esc(o.planned_date||'')}','date')">${UI.fmtDate(o.planned_date)}</td>
+          ${cols.has('latest_date') ? `<td>${UI.fmtDate(o.latest_date)}</td>` : ''}
           <td>${UI.esc(o.assigned_name || '–')}</td>
+          ${cols.has('sort_order') ? `<td style="text-align:center;color:var(--text2)">${o.sort_order||0}</td>` : ''}
+          ${cols.has('notes_planer') ? `<td style="font-size:12px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${UI.esc(o.notes_planer||'')}">${UI.esc((o.notes_planer||'').substring(0,60))}${(o.notes_planer||'').length>60?'…':''}</td>` : ''}
           <td class="inline-edit-cell" onclick="PlanerViews.inlineEditStatus(event,${o.id},'${o.status}')">${UI.statusBadge(o.status)}</td>
           <td class="text-right" style="white-space:nowrap">
             <button class="btn btn-ghost btn-sm" onclick="PlanerViews.renderOrderDetail(${o.id})">Ansicht</button>
@@ -188,6 +214,84 @@ const PlanerViews = {
     if (!await UI.confirm('Auftrag archivieren?')) return;
     try { await API.deleteOrder(id); UI.toast('Auftrag archiviert', 'success'); await PlanerViews.loadOrdersTable(); }
     catch (e) { UI.toast(e.message, 'error'); }
+  },
+
+  // ── Column Toggle ────────────────────────────────────────────────────────
+  openColSettings() {
+    const cols = PlanerViews._getVisibleCols();
+    UI.modal('Spalten anzeigen',
+      `<div style="display:flex;flex-direction:column;gap:10px">
+        <label style="display:flex;gap:8px;align-items:center;cursor:pointer">
+          <input type="checkbox" id="col-project" ${cols.has('project_number') ? 'checked' : ''}>
+          <span>Projektnummer</span>
+        </label>
+        <label style="display:flex;gap:8px;align-items:center;cursor:pointer">
+          <input type="checkbox" id="col-sort" ${cols.has('sort_order') ? 'checked' : ''}>
+          <span>Reihenfolge</span>
+        </label>
+        <label style="display:flex;gap:8px;align-items:center;cursor:pointer">
+          <input type="checkbox" id="col-notes" ${cols.has('notes_planer') ? 'checked' : ''}>
+          <span>Bemerkungen Planer</span>
+        </label>
+        <label style="display:flex;gap:8px;align-items:center;cursor:pointer">
+          <input type="checkbox" id="col-latest" ${cols.has('latest_date') ? 'checked' : ''}>
+          <span>Spätestes Datum</span>
+        </label>
+      </div>`,
+      `<button class="btn btn-ghost" onclick="UI.closeModal()">Abbrechen</button>
+       <button class="btn btn-primary" onclick="PlanerViews.applyColSettings()">Übernehmen</button>`
+    );
+  },
+
+  applyColSettings() {
+    const cols = new Set();
+    if (document.getElementById('col-project')?.checked) cols.add('project_number');
+    if (document.getElementById('col-sort')?.checked) cols.add('sort_order');
+    if (document.getElementById('col-notes')?.checked) cols.add('notes_planer');
+    if (document.getElementById('col-latest')?.checked) cols.add('latest_date');
+    PlanerViews._visibleCols = cols;
+    try { localStorage.setItem('planer_cols', JSON.stringify([...cols])); } catch {}
+    UI.closeModal();
+    PlanerViews.applyFilter();
+  },
+
+  // ── Print Orders ─────────────────────────────────────────────────────────
+  printOrders() {
+    const orders = PlanerViews._filteredOrders.length ? PlanerViews._filteredOrders : PlanerViews._allOrders;
+    const today = new Date().toLocaleDateString('de-CH');
+    const rows = orders.map(o => `<tr>
+      <td><code>${UI.esc(o.order_number)}</code></td>
+      <td style="color:#1a4fa0;font-weight:600">${UI.esc(o.project_number || '')}</td>
+      <td>${o.planned_date ? new Date(o.planned_date + 'T00:00:00').toLocaleDateString('de-CH') : '–'}</td>
+      <td>${UI.esc(o.customer_name || o.cust_name || '')}</td>
+      <td>${UI.esc(o.installation_address || '')}</td>
+      <td>${UI.esc(o.assigned_name || '')}</td>
+      <td class="status-${UI.esc(o.status)}">${UI.esc(o.status || '')}</td>
+    </tr>`).join('');
+    const html = `<!DOCTYPE html><html lang="de"><head><meta charset="utf-8"><title>Montageliste</title>
+    <style>
+      body { font-family: Arial, Helvetica, sans-serif; font-size: 11px; margin: 12px; color: #000; }
+      h3 { margin: 0 0 10px; font-size: 14px; }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { border: 1px solid #bbb; padding: 4px 6px; text-align: left; vertical-align: top; }
+      th { background: #e8e8e8; font-weight: bold; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
+      tr:nth-child(even) { background: #f5f5f5; }
+      .status-abgeschlossen { color: #2d7a2d; font-weight: 600; }
+      .status-in_bearbeitung { color: #c07000; font-weight: 600; }
+      .status-geplant { color: #555; }
+      @media print { body { margin: 0; } }
+    </style></head><body>
+    <h3>Montageliste – Stand ${today} (${orders.length} Aufträge)</h3>
+    <table>
+      <thead><tr><th>Nr.</th><th>Projekt</th><th>Datum</th><th>Kunde</th><th>Montageadresse</th><th>Techniker</th><th>Status</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    </body></html>`;
+    const w = window.open('', '_blank');
+    if (!w) { UI.toast('Popup blockiert – bitte Popups erlauben', 'error'); return; }
+    w.document.write(html);
+    w.document.close();
+    setTimeout(() => w.print(), 300);
   },
 
   // ── Planer: items table editor ───────────────────────────────────────────
@@ -562,15 +666,26 @@ const PlanerViews = {
     const fv = v => UI.esc(v || '–');
     const fa = v => (Array.isArray(v) ? v : []).join(', ') || '–';
 
+    const filteredOrders = PlanerViews._filteredOrders || PlanerViews._allOrders;
+    const idx = filteredOrders.findIndex(o => o.id === orderId);
+    const prevOrder = idx > 0 ? filteredOrders[idx - 1] : null;
+    const nextOrder = idx < filteredOrders.length - 1 ? filteredOrders[idx + 1] : null;
+
     main.innerHTML = `
-      <div class="page-header">
-        <div class="flex gap-2 align-items-center">
+      <div class="page-header" style="flex-wrap:wrap">
+        <div class="flex gap-2 align-items-center flex-wrap">
           <button class="btn btn-ghost btn-sm" onclick="PlanerViews.renderOrders()">← Zurück</button>
           <h2>${order.project_number ? `Projekt ${fv(order.project_number)}` : `Auftrag ${fv(order.order_number)}`}</h2>
           ${order.project_number ? `<span class="text-muted text-sm">${fv(order.order_number)}</span>` : ''}
           ${UI.statusBadge(order.status)}
         </div>
-        <div class="flex gap-2">
+        <div class="flex gap-2 flex-wrap align-items-center">
+          ${filteredOrders.length > 1 ? `
+          <div class="flex gap-1 align-items-center">
+            <button class="btn btn-ghost btn-sm" ${!prevOrder ? 'disabled' : ''} onclick="PlanerViews.renderOrderDetail(${prevOrder?.id})">← Vorheriger</button>
+            <span class="text-muted text-sm" style="white-space:nowrap">${idx + 1} / ${filteredOrders.length}</span>
+            <button class="btn btn-ghost btn-sm" ${!nextOrder ? 'disabled' : ''} onclick="PlanerViews.renderOrderDetail(${nextOrder?.id})">Nächster →</button>
+          </div>` : ''}
           <button class="btn btn-ghost" onclick="window.print()">🖨 Drucken</button>
           <button class="btn btn-ghost" onclick="PlanerViews.openEmailModal(${order.id})">✉️ Per E-Mail</button>
           <button class="btn btn-ghost" onclick="PlanerViews.sendOrderToCustomer(${order.id})">📧 An Kunden senden</button>

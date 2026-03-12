@@ -119,6 +119,7 @@ const MonteurViews = {
     const projectLabel = order.project_number || order.order_number;
     const isStamped = MonteurViews._isStamped(orderId);
     const isRunning = MonteurViews._timerRunning(orderId);
+    const isLocked = order.status === 'abgeschlossen';
 
     main.innerHTML = `
       <div class="page-header" style="flex-wrap:wrap">
@@ -133,6 +134,14 @@ const MonteurViews = {
           ${nextOrder ? `<button class="btn btn-ghost btn-sm" onclick="MonteurViews.renderWorkForm(${nextOrder.id})">N\u00e4chster \u2192</button>` : ''}
         </div>
       </div>
+
+      ${isLocked ? `
+      <div style="background:rgba(45,122,45,.12);border:1px solid #2d7a2d;border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:10px">
+        <span style="font-size:20px">✅</span>
+        <span style="font-weight:600;color:#2d7a2d">Auftrag abgeschlossen \u2013 nur Nachtrag-Bemerkungen können noch hinzugefügt werden</span>
+      </div>` : ''}
+
+      <fieldset ${isLocked ? 'disabled' : ''} style="border:none;padding:0;margin:0">
 
       <!-- READ-ONLY: Order info from planer -->
       <div class="card">
@@ -420,19 +429,40 @@ const MonteurViews = {
         </div>
       </div>
 
+      </fieldset>
+
+      ${isLocked ? `
+      <!-- Nachtrag (nachträgliche Bemerkungen, nach Abschluss) -->
+      <div class="card">
+        <div class="section-header open" onclick="UI.toggleSection(this)">
+          <h3>📝 Nachtrag</h3><span class="toggle">▶</span>
+        </div>
+        <div class="section-body">
+          <p class="text-sm text-muted mb-2">Nachträgliche Bemerkungen werden mit Datum und Uhrzeit als Nachtrag deklariert und den bisherigen Bemerkungen angefügt.</p>
+          <div class="field mb-2">
+            <label>Nachträgliche Bemerkung</label>
+            <textarea id="f-nachtrag" placeholder="Nachtrag eingeben…" rows="3"></textarea>
+          </div>
+          <button class="btn btn-primary" onclick="MonteurViews.saveNachtrag(${orderId})">Nachtrag speichern</button>
+        </div>
+      </div>` : ''}
+
       <!-- Sticky save bar spacer for mobile -->
       <div style="height:80px" class="mobile-save-spacer"></div>
 
       <!-- Bottom save buttons (hidden on mobile, replaced by sticky bar) -->
-      <div class="flex gap-2 mt-3 mb-3 desktop-save-bar">
+      <div class="flex gap-2 mt-3 mb-3 desktop-save-bar flex-wrap">
+        ${!isLocked ? `
         <button class="btn btn-primary" onclick="MonteurViews.saveWork(${orderId})">Speichern & Abschicken</button>
+        <button class="btn btn-success" onclick="MonteurViews.closeOrder(${orderId})" style="background:#2d7a2d">✅ Auftrag abschliessen</button>
+        ` : ''}
         <button class="btn btn-ghost" onclick="MonteurViews.renderMyOrders()">Abbrechen</button>
       </div>
 
       <!-- Sticky save bar for mobile -->
       <div class="sticky-save-bar" id="sticky-save">
-        <button class="btn btn-primary" style="flex:1" onclick="MonteurViews.saveWork(${orderId})">Speichern & Abschicken</button>
-        <button class="btn btn-ghost" onclick="MonteurViews.renderMyOrders()">Abbrechen</button>
+        ${!isLocked ? `<button class="btn btn-primary" style="flex:1" onclick="MonteurViews.saveWork(${orderId})">Speichern & Abschicken</button>` : ''}
+        <button class="btn btn-ghost" onclick="MonteurViews.renderMyOrders()">Zurück</button>
       </div>
     `;
 
@@ -843,6 +873,96 @@ const MonteurViews = {
       await API.updateOrder(orderId, data);
       UI.toast('Auftrag gespeichert','success');
       MonteurViews.renderMyOrders();
+    } catch(e) { UI.toast(e.message,'error'); }
+  },
+
+  async closeOrder(orderId) {
+    if (!await UI.confirm('Auftrag als abgeschlossen markieren? Die Endzeit wird automatisch auf jetzt gesetzt. Danach können nur noch Nachtrag-Bemerkungen hinzugefügt werden.')) return;
+
+    const now = new Date();
+    const toEl = document.getElementById('f-work-to');
+    if (toEl) toEl.value = MonteurViews._fmtTime(now);
+
+    if (MonteurViews._timerRunning(orderId)) {
+      const key = MonteurViews._timerKey(orderId);
+      localStorage.removeItem(key);
+      clearInterval(MonteurViews._timerInterval);
+      MonteurViews._timerInterval = null;
+    }
+    localStorage.setItem('last_order_end_time', now.toISOString());
+    localStorage.setItem('last_order_id', String(orderId));
+    localStorage.removeItem(MonteurViews._stampedKey(orderId));
+
+    const signatureData = MonteurViews._sigPad?.getData() || null;
+    const allItems = [
+      ...MonteurViews.getLsItemRows(),
+      ...MonteurViews.getItemRows()
+    ];
+
+    const data = {
+      executed_work:       UI.getMultiCheck('ausgefuehrte_arbeiten'),
+      items_table:         allItems,
+      additional_material: [],
+      extra_material:      MonteurViews.getExtraRows(),
+      extra_aufwand:       parseFloat(document.getElementById('f-extra-aufwand')?.value) || null,
+      extra_argumentation: document.getElementById('f-extra-argumentation')?.value.trim() || null,
+      notes_monteur:       document.getElementById('f-notes-monteur')?.value.trim() || null,
+      rings_data: {
+        type:  UI.getMultiCheck('halteringe')[0] || null,
+        count: document.getElementById('f-rings-count')?.value || null,
+        note:  document.getElementById('f-rings-note')?.value.trim() || null,
+      },
+      keys_data: {
+        type:  UI.getMultiCheck('schluessel')[0] || null,
+        count: document.getElementById('f-keys-count')?.value || null,
+        id:    document.getElementById('f-keys-id')?.value.trim() || null,
+        note:  document.getElementById('f-keys-note')?.value.trim() || null,
+      },
+      work_date:        document.getElementById('f-work-date')?.value || null,
+      work_time_from:   document.getElementById('f-work-from')?.value || null,
+      work_time_to:     MonteurViews._fmtTime(now),
+      travel_time:      parseFloat(document.getElementById('f-travel-time')?.value) || null,
+      travel_km:        parseInt(document.getElementById('f-travel-km')?.value) || null,
+      technician_name:  document.getElementById('f-technician')?.value.trim() || null,
+      technician_block: document.getElementById('f-block')?.value.trim() || null,
+      signature_data:   signatureData,
+      agb_accepted:     true,
+      status:           'abgeschlossen',
+    };
+
+    if (!data.technician_name) { UI.toast('Techniker-Name erforderlich','error'); return; }
+
+    try {
+      await API.updateOrder(orderId, data);
+      UI.toast('Auftrag abgeschlossen','success');
+      MonteurViews.renderWorkForm(orderId); // reload in read-only mode
+    } catch(e) { UI.toast(e.message,'error'); }
+  },
+
+  async saveNachtrag(orderId) {
+    const text = document.getElementById('f-nachtrag')?.value.trim();
+    if (!text) { UI.toast('Bitte Nachtrag-Text eingeben','error'); return; }
+
+    let existingNotes = '';
+    try {
+      const order = await API.getOrder(orderId);
+      existingNotes = order.notes_monteur || '';
+    } catch(e) { /* use empty */ }
+
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('de-CH') + ' ' + now.toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' });
+    const nachtragLine = `[Nachtrag ${dateStr}]: ${text}`;
+    const newNotes = existingNotes ? `${existingNotes}\n${nachtragLine}` : nachtragLine;
+
+    try {
+      await fetch(`/api/orders/${orderId}/notes`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notes_monteur: newNotes }),
+        credentials: 'same-origin',
+      });
+      UI.toast('Nachtrag gespeichert','success');
+      MonteurViews.renderWorkForm(orderId);
     } catch(e) { UI.toast(e.message,'error'); }
   },
 };
