@@ -607,6 +607,49 @@ tbody td { padding: 12px; font-size: 13px; }
     margin: 0 auto 20px;
   }
   .login-card h1 { font-size: 22px; }
+
+  /* ── Mobile: Sticky save bar ── */
+  .sticky-save-bar {
+    display: flex;
+    position: fixed;
+    bottom: calc(var(--bottom-h) + env(safe-area-inset-bottom, 0px));
+    left: 0; right: 0;
+    background: rgba(255,255,255,0.95);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    padding: 10px 16px;
+    border-top: 1px solid var(--border);
+    z-index: 150;
+    gap: 8px;
+  }
+  .mobile-save-spacer { display: block; }
+  .desktop-save-bar { display: none; }
+
+  /* ── Mobile: Larger timer buttons ── */
+  #timer-box .btn {
+    min-height: 52px;
+    font-size: 16px;
+    padding: 14px 24px;
+  }
+  #timer-box #timer-display {
+    font-size: 28px !important;
+  }
+
+  /* ── Mobile: Larger signature canvas ── */
+  #sig-canvas {
+    height: 200px !important;
+  }
+  #sig-wrap-container {
+    max-width: 100% !important;
+  }
+}
+
+/* ── Sticky save bar (mobile only by default hidden on desktop) ──────────── */
+.sticky-save-bar {
+  display: none;
+}
+.mobile-save-spacer {
+  display: none;
 }
 
 /* ── Sortable table headers ──────────────────────────────────────────────── */

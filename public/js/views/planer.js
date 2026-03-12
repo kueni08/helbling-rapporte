@@ -16,8 +16,10 @@ const PlanerViews = {
     el.innerHTML = `
       <div class="page-header">
         <h2>📋 Aufträge</h2>
-        <div class="flex gap-2">
+        <div class="flex gap-2 flex-wrap">
+          <button class="btn btn-ghost" onclick="window.location='/api/orders/import-template'">📄 Vorlage</button>
           <button class="btn btn-ghost" onclick="PlanerViews.openImport()">📥 Excel Import</button>
+          <button class="btn btn-ghost" onclick="window.location='/api/orders/export'">📤 Excel Export</button>
           <button class="btn btn-primary" onclick="PlanerViews.renderOrderForm()">+ Neuer Auftrag</button>
         </div>
       </div>
@@ -212,7 +214,7 @@ const PlanerViews = {
       const name = document.getElementById(`p-item-name-${id}`)?.value.trim();
       const qty  = document.getElementById(`p-item-qty-${id}`)?.value;
       const unit = document.getElementById(`p-item-unit-${id}`)?.value.trim();
-      if (name) items.push({ name, quantity: parseFloat(qty) || 1, unit: unit || 'Stk.' });
+      if (name) items.push({ name, quantity: parseFloat(qty) || 1, unit: unit || 'Stk.', _source: 'planer' });
     });
     return items;
   },
@@ -286,6 +288,10 @@ const PlanerViews = {
             <div class="field">
               <label>Montageadresse <span class="req">*</span></label>
               <input type="text" id="f-installation-address" value="${UI.esc(order?.installation_address||'')}">
+            </div>
+            <div class="field">
+              <label>Projektnummer</label>
+              <input type="text" id="f-project-number" value="${UI.esc(order?.project_number||'')}" placeholder="z.B. PR26-001">
             </div>
             <div class="field">
               <label>Kommunizierte Ankunftszeit (von – bis)</label>
@@ -529,6 +535,7 @@ const PlanerViews = {
       sort_order:            parseInt(document.getElementById('f-sort-order').value) || 0,
       status:                document.getElementById('f-status').value,
       items_table:           PlanerViews.getPlanerItemRows(),
+      project_number:        document.getElementById('f-project-number')?.value.trim() || null,
     };
 
     if (!data.customer_id && !data.customer_name) { UI.toast('Kunde erforderlich','error'); return; }
@@ -559,7 +566,8 @@ const PlanerViews = {
       <div class="page-header">
         <div class="flex gap-2 align-items-center">
           <button class="btn btn-ghost btn-sm" onclick="PlanerViews.renderOrders()">← Zurück</button>
-          <h2>Auftrag ${fv(order.order_number)}</h2>
+          <h2>${order.project_number ? `Projekt ${fv(order.project_number)}` : `Auftrag ${fv(order.order_number)}`}</h2>
+          ${order.project_number ? `<span class="text-muted text-sm">${fv(order.order_number)}</span>` : ''}
           ${UI.statusBadge(order.status)}
         </div>
         <div class="flex gap-2">
@@ -575,6 +583,7 @@ const PlanerViews = {
           <div class="card-title">Auftragsinformation</div>
           ${[
             ['Auftragsnummer', fv(order.order_number)],
+            ...(order.project_number ? [['Projektnummer', fv(order.project_number)]] : []),
             ['Kunde',          fv(order.customer_name || order.cust_name)],
             ['Kundenadresse',  fv(order.customer_address || order.cust_address)],
             ['Besteller',      fv(order.orderer)],
@@ -915,8 +924,8 @@ const PlanerViews = {
   openImport() {
     UI.modal('Excel Import – Aufträge',
       `<p class="text-muted text-sm mb-3">
-        <strong>Standard-Format:</strong> Spalten: <code>Kunde</code>, <code>Montagedatum</code>, <code>Montageadresse</code>, <code>Besteller</code>, <code>Bemerkungen</code><br>
-        <strong>Lieferschein-Format:</strong> Spalten: <code>ID</code>, <code>Unternehmen</code>, <code>Datum</code>, <code>Abteilung</code>, <code>Artikel-Code (Lieferschein-Artikel)</code>, <code>Artikelname (Lieferschein-Artikel)</code>, <code>Anzahl (Lieferschein-Artikel)</code>, <code>Einheit (Lieferschein-Artikel)</code>
+        <strong>Standard-Format:</strong> Spalten: <code>Kunde</code>, <code>Montagedatum</code>, <code>Montageadresse</code>, <code>Besteller</code>, <code>Bemerkungen</code>, <code>Projekt</code><br>
+        <strong>ERPNext Lieferschein:</strong> Spalten: <code>ID</code>, <code>Kunde</code>, <code>Datum</code>, <code>Anweisungen</code>, <code>Projekt</code>, <code>Artikel-Code</code>, <code>Artikelname</code>, <code>Anzahl</code>, <code>Einheit</code> (Lieferschein-Artikel)
       </p>
        <div class="field">
          <label>Excel-Datei (.xlsx/.xls)</label>

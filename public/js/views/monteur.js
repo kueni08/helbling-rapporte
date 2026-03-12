@@ -14,14 +14,14 @@ const MonteurViews = {
     const el = document.getElementById('main-content');
     el.innerHTML = `
       <div class="page-header">
-        <h2>📅 Meine Aufträge</h2>
+        <h2>Meine Auftr\u00e4ge</h2>
         <div class="flex gap-2">
           <input type="date" id="m-filter-date" style="width:160px" onchange="MonteurViews.applyFilter()"
             value="${new Date().toISOString().split('T')[0]}">
           <button class="btn btn-ghost btn-sm" onclick="MonteurViews.clearFilter()">Alle anzeigen</button>
         </div>
       </div>
-      <div id="monteur-orders-list">Lade…</div>`;
+      <div id="monteur-orders-list">Lade\u2026</div>`;
     await MonteurViews.loadMyOrders();
   },
 
@@ -46,11 +46,14 @@ const MonteurViews = {
     if (!el) return;
 
     if (!orders.length) {
-      el.innerHTML = `<div class="card"><p class="text-muted text-sm">Keine Aufträge für diesen Tag.</p></div>`;
+      el.innerHTML = `<div class="card"><p class="text-muted text-sm">Keine Auftr\u00e4ge f\u00fcr diesen Tag.</p></div>`;
       return;
     }
 
-    el.innerHTML = orders.map((o, idx) => `
+    el.innerHTML = orders.map((o, idx) => {
+      const isRunning = MonteurViews._timerRunning(o.id);
+      const projectLabel = o.project_number || o.order_number;
+      return `
       <div class="card" style="cursor:pointer" onclick="MonteurViews.renderWorkForm(${o.id})">
         <div class="flex gap-3 align-items-start">
           <div style="background:var(--accent);color:#fff;border-radius:50%;width:32px;height:32px;
@@ -58,22 +61,41 @@ const MonteurViews = {
             ${idx + 1}
           </div>
           <div style="flex:1;min-width:0">
+            <div style="font-weight:700;color:var(--accent);font-size:15px;margin-bottom:2px">
+              ${UI.esc(projectLabel)}
+            </div>
             <div class="flex gap-2 align-items-center mb-1">
               <strong>${UI.esc(o.customer_name || o.cust_name || 'Unbekannt')}</strong>
               ${UI.statusBadge(o.status)}
             </div>
-            <div class="text-sm text-muted">${UI.esc(o.installation_address || '–')}</div>
+            <div class="text-sm text-muted">${UI.esc(o.installation_address || '\u2013')}</div>
             <div class="flex gap-3 mt-2 text-sm">
-              <span>📅 ${UI.fmtDate(o.planned_date)}</span>
-              ${o.arrival_time ? `<span>🕐 ${UI.esc(o.arrival_time)}</span>` : ''}
-              <span>📋 ${UI.esc(o.order_number)}</span>
+              <span>\ud83d\udcc5 ${UI.fmtDate(o.planned_date)}</span>
+              ${o.arrival_time ? `<span>\ud83d\udd50 ${UI.esc(o.arrival_time)}</span>` : ''}
             </div>
           </div>
-          <div>
-            <button class="btn btn-primary btn-sm">Auftrag öffnen →</button>
+          <div class="flex gap-2" style="flex-shrink:0">
+            <button class="btn ${isRunning ? 'btn-danger' : 'btn-success'} btn-sm"
+              onclick="event.stopPropagation(); MonteurViews.quickToggleTimer(${o.id})"
+              title="${isRunning ? 'Timer l\u00e4uft' : 'Timer starten'}"
+              style="min-width:44px;min-height:44px;font-size:18px;padding:0;display:flex;align-items:center;justify-content:center">
+              ${isRunning ? '\u23f9' : '\u25b6'}
+            </button>
           </div>
         </div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
+  },
+
+  quickToggleTimer(orderId) {
+    if (MonteurViews._timerRunning(orderId)) {
+      // Stop and navigate to form
+      MonteurViews.renderWorkForm(orderId);
+    } else {
+      MonteurViews.startTimer(orderId);
+      UI.toast('Timer gestartet', 'success');
+      MonteurViews.applyFilter(); // refresh card to show stop icon
+    }
   },
 
   // ── Work Form (Monteur fills in) ────────────────────────────────────────
@@ -83,32 +105,51 @@ const MonteurViews = {
     const opts = this._options;
     const main = document.getElementById('main-content');
 
+    // Separate LS items (from planer/import) and monteur items
+    const allItems = order.items_table || [];
+    const lsItems = allItems.filter(i => i._source === 'planer');
+    const monteurItems = allItems.filter(i => i._source !== 'planer');
+
+    // Prev/Next navigation
+    const filteredOrders = MonteurViews._myOrders.filter(o => o.status !== 'archiviert');
+    const currentIdx = filteredOrders.findIndex(o => o.id === orderId);
+    const prevOrder = currentIdx > 0 ? filteredOrders[currentIdx - 1] : null;
+    const nextOrder = currentIdx < filteredOrders.length - 1 ? filteredOrders[currentIdx + 1] : null;
+
+    const projectLabel = order.project_number || order.order_number;
+    const isStamped = MonteurViews._isStamped(orderId);
+    const isRunning = MonteurViews._timerRunning(orderId);
+
     main.innerHTML = `
-      <div class="page-header">
+      <div class="page-header" style="flex-wrap:wrap">
         <div class="flex gap-2 align-items-center">
-          <button class="btn btn-ghost btn-sm" onclick="MonteurViews.renderMyOrders()">← Zurück</button>
-          <h2>Auftrag ${UI.esc(order.order_number)}</h2>
+          <button class="btn btn-ghost btn-sm" onclick="MonteurViews.renderMyOrders()">\u2190 Zur\u00fcck</button>
+          <h2 style="color:var(--accent)">${UI.esc(projectLabel)}</h2>
+          ${order.project_number ? `<span class="text-muted text-sm">${UI.esc(order.order_number)}</span>` : ''}
           ${UI.statusBadge(order.status)}
         </div>
-        <button class="btn btn-primary" onclick="MonteurViews.saveWork(${orderId})">Speichern</button>
+        <div class="flex gap-2">
+          ${prevOrder ? `<button class="btn btn-ghost btn-sm" onclick="MonteurViews.renderWorkForm(${prevOrder.id})">\u2190 Vorheriger</button>` : ''}
+          ${nextOrder ? `<button class="btn btn-ghost btn-sm" onclick="MonteurViews.renderWorkForm(${nextOrder.id})">N\u00e4chster \u2192</button>` : ''}
+        </div>
       </div>
 
       <!-- READ-ONLY: Order info from planer -->
       <div class="card">
         <div class="section-header open" onclick="UI.toggleSection(this)">
-          <h3>📄 Auftragsinformation</h3><span class="toggle">▶</span>
+          <h3>\ud83d\udcc4 Auftragsinformation</h3><span class="toggle">\u25b6</span>
         </div>
         <div class="section-body">
           ${[
-            ['Kunde',           order.customer_name || order.cust_name || '–'],
-            ['Kundenadresse',   order.customer_address || order.cust_address || '–'],
-            ['Montageadresse',  order.installation_address || '–'],
-            ['Besteller',       order.orderer || '–'],
-            ['Kontakt vor Ort', order.on_site_contact || '–'],
-            ['Ankunftszeit',    order.arrival_time || '–'],
+            ['Kunde',           order.customer_name || order.cust_name || '\u2013'],
+            ['Kundenadresse',   order.customer_address || order.cust_address || '\u2013'],
+            ['Montageadresse',  order.installation_address || '\u2013'],
+            ['Besteller',       order.orderer || '\u2013'],
+            ['Kontakt vor Ort', order.on_site_contact || '\u2013'],
+            ['Ankunftszeit',    order.arrival_time || '\u2013'],
             ['Montagedatum',    UI.fmtDate(order.planned_date)],
-            ['Spätestes Datum', UI.fmtDate(order.latest_date)],
-            ['Arbeit',          (order.work_types||[]).join(', ') || '–'],
+            ['Sp\u00e4testes Datum', UI.fmtDate(order.latest_date)],
+            ['Arbeit',          (order.work_types||[]).join(', ') || '\u2013'],
           ].map(([l,v]) => `<div class="flex mb-2 gap-2">
             <span style="width:180px;flex-shrink:0;color:var(--text2);font-size:12px;font-weight:600">${l}</span>
             <span>${UI.esc(String(v))}</span>
@@ -127,10 +168,10 @@ const MonteurViews = {
           </div>` : ''}
 
           ${order.attachments?.length ? `
-          <p class="text-sm text-muted mt-3 mb-2">Anhänge</p>
+          <p class="text-sm text-muted mt-3 mb-2">Anh\u00e4nge</p>
           <div class="file-list">
             ${order.attachments.map(a => `<div class="file-item">
-              <span>📄</span>
+              <span>\ud83d\udcc4</span>
               <a href="${API.fileUrl(order.id, a.filename)}" target="_blank" class="file-name">${UI.esc(a.original_name)}</a>
             </div>`).join('')}
           </div>` : ''}
@@ -140,26 +181,12 @@ const MonteurViews = {
       <!-- MONTEUR: Executed work -->
       <div class="card">
         <div class="section-header open" onclick="UI.toggleSection(this)">
-          <h3>🔧 Ausgeführte Arbeiten</h3><span class="toggle">▶</span>
+          <h3>\ud83d\udd27 Ausgef\u00fchrte Arbeiten</h3><span class="toggle">\u25b6</span>
         </div>
         <div class="section-body">
           <div class="field mb-3">
-            <label>Ausgeführte Arbeiten</label>
+            <label>Ausgef\u00fchrte Arbeiten</label>
             ${UI.multiCheck('ausgefuehrte_arbeiten', opts.ausgefuehrte_arbeiten || [], order.executed_work || [])}
-          </div>
-
-          <!-- Items table -->
-          <div class="field mb-3">
-            <label>Material / Positionen</label>
-            <table class="items-table" id="items-table-body">
-              <thead><tr>
-                <th>Artikel / Beschreibung</th><th style="width:80px">Menge</th><th style="width:70px">Einheit</th><th style="width:36px"></th>
-              </tr></thead>
-              <tbody id="items-rows">
-                ${(order.items_table||[]).map((item, i) => MonteurViews.itemRow(i, item)).join('')}
-              </tbody>
-            </table>
-            <button class="btn btn-ghost btn-sm mt-2" onclick="MonteurViews.addItemRow()">+ Zeile hinzufügen</button>
           </div>
 
           <div class="field mb-3">
@@ -169,24 +196,61 @@ const MonteurViews = {
         </div>
       </div>
 
+      <!-- LS-Artikel (Planer/Import) – eingeklappt -->
+      ${lsItems.length ? `
+      <div class="card">
+        <div class="section-header" onclick="UI.toggleSection(this)">
+          <h3>\ud83d\udce6 LS-Artikel (Lieferschein)</h3><span class="toggle">\u25b6</span>
+        </div>
+        <div class="section-body collapsed">
+          <p class="text-sm text-muted mb-2">Vom Planer/Import vordefinierte Positionen. Artikelname ist nicht \u00e4nderbar, Mengen\u00e4nderungen werden hervorgehoben.</p>
+          <table class="items-table" id="ls-items-table">
+            <thead><tr>
+              <th>Artikel / Beschreibung</th><th style="width:80px">Menge</th><th style="width:70px">Einheit</th>
+            </tr></thead>
+            <tbody id="ls-items-rows">
+              ${lsItems.map((item, i) => MonteurViews.lsItemRow(i, item)).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>` : ''}
+
+      <!-- Zusätzliche Positionen (Monteur) – offen -->
+      <div class="card">
+        <div class="section-header open" onclick="UI.toggleSection(this)">
+          <h3>\ud83d\udd27 Zus\u00e4tzliche Positionen</h3><span class="toggle">\u25b6</span>
+        </div>
+        <div class="section-body">
+          <table class="items-table" id="items-table-body">
+            <thead><tr>
+              <th>Artikel / Beschreibung</th><th style="width:80px">Menge</th><th style="width:70px">Einheit</th><th style="width:36px"></th>
+            </tr></thead>
+            <tbody id="items-rows">
+              ${monteurItems.map((item, i) => MonteurViews.itemRow(i, item)).join('')}
+            </tbody>
+          </table>
+          <button class="btn btn-ghost btn-sm mt-2" onclick="MonteurViews.addItemRow()">+ Zeile hinzuf\u00fcgen</button>
+        </div>
+      </div>
+
       <!-- Nicht auf LS aufgeführt -->
       <div class="card" id="extra-material-card" style="${(order.extra_material?.length || order.extra_aufwand) ? 'border:2px solid #d48a00;background:rgba(212,138,0,.05)' : ''}">
         <div class="section-header open" onclick="UI.toggleSection(this)">
-          <h3 style="color:${(order.extra_material?.length || order.extra_aufwand) ? '#d48a00' : 'inherit'}">⚠️ Nicht auf LS aufgeführt</h3><span class="toggle">▶</span>
+          <h3 style="color:${(order.extra_material?.length || order.extra_aufwand) ? '#d48a00' : 'inherit'}">\u26a0\ufe0f Nicht auf LS aufgef\u00fchrt</h3><span class="toggle">\u25b6</span>
         </div>
         <div class="section-body">
-          <p class="text-sm text-muted mb-3">Zusätzliches Material und Mehraufwand, das nicht auf dem Lieferschein aufgeführt ist – wird in der Übersicht gelb hervorgehoben.</p>
+          <p class="text-sm text-muted mb-3">Zus\u00e4tzliches Material und Mehraufwand, das nicht auf dem Lieferschein aufgef\u00fchrt ist.</p>
 
           <div class="field mb-3">
-            <label>Artikel hinzufügen</label>
+            <label>Artikel hinzuf\u00fcgen</label>
             <div class="flex gap-2">
-              <input type="text" id="extra-art-search" list="extra-art-list" placeholder="Artikel suchen…" style="flex:1"
+              <input type="text" id="extra-art-search" list="extra-art-list" placeholder="Artikel suchen\u2026" style="flex:1"
                 autocomplete="off" oninput="MonteurViews.filterExtraArticles()">
               <datalist id="extra-art-list">
-                ${(MonteurViews._articles||[]).map(a => `<option data-id="${a.id}" data-unit="${UI.esc(a.unit||'Stk.')}" value="${UI.esc(a.article_number ? a.article_number+' – '+a.name : a.name)}"></option>`).join('')}
+                ${(MonteurViews._articles||[]).map(a => `<option data-id="${a.id}" data-unit="${UI.esc(a.unit||'Stk.')}" value="${UI.esc(a.article_number ? a.article_number+' \u2013 '+a.name : a.name)}"></option>`).join('')}
               </datalist>
               <input type="number" id="extra-art-qty" value="1" min="0.01" step="0.1" style="width:80px" placeholder="Menge">
-              <button class="btn btn-primary btn-sm" onclick="MonteurViews.addExtraRow()">+ Hinzufügen</button>
+              <button class="btn btn-primary btn-sm" onclick="MonteurViews.addExtraRow()">+ Hinzuf\u00fcgen</button>
             </div>
           </div>
 
@@ -205,8 +269,8 @@ const MonteurViews = {
               <input type="number" id="f-extra-aufwand" value="${UI.esc(String(order.extra_aufwand||''))}" min="0" step="0.25" placeholder="z.B. 1.5">
             </div>
             <div class="field">
-              <label>Argumentation / Begründung</label>
-              <input type="text" id="f-extra-argumentation" value="${UI.esc(order.extra_argumentation||'')}" placeholder="Grund für Mehraufwand…">
+              <label>Argumentation / Begr\u00fcndung</label>
+              <input type="text" id="f-extra-argumentation" value="${UI.esc(order.extra_argumentation||'')}" placeholder="Grund f\u00fcr Mehraufwand\u2026">
             </div>
           </div>
         </div>
@@ -215,7 +279,7 @@ const MonteurViews = {
       <!-- Halteringe & Schlüssel -->
       <div class="card">
         <div class="section-header open" onclick="UI.toggleSection(this)">
-          <h3>🔑 Halteringe & Schlüssel</h3><span class="toggle">▶</span>
+          <h3>\ud83d\udd11 Halteringe & Schl\u00fcssel</h3><span class="toggle">\u25b6</span>
         </div>
         <div class="section-body">
           <div class="form-grid">
@@ -234,7 +298,7 @@ const MonteurViews = {
               </div>
             </div>
             <div>
-              <p class="text-sm text-muted mb-2">Schlüssel</p>
+              <p class="text-sm text-muted mb-2">Schl\u00fcssel</p>
               ${UI.multiCheck('schluessel', opts.schluessel || [], order.keys_data?.type ? [order.keys_data.type] : [])}
               <div class="form-grid-3 mt-2">
                 <div class="field">
@@ -258,7 +322,7 @@ const MonteurViews = {
       <!-- Time & Technician -->
       <div class="card">
         <div class="section-header open" onclick="UI.toggleSection(this)">
-          <h3>⏱ Zeiten & Techniker</h3><span class="toggle">▶</span>
+          <h3>\u23f1 Zeiten & Techniker</h3><span class="toggle">\u25b6</span>
         </div>
         <div class="section-body">
 
@@ -268,12 +332,12 @@ const MonteurViews = {
               <div id="timer-display" style="font-size:22px;font-weight:700;font-family:monospace;letter-spacing:2px;min-width:90px">
                 ${MonteurViews._timerDisplay(orderId)}
               </div>
-              <button id="timer-btn-start" class="btn btn-primary" onclick="MonteurViews.startTimer(${orderId})"
-                style="${MonteurViews._timerRunning(orderId) ? 'display:none' : ''}">▶ Arbeit starten</button>
+              <button id="timer-btn-start" class="btn ${isStamped && !isRunning ? 'btn-ghost' : 'btn-primary'}" onclick="MonteurViews.startTimer(${orderId})"
+                style="${isRunning ? 'display:none' : ''}">${isStamped ? '\u21bb Neu starten' : '\u25b6 Arbeit starten'}</button>
               <button id="timer-btn-stop" class="btn btn-danger" onclick="MonteurViews.stopTimer(${orderId})"
-                style="${MonteurViews._timerRunning(orderId) ? '' : 'display:none'}">⏹ Arbeit stoppen</button>
-              <button class="btn btn-ghost btn-sm" onclick="MonteurViews.resetTimer(${orderId})" title="Timer zurücksetzen">↺</button>
-              <span class="text-muted text-sm">Startet/stoppt Arbeitszeit automatisch</span>
+                style="${isRunning ? '' : 'display:none'}">\u23f9 Arbeit stoppen</button>
+              <button class="btn btn-ghost btn-sm" onclick="MonteurViews.resetTimer(${orderId})" title="Timer zur\u00fccksetzen">\u21ba</button>
+              ${isStamped && !isRunning ? `<span class="text-sm" style="color:var(--success);font-weight:600">\u2713 Eingestempelt</span>` : ''}
             </div>
           </div>
 
@@ -284,31 +348,28 @@ const MonteurViews = {
             </div>
             <div class="field"></div>
             <div class="field">
-              <label>Arbeitszeit exkl. Anfahrt – von</label>
+              <label>Arbeitszeit exkl. Anfahrt \u2013 von</label>
               <input type="time" id="f-work-from" value="${UI.esc(order.work_time_from||'')}">
             </div>
             <div class="field">
-              <label>Arbeitszeit exkl. Anfahrt – bis</label>
+              <label>Arbeitszeit exkl. Anfahrt \u2013 bis</label>
               <input type="time" id="f-work-to" value="${UI.esc(order.work_time_to||'')}">
             </div>
             <div class="field">
               <label>Techniker (Druckschrift) <span class="req">*</span></label>
               <input type="text" id="f-technician" value="${UI.esc(order.technician_name || (App.state?.fullName||''))}">
             </div>
-            <div class="field">
-              <label>Blockschrift</label>
-              <input type="text" id="f-block" value="${UI.esc(order.technician_block||'')}">
-            </div>
+            <div class="field"></div>
           </div>
 
           <!-- Fahrzeit & Kilometer – intern, erscheint nicht auf Rapport -->
           <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
             <p class="text-sm text-muted mb-2" style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;font-weight:600">
-              Fahrzeit & Kilometer (intern – nicht auf Rapport)
+              Fahrzeit & Kilometer (intern \u2013 nicht auf Rapport)
             </p>
             <div class="form-grid">
               <div class="field">
-                <label>Fahrzeit (Std.)</label>
+                <label>Fahrzeit / Transferzeit (Std.)</label>
                 <input type="number" id="f-travel-time" value="${UI.esc(String(order.travel_time||''))}" min="0" step="0.25" placeholder="z.B. 0.5">
               </div>
               <div class="field">
@@ -323,15 +384,19 @@ const MonteurViews = {
       <!-- Signature -->
       <div class="card">
         <div class="section-header open" onclick="UI.toggleSection(this)">
-          <h3>✍️ Unterschrift Kunde</h3><span class="toggle">▶</span>
+          <h3>\u270d\ufe0f Unterschrift Kunde</h3><span class="toggle">\u25b6</span>
         </div>
         <div class="section-body">
+          <div class="field mb-3">
+            <label>Blockschrift (Name in Druckbuchstaben)</label>
+            <input type="text" id="f-block" value="${UI.esc(order.technician_block||'')}" placeholder="Name des Unterzeichners">
+          </div>
           <p class="text-muted text-sm mb-2">Bitte Unterschrift des Kunden hier einholen:</p>
-          <div class="sig-wrap" style="max-width:500px">
+          <div class="sig-wrap" id="sig-wrap-container">
             <canvas id="sig-canvas" style="height:150px;cursor:crosshair"></canvas>
           </div>
           <div class="sig-actions mt-2">
-            <button class="btn btn-ghost btn-sm" onclick="MonteurViews.clearSig()">Löschen</button>
+            <button class="btn btn-ghost btn-sm" onclick="MonteurViews.clearSig()">L\u00f6schen</button>
           </div>
           <p class="text-muted text-sm mt-3">Es gelten unsere AGB's.</p>
 
@@ -348,15 +413,25 @@ const MonteurViews = {
       <!-- Upload photos -->
       <div class="card">
         <div class="section-header open" onclick="UI.toggleSection(this)">
-          <h3>📸 Fotos hochladen</h3><span class="toggle">▶</span>
+          <h3>\ud83d\udcf8 Fotos hochladen</h3><span class="toggle">\u25b6</span>
         </div>
         <div class="section-body" id="monteur-photos-section">
           ${MonteurViews.renderPhotosSection(order)}
         </div>
       </div>
 
-      <div class="flex gap-2 mt-3 mb-3">
+      <!-- Sticky save bar spacer for mobile -->
+      <div style="height:80px" class="mobile-save-spacer"></div>
+
+      <!-- Bottom save buttons (hidden on mobile, replaced by sticky bar) -->
+      <div class="flex gap-2 mt-3 mb-3 desktop-save-bar">
         <button class="btn btn-primary" onclick="MonteurViews.saveWork(${orderId})">Speichern & Abschicken</button>
+        <button class="btn btn-ghost" onclick="MonteurViews.renderMyOrders()">Abbrechen</button>
+      </div>
+
+      <!-- Sticky save bar for mobile -->
+      <div class="sticky-save-bar" id="sticky-save">
+        <button class="btn btn-primary" style="flex:1" onclick="MonteurViews.saveWork(${orderId})">Speichern & Abschicken</button>
         <button class="btn btn-ghost" onclick="MonteurViews.renderMyOrders()">Abbrechen</button>
       </div>
     `;
@@ -373,8 +448,9 @@ const MonteurViews = {
     }, 50);
 
     window._monteurOrderId = orderId;
-    MonteurViews._itemCount  = (order.items_table||[]).length;
+    MonteurViews._itemCount  = monteurItems.length;
     MonteurViews._extraCount = (order.extra_material||[]).length;
+    MonteurViews._lsItems    = lsItems; // store for save
 
     // Resume timer if it was already running (page reload / navigation)
     if (MonteurViews._timerRunning(orderId)) {
@@ -382,13 +458,60 @@ const MonteurViews = {
     }
   },
 
+  // ── LS Item Row (read-only name, editable quantity with highlight) ─────
+  lsItemRow(i, item = {}) {
+    return `<tr id="ls-item-row-${i}">
+      <td>
+        <span style="font-weight:500">${UI.esc(item.name||'')}</span>
+        ${item.article_number ? `<br><code style="font-size:11px;color:var(--text2)">${UI.esc(item.article_number)}</code>` : ''}
+      </td>
+      <td><input type="number" id="ls-item-qty-${i}" value="${UI.esc(String(item.quantity||''))}" min="0" step="0.1"
+        data-orig="${UI.esc(String(item.quantity||''))}"
+        onchange="MonteurViews._highlightLsQty(this)"
+        style="width:70px"></td>
+      <td style="color:var(--text2);font-size:12px">${UI.esc(item.unit||'Stk.')}</td>
+    </tr>`;
+  },
+
+  _highlightLsQty(input) {
+    const orig = input.dataset.orig;
+    const changed = input.value !== orig;
+    input.style.borderColor = changed ? '#d48a00' : '';
+    input.style.background = changed ? 'rgba(212,138,0,.1)' : '';
+    // Add/remove "ge\u00e4ndert" indicator
+    const row = input.closest('tr');
+    let badge = row.querySelector('.qty-changed-badge');
+    if (changed && !badge) {
+      input.insertAdjacentHTML('afterend', '<span class="qty-changed-badge" style="font-size:10px;color:#d48a00;font-weight:600;margin-left:4px">ge\u00e4ndert</span>');
+    } else if (!changed && badge) {
+      badge.remove();
+    }
+  },
+
+  getLsItemRows() {
+    const items = [];
+    const lsItems = MonteurViews._lsItems || [];
+    lsItems.forEach((orig, i) => {
+      const qtyEl = document.getElementById(`ls-item-qty-${i}`);
+      items.push({
+        name: orig.name,
+        article_number: orig.article_number || null,
+        quantity: qtyEl ? (parseFloat(qtyEl.value) || orig.quantity) : orig.quantity,
+        unit: orig.unit || 'Stk.',
+        _source: 'planer'
+      });
+    });
+    return items;
+  },
+
+  // ── Monteur Item Row (fully editable) ──────────────────────────────────
   _itemCount: 0,
   itemRow(i, item = {}) {
     return `<tr id="item-row-${i}">
       <td><input type="text" id="item-name-${i}" value="${UI.esc(item.name||'')}"></td>
       <td><input type="number" id="item-qty-${i}" value="${UI.esc(String(item.quantity||''))}" min="0" step="0.1"></td>
       <td><input type="text" id="item-unit-${i}" value="${UI.esc(item.unit||'Stk.')}" style="width:60px"></td>
-      <td><button class="del-btn" onclick="MonteurViews.removeItemRow(${i})">✕</button></td>
+      <td><button class="del-btn" onclick="MonteurViews.removeItemRow(${i})">\u2715</button></td>
     </tr>`;
   },
 
@@ -410,7 +533,7 @@ const MonteurViews = {
       <td><input type="number" id="extra-qty-${i}" value="${UI.esc(String(item.quantity||'1'))}" min="0.01" step="0.1" style="width:70px"
         data-unit="${UI.esc(item.unit||'Stk.')}" data-name="${UI.esc(item.name||'')}" data-artnr="${UI.esc(item.article_number||'')}"></td>
       <td>${UI.esc(item.unit||'Stk.')}</td>
-      <td><button class="del-btn" onclick="MonteurViews.removeExtraRow(${i})">✕</button></td>
+      <td><button class="del-btn" onclick="MonteurViews.removeExtraRow(${i})">\u2715</button></td>
     </tr>`;
   },
   removeExtraRow(i) {
@@ -418,7 +541,6 @@ const MonteurViews = {
     MonteurViews._updateExtraHighlight();
   },
   filterExtraArticles() {
-    // Native datalist handles filtering; just highlight the card when items exist
     MonteurViews._updateExtraHighlight();
   },
   addExtraRow() {
@@ -427,10 +549,9 @@ const MonteurViews = {
     const val      = searchEl?.value.trim();
     if (!val) { UI.toast('Bitte Artikel eingeben', 'error'); return; }
 
-    // Find matching article from list
     const articles = MonteurViews._articles || [];
     const match = articles.find(a =>
-      val === (a.article_number ? a.article_number + ' – ' + a.name : a.name) ||
+      val === (a.article_number ? a.article_number + ' \u2013 ' + a.name : a.name) ||
       val.toLowerCase() === a.name.toLowerCase()
     );
 
@@ -479,11 +600,17 @@ const MonteurViews = {
 
   // ── Work Timer ──────────────────────────────────────────────────────────
   _timerInterval: null,
+  _lsItems: [],
 
   _timerKey: (orderId) => `work_start_${orderId}`,
+  _stampedKey: (orderId) => `stamped_${orderId}`,
 
   _timerRunning(orderId) {
     return !!localStorage.getItem(MonteurViews._timerKey(orderId));
+  },
+
+  _isStamped(orderId) {
+    return !!localStorage.getItem(MonteurViews._stampedKey(orderId));
   },
 
   _timerDisplay(orderId) {
@@ -507,18 +634,38 @@ const MonteurViews = {
 
   startTimer(orderId) {
     const key = MonteurViews._timerKey(orderId);
-    if (localStorage.getItem(key)) return; // already running
     const now = new Date();
+
+    // Auto-calculate transfer time from last order's end
+    const lastEnd = localStorage.getItem('last_order_end_time');
+    const lastOrderId = localStorage.getItem('last_order_id');
+    if (lastEnd && lastOrderId && String(lastOrderId) !== String(orderId)) {
+      const transferMinutes = (now - new Date(lastEnd)) / 60000;
+      if (transferMinutes > 0 && transferMinutes < 480) { // max 8h reasonable
+        const transferHours = Math.round(transferMinutes / 15) * 0.25; // round to 15min
+        const travelEl = document.getElementById('f-travel-time');
+        if (travelEl && !travelEl.value) travelEl.value = transferHours;
+      }
+    }
+
+    // Always update start time (overwrite if already running)
+    clearInterval(MonteurViews._timerInterval);
     localStorage.setItem(key, now.toISOString());
-    // set work-from field
+    localStorage.setItem(MonteurViews._stampedKey(orderId), 'true');
+
+    // Always set work-from field
     const fromEl = document.getElementById('f-work-from');
-    if (fromEl && !fromEl.value) fromEl.value = MonteurViews._fmtTime(now);
+    if (fromEl) fromEl.value = MonteurViews._fmtTime(now);
     // set work-date
     const dateEl = document.getElementById('f-work-date');
     if (dateEl) dateEl.value = now.toISOString().split('T')[0];
+
     // toggle buttons
-    document.getElementById('timer-btn-start').style.display = 'none';
-    document.getElementById('timer-btn-stop').style.display  = '';
+    const startBtn = document.getElementById('timer-btn-start');
+    const stopBtn = document.getElementById('timer-btn-stop');
+    if (startBtn) startBtn.style.display = 'none';
+    if (stopBtn) stopBtn.style.display = '';
+
     // start interval
     MonteurViews._startTimerInterval(orderId);
   },
@@ -539,21 +686,34 @@ const MonteurViews = {
     const elapsed = Math.floor((now - start) / 1000);
     const display = document.getElementById('timer-display');
     if (display) display.textContent = MonteurViews._fmtElapsed(elapsed);
-    // toggle buttons
-    document.getElementById('timer-btn-stop').style.display  = 'none';
-    document.getElementById('timer-btn-start').style.display = '';
-    UI.toast(`Arbeitszeit gestoppt: ${MonteurViews._fmtTime(start)} – ${MonteurViews._fmtTime(now)}`, 'success', 4000);
+    // toggle buttons – show "Neu starten" (rewind) since already stamped
+    const stopBtn = document.getElementById('timer-btn-stop');
+    const startBtn = document.getElementById('timer-btn-start');
+    if (stopBtn) stopBtn.style.display = 'none';
+    if (startBtn) {
+      startBtn.style.display = '';
+      startBtn.textContent = '\u21bb Neu starten';
+      startBtn.className = 'btn btn-ghost';
+    }
+    UI.toast(`Arbeitszeit gestoppt: ${MonteurViews._fmtTime(start)} \u2013 ${MonteurViews._fmtTime(now)}`, 'success', 4000);
   },
 
   resetTimer(orderId) {
     const key = MonteurViews._timerKey(orderId);
     localStorage.removeItem(key);
+    localStorage.removeItem(MonteurViews._stampedKey(orderId));
     clearInterval(MonteurViews._timerInterval);
     MonteurViews._timerInterval = null;
     const display = document.getElementById('timer-display');
     if (display) display.textContent = '00:00:00';
-    document.getElementById('timer-btn-stop').style.display  = 'none';
-    document.getElementById('timer-btn-start').style.display = '';
+    const stopBtn = document.getElementById('timer-btn-stop');
+    const startBtn = document.getElementById('timer-btn-start');
+    if (stopBtn) stopBtn.style.display = 'none';
+    if (startBtn) {
+      startBtn.style.display = '';
+      startBtn.textContent = '\u25b6 Arbeit starten';
+      startBtn.className = 'btn btn-primary';
+    }
   },
 
   _startTimerInterval(orderId) {
@@ -587,11 +747,11 @@ const MonteurViews = {
       <div class="photo-grid mb-2" id="m-photo-grid">
         ${photos.map(p => `<div class="photo-thumb" id="m-photo-${p.id}">
           <img src="${API.fileUrl(order.id, p.filename)}" alt="">
-          <button class="del-photo" onclick="MonteurViews.delPhoto(${order.id},${p.id})">✕</button>
+          <button class="del-photo" onclick="MonteurViews.delPhoto(${order.id},${p.id})">\u2715</button>
         </div>`).join('')}
       </div>
       <label class="btn btn-ghost btn-sm" style="cursor:pointer">
-        📷 Bilder hochladen
+        \ud83d\udcf7 Bilder hochladen
         <input type="file" id="m-photo-upload" multiple accept="image/*" capture="environment"
           style="display:none" onchange="MonteurViews.uploadPhotos(${order.id})">
       </label>`;
@@ -618,11 +778,37 @@ const MonteurViews = {
   },
 
   async saveWork(orderId) {
+    // Auto-set end time to now
+    const now = new Date();
+    const toEl = document.getElementById('f-work-to');
+    if (toEl) toEl.value = MonteurViews._fmtTime(now);
+
+    // Stop timer if running
+    if (MonteurViews._timerRunning(orderId)) {
+      const key = MonteurViews._timerKey(orderId);
+      localStorage.removeItem(key);
+      clearInterval(MonteurViews._timerInterval);
+      MonteurViews._timerInterval = null;
+    }
+
+    // Store last end time for transfer time calculation
+    localStorage.setItem('last_order_end_time', now.toISOString());
+    localStorage.setItem('last_order_id', String(orderId));
+
+    // Clean up stamped flag
+    localStorage.removeItem(MonteurViews._stampedKey(orderId));
+
     const signatureData = MonteurViews._sigPad?.getData() || null;
+
+    // Combine LS items + monteur items
+    const allItems = [
+      ...MonteurViews.getLsItemRows(),
+      ...MonteurViews.getItemRows()
+    ];
 
     const data = {
       executed_work:       UI.getMultiCheck('ausgefuehrte_arbeiten'),
-      items_table:         MonteurViews.getItemRows(),
+      items_table:         allItems,
       additional_material: [],
       extra_material:      MonteurViews.getExtraRows(),
       extra_aufwand:       parseFloat(document.getElementById('f-extra-aufwand')?.value) || null,
