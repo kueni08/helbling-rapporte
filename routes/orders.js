@@ -130,7 +130,9 @@ router.get('/', requireLogin, (req, res) => {
   let orders;
   if (role === 'monteur') {
     orders = db.prepare(`
-      SELECT o.*, u.full_name AS assigned_name, c.name AS cust_name
+      SELECT o.*, u.full_name AS assigned_name, c.name AS cust_name,
+        (SELECT COUNT(*) FROM order_attachments WHERE order_id = o.id) AS attachment_count,
+        (SELECT COUNT(*) FROM order_photos WHERE order_id = o.id) AS photo_count
       FROM orders o
       LEFT JOIN users u ON u.id = o.assigned_to
       LEFT JOIN customers c ON c.id = o.customer_id
@@ -139,7 +141,9 @@ router.get('/', requireLogin, (req, res) => {
     `).all(userId);
   } else {
     orders = db.prepare(`
-      SELECT o.*, u.full_name AS assigned_name, c.name AS cust_name
+      SELECT o.*, u.full_name AS assigned_name, c.name AS cust_name,
+        (SELECT COUNT(*) FROM order_attachments WHERE order_id = o.id) AS attachment_count,
+        (SELECT COUNT(*) FROM order_photos WHERE order_id = o.id) AS photo_count
       FROM orders o
       LEFT JOIN users u ON u.id = o.assigned_to
       LEFT JOIN customers c ON c.id = o.customer_id
@@ -324,6 +328,19 @@ router.patch('/reorder', requireRole('admin', 'planer'), (req, res) => {
   const update = db.prepare('UPDATE orders SET sort_order = ? WHERE id = ?');
   const tx = db.transaction(() => items.forEach(({ id, sort_order }) => update.run(sort_order, id)));
   tx();
+  res.json({ ok: true });
+});
+
+// PATCH /api/orders/:id/notes  – append nachtrag to monteur notes (all roles)
+router.patch('/:id/notes', requireLogin, (req, res) => {
+  const db = getDb();
+  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
+  if (!order) return res.status(404).json({ error: 'Auftrag nicht gefunden' });
+  if (req.session.role === 'monteur' && order.assigned_to !== req.session.userId) {
+    return res.status(403).json({ error: 'Keine Berechtigung' });
+  }
+  db.prepare("UPDATE orders SET notes_monteur = ?, updated_at = datetime('now') WHERE id = ?")
+    .run(req.body.notes_monteur || null, req.params.id);
   res.json({ ok: true });
 });
 
