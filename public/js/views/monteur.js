@@ -461,7 +461,8 @@ const MonteurViews = {
 
       <!-- Sticky save bar for mobile -->
       <div class="sticky-save-bar" id="sticky-save">
-        ${!isLocked ? `<button class="btn btn-primary" style="flex:1" onclick="MonteurViews.saveWork(${orderId})">Speichern & Abschicken</button>` : ''}
+        ${!isLocked ? `<button class="btn btn-primary" style="flex:1" onclick="MonteurViews.saveWork(${orderId})">Speichern & Abschicken</button>
+        <button class="btn btn-success" style="flex:1" onclick="MonteurViews.closeOrder(${orderId})">✅ Abschliessen</button>` : ''}
         <button class="btn btn-ghost" onclick="MonteurViews.renderMyOrders()">Zurück</button>
       </div>
     `;
