@@ -19,7 +19,9 @@ primary_region = "fra"
 [[mounts]]
   source = "rapporte_data"
   destination = "/app/db"
+  initial_size = "1gb"
 
 [[mounts]]
   source = "rapporte_uploads"
   destination = "/app/uploads"
+  initial_size = "1gb"
