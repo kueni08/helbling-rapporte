@@ -1,0 +1,25 @@
+app = "helbling-rapporte"
+primary_region = "fra"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "3000"
+  NODE_ENV = "production"
+  GOOGLE_SERVICE_ACCOUNT_FILE = "./credentials/service-account.json"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[mounts]]
+  source = "rapporte_data"
+  destination = "/app/db"
+
+[[mounts]]
+  source = "rapporte_uploads"
+  destination = "/app/uploads"
