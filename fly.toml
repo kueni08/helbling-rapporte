@@ -1,37 +1,23 @@
-# fly.toml app configuration file generated for app-shy-water-2952 on 2026-03-14T17:24:47Z
+# fly.toml app configuration file generated for helbling-rapporte-c-1afq on 2026-03-14T17:57:29Z
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = 'app-shy-water-2952'
-primary_region = 'fra'
+app = 'helbling-rapporte-c-1afq'
+primary_region = 'iad'
 
 [build]
-  dockerfile = "Dockerfile"
-
-[env]
-  PORT = "3000"
-  NODE_ENV = "production"
-  GOOGLE_SERVICE_ACCOUNT_FILE = "./credentials/service-account.json"
 
 [http_service]
   internal_port = 3000
   force_https = true
   auto_stop_machines = 'stop'
   auto_start_machines = true
-  min_machines_running = 1
+  min_machines_running = 0
   processes = ['app']
-
-[[mounts]]
-  source = "rapporte_data"
-  destination = "/app/db"
-
-[[mounts]]
-  source = "rapporte_uploads"
-  destination = "/app/uploads"
 
 [[vm]]
   memory = '1gb'
   cpu_kind = 'shared'
   cpus = 1
-  memory_mb = 256
+  memory_mb = 1024
