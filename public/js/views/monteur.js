@@ -40,7 +40,8 @@ const MonteurViews = {
   applyFilter() {
     const date = document.getElementById('m-filter-date')?.value || '';
     let orders = MonteurViews._myOrders.filter(o => o.status !== 'archiviert');
-    if (date) orders = orders.filter(o => (o.planned_date||'').startsWith(date));
+    // Datumsfilter anwenden, aber abgeschlossene Aufträge immer anzeigen
+    if (date) orders = orders.filter(o => o.status === 'abgeschlossen' || (o.planned_date||'').startsWith(date));
 
     const el = document.getElementById('monteur-orders-list');
     if (!el) return;
