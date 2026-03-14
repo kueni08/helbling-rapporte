@@ -55,6 +55,126 @@ function formatOrder(o) {
   };
 }
 
+// ── Tagesübersicht ────────────────────────────────────────────────────────
+// GET /api/orders/tagesuebersicht?date=YYYY-MM-DD[&technicianId=ID]
+router.get('/tagesuebersicht', requireLogin, (req, res) => {
+  const db = getDb();
+  const { role, userId } = req.session;
+  const date = req.query.date || new Date().toISOString().split('T')[0];
+  let rows;
+  if (role === 'monteur') {
+    rows = db.prepare(`
+      SELECT o.*, u.full_name AS assigned_name
+      FROM orders o
+      LEFT JOIN users u ON u.id = o.assigned_to
+      WHERE o.assigned_to = ?
+        AND (o.work_date = ? OR o.planned_date = ?)
+        AND o.status != 'archiviert'
+      ORDER BY o.work_time_from, o.sort_order
+    `).all(userId, date, date);
+  } else {
+    const techId = req.query.technicianId ? parseInt(req.query.technicianId) : null;
+    let sql = `
+      SELECT o.*, u.full_name AS assigned_name
+      FROM orders o
+      LEFT JOIN users u ON u.id = o.assigned_to
+      WHERE (o.work_date = ? OR o.planned_date = ?)
+        AND o.status != 'archiviert'`;
+    const params = [date, date];
+    if (techId) { sql += ' AND o.assigned_to = ?'; params.push(techId); }
+    sql += ' ORDER BY u.full_name, o.work_time_from, o.sort_order';
+    rows = db.prepare(sql).all(...params);
+  }
+
+  const technicians = db.prepare("SELECT id, full_name FROM users WHERE role='monteur' AND active=1 ORDER BY full_name").all();
+
+  const result = rows.map(o => {
+    const workFrom = o.work_time_from || null;
+    const workTo   = o.work_time_to   || null;
+    let durationH  = null;
+    if (workFrom && workTo) {
+      const [fh, fm] = workFrom.split(':').map(Number);
+      const [th, tm] = workTo.split(':').map(Number);
+      durationH = Math.round(((th * 60 + tm) - (fh * 60 + fm)) / 60 * 100) / 100;
+    }
+    return {
+      id:               o.id,
+      order_number:     o.order_number,
+      status:           o.status,
+      customer_name:    o.customer_name,
+      installation_address: o.installation_address,
+      technician_name:  o.assigned_name || o.technician_name,
+      work_date:        o.work_date     || o.planned_date,
+      work_time_from:   workFrom,
+      work_time_to:     workTo,
+      duration_h:       durationH,
+      travel_time:      o.travel_time,
+      travel_km:        o.travel_km,
+      executed_work:    parseJSON(o.executed_work, []),
+      notes_monteur:    o.notes_monteur,
+    };
+  });
+
+  res.json({ date, rows: result, technicians });
+});
+
+// GET /api/orders/tagesuebersicht/export  – Excel
+router.get('/tagesuebersicht/export', requireLogin, (req, res) => {
+  const db = getDb();
+  const { role, userId } = req.session;
+  const date = req.query.date || new Date().toISOString().split('T')[0];
+  let rows;
+  if (role === 'monteur') {
+    rows = db.prepare(`
+      SELECT o.*, u.full_name AS assigned_name FROM orders o
+      LEFT JOIN users u ON u.id = o.assigned_to
+      WHERE o.assigned_to = ? AND (o.work_date = ? OR o.planned_date = ?)
+        AND o.status != 'archiviert' ORDER BY o.work_time_from, o.sort_order
+    `).all(userId, date, date);
+  } else {
+    const techId = req.query.technicianId ? parseInt(req.query.technicianId) : null;
+    let sql = `SELECT o.*, u.full_name AS assigned_name FROM orders o
+      LEFT JOIN users u ON u.id = o.assigned_to
+      WHERE (o.work_date = ? OR o.planned_date = ?) AND o.status != 'archiviert'`;
+    const params = [date, date];
+    if (techId) { sql += ' AND o.assigned_to = ?'; params.push(techId); }
+    sql += ' ORDER BY u.full_name, o.work_time_from, o.sort_order';
+    rows = db.prepare(sql).all(...params);
+  }
+  const data = rows.map(o => {
+    const workFrom = o.work_time_from;
+    const workTo   = o.work_time_to;
+    let durationH  = null;
+    if (workFrom && workTo) {
+      const [fh, fm] = workFrom.split(':').map(Number);
+      const [th, tm] = workTo.split(':').map(Number);
+      durationH = Math.round(((th*60+tm)-(fh*60+fm))/60*100)/100;
+    }
+    return {
+      'Techniker':         o.assigned_name || o.technician_name || '',
+      'Datum':             o.work_date || o.planned_date || '',
+      'Auftragsnummer':    o.order_number || '',
+      'Kunde':             o.customer_name || '',
+      'Montageadresse':    o.installation_address || '',
+      'Von':               workFrom || '',
+      'Bis':               workTo   || '',
+      'Dauer (Std.)':      durationH || '',
+      'Fahrzeit (Std.)':   o.travel_time || '',
+      'Kilometer':         o.travel_km   || '',
+      'Ausgeführte Arbeiten': (parseJSON(o.executed_work,[])).join(', '),
+      'Bemerkungen':       o.notes_monteur || '',
+      'Status':            o.status,
+    };
+  });
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(data);
+  XLSX.utils.book_append_sheet(wb, ws, `Tag_${date}`);
+  const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="tagesuebersicht_${date}.xlsx"`);
+  res.send(Buffer.from(buf));
+});
+
 // ── Excel Export ─────────────────────────────────────────────────────────
 // GET /api/orders/export  (planer + admin)
 router.get('/export', requireRole('admin', 'planer'), (req, res) => {

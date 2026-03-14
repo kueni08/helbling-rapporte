@@ -887,7 +887,7 @@ const MonteurViews = {
         `<div style="display:flex;flex-direction:column;gap:16px;padding:8px 0">
           <label style="display:flex;align-items:center;gap:12px;font-size:15px;cursor:pointer">
             <input type="checkbox" id="cl-material" style="width:20px;height:20px">
-            Zusätzliches Material (nicht auf LS) verwendet?
+            Zusätzliches Material (nicht auf LS) ausgeführt?
           </label>
           <label style="display:flex;align-items:center;gap:12px;font-size:15px;cursor:pointer">
             <input type="checkbox" id="cl-foto" style="width:20px;height:20px">
@@ -969,8 +969,35 @@ const MonteurViews = {
 
     try {
       await API.updateOrder(orderId, data);
-      UI.toast('Auftrag abgeschlossen','success');
-      MonteurViews.renderWorkForm(orderId); // reload in read-only mode
+
+      // Erfolgs-Bestätigung anzeigen dann zurück zur Übersicht
+      const order = await API.getOrder(orderId);
+      await new Promise(resolve => {
+        window._doneResolve = (val) => { window._doneResolve = () => {}; resolve(val); };
+        UI.modal('✅ Auftrag abgeschlossen',
+          `<div style="display:flex;flex-direction:column;gap:12px;padding:8px 0">
+            <div style="background:#f0faf0;border:1px solid #2d7a2d;border-radius:8px;padding:16px;text-align:center">
+              <div style="font-size:32px;margin-bottom:8px">✅</div>
+              <div style="font-weight:700;font-size:16px;color:#2d7a2d">Auftrag ${UI.esc(order.order_number||'')} abgeschlossen</div>
+              <div style="color:#666;margin-top:4px">${UI.esc(order.customer_name||'')} – ${UI.esc(order.installation_address||'')}</div>
+            </div>
+            <table style="width:100%;border-collapse:collapse;font-size:13px">
+              <tr><td style="padding:5px 8px;font-weight:600;width:40%">Techniker</td><td style="padding:5px 8px">${UI.esc(data.technician_name)}</td></tr>
+              <tr style="background:#f5f5f5"><td style="padding:5px 8px;font-weight:600">Datum</td><td style="padding:5px 8px">${UI.esc(data.work_date||'–')}</td></tr>
+              <tr><td style="padding:5px 8px;font-weight:600">Arbeitszeit</td><td style="padding:5px 8px">${UI.esc(data.work_time_from||'–')} – ${UI.esc(data.work_time_to||'–')}</td></tr>
+              ${data.travel_time ? `<tr style="background:#f5f5f5"><td style="padding:5px 8px;font-weight:600">Fahrzeit</td><td style="padding:5px 8px">${data.travel_time} h</td></tr>` : ''}
+              ${data.travel_km ? `<tr><td style="padding:5px 8px;font-weight:600">Kilometer</td><td style="padding:5px 8px">${data.travel_km} km</td></tr>` : ''}
+            </table>
+            <div style="color:#666;font-size:12px;text-align:center">Rapport wurde gespeichert. Der Planer kann jetzt die E-Mail versenden.</div>
+          </div>`,
+          `<button class="btn btn-success" style="background:#2d7a2d" onclick="UI.closeModal();window._doneResolve(true)">Zurück zur Übersicht</button>`
+        );
+        const mc = document.getElementById('modal-container');
+        const obs = new MutationObserver(() => { if (!mc.innerHTML.trim()) { obs.disconnect(); window._doneResolve(true); } });
+        obs.observe(mc, { childList: true });
+      });
+
+      App.navigate('monteur-orders');
     } catch(e) { UI.toast(e.message,'error'); }
   },
 
