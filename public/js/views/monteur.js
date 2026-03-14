@@ -899,8 +899,8 @@ const MonteurViews = {
             Auftrag abgeschlossen?
           </label>
         </div>`,
-        `<button class="btn btn-ghost" onclick="UI.closeModal();window._clResolve(null)">Abbrechen</button>
-         <button class="btn btn-success" style="background:#2d7a2d" onclick="UI.closeModal();window._clResolve({material:document.getElementById('cl-material').checked,foto:document.getElementById('cl-foto').checked,done:document.getElementById('cl-done').checked})">Auftrag abschliessen</button>`
+        `<button class="btn btn-ghost" onclick="window._clResolve(null);UI.closeModal()">Abbrechen</button>
+         <button class="btn btn-success" style="background:#2d7a2d" onclick="window._clResolve({material:document.getElementById('cl-material').checked,foto:document.getElementById('cl-foto').checked,done:document.getElementById('cl-done').checked});UI.closeModal()">Auftrag abschliessen</button>`
       );
       const mc = document.getElementById('modal-container');
       const obs = new MutationObserver(() => { if (!mc.innerHTML.trim()) { obs.disconnect(); window._clResolve(null); } });
