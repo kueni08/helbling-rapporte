@@ -69,12 +69,14 @@ const App = {
     const navItems = [];
 
     if (role === 'monteur') {
-      navItems.push({ id: 'monteur-orders', icon: '📅', label: 'Meine Aufträge' });
+      navItems.push({ id: 'monteur-orders',      icon: '📅', label: 'Meine Aufträge' });
+      navItems.push({ id: 'tagesuebersicht',     icon: '📊', label: 'Tagesübersicht' });
     }
 
     if (role === 'planer' || role === 'admin') {
-      navItems.push({ id: 'planer-orders',   icon: '📋', label: 'Aufträge' });
-      navItems.push({ id: 'planer-anfragen', icon: '📩', label: 'Kundenanfragen' });
+      navItems.push({ id: 'planer-orders',       icon: '📋', label: 'Aufträge' });
+      navItems.push({ id: 'planer-anfragen',     icon: '📩', label: 'Kundenanfragen' });
+      navItems.push({ id: 'tagesuebersicht',     icon: '📊', label: 'Tagesübersicht' });
     }
 
     if (role === 'admin') {
@@ -109,6 +111,7 @@ const App = {
       'admin-users':      'Benutzer',
       'admin-settings':   'Einstellungen',
       'change-password':  'Passwort ändern',
+      'tagesuebersicht':  'Tagesübersicht',
     };
     const titleEl = document.getElementById('mobile-title');
     if (titleEl) titleEl.textContent = titles[viewId] || 'Rapporte';
@@ -121,6 +124,7 @@ const App = {
       case 'admin-users':      AdminViews.renderUsers(); break;
       case 'admin-settings':   AdminViews.renderSettings(); break;
       case 'change-password':  App.renderChangePassword(); break;
+      case 'tagesuebersicht':  TagesuebersichtView.render(); break;
     }
   },
 

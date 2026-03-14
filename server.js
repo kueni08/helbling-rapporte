@@ -5,6 +5,16 @@ const SQLiteStore = require('connect-sqlite3')(session);
 const path = require('path');
 const fs = require('fs');
 
+// Fly.io: Service Account JSON aus Env-Var in Datei schreiben
+if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+  const credDir = path.join(__dirname, 'credentials');
+  fs.mkdirSync(credDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(credDir, 'service-account.json'),
+    Buffer.from(process.env.GOOGLE_SERVICE_ACCOUNT_JSON, 'base64').toString('utf8')
+  );
+}
+
 const { initDatabase } = require('./lib/database');
 
 const app = express();
