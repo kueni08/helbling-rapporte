@@ -1,4 +1,5 @@
 node_modules/
+credentials/
 .env
 db/rapporte.db
 db/rapporte.db-shm

@@ -447,6 +447,10 @@ const MonteurViews = {
         </div>
       </div>` : ''}
 
+      ${!isLocked ? `
+      <button class="btn btn-success" style="width:100%;margin-top:16px;background:#2d7a2d;font-size:16px;padding:14px" onclick="MonteurViews.closeOrder(${orderId})">✅ Auftrag abschliessen</button>
+      ` : ''}
+
       <!-- Sticky save bar spacer for mobile -->
       <div style="height:80px" class="mobile-save-spacer"></div>
 
@@ -461,8 +465,7 @@ const MonteurViews = {
 
       <!-- Sticky save bar for mobile -->
       <div class="sticky-save-bar" id="sticky-save">
-        ${!isLocked ? `<button class="btn btn-primary" style="flex:1" onclick="MonteurViews.saveWork(${orderId})">Speichern & Abschicken</button>
-        <button class="btn btn-success" style="flex:1" onclick="MonteurViews.closeOrder(${orderId})">✅ Abschliessen</button>` : ''}
+        ${!isLocked ? `<button class="btn btn-primary" style="flex:1" onclick="MonteurViews.saveWork(${orderId})">Speichern & Abschicken</button>` : ''}
         <button class="btn btn-ghost" onclick="MonteurViews.renderMyOrders()">Zurück</button>
       </div>
     `;
@@ -878,7 +881,38 @@ const MonteurViews = {
   },
 
   async closeOrder(orderId) {
-    if (!await UI.confirm('Auftrag als abgeschlossen markieren? Die Endzeit wird automatisch auf jetzt gesetzt. Danach können nur noch Nachtrag-Bemerkungen hinzugefügt werden.')) return;
+    const answers = await new Promise(resolve => {
+      window._clResolve = (val) => { window._clResolve = () => {}; resolve(val); };
+      UI.modal('Auftrag abschliessen – Checkliste',
+        `<div style="display:flex;flex-direction:column;gap:16px;padding:8px 0">
+          <label style="display:flex;align-items:center;gap:12px;font-size:15px;cursor:pointer">
+            <input type="checkbox" id="cl-material" style="width:20px;height:20px">
+            Zusätzliches Material (nicht auf LS) verwendet?
+          </label>
+          <label style="display:flex;align-items:center;gap:12px;font-size:15px;cursor:pointer">
+            <input type="checkbox" id="cl-foto" style="width:20px;height:20px">
+            Foto gemacht?
+          </label>
+          <label style="display:flex;align-items:center;gap:12px;font-size:15px;cursor:pointer">
+            <input type="checkbox" id="cl-done" style="width:20px;height:20px">
+            Auftrag abgeschlossen?
+          </label>
+        </div>`,
+        `<button class="btn btn-ghost" onclick="UI.closeModal();window._clResolve(null)">Abbrechen</button>
+         <button class="btn btn-success" style="background:#2d7a2d" onclick="UI.closeModal();window._clResolve({material:document.getElementById('cl-material').checked,foto:document.getElementById('cl-foto').checked,done:document.getElementById('cl-done').checked})">Auftrag abschliessen</button>`
+      );
+      const mc = document.getElementById('modal-container');
+      const obs = new MutationObserver(() => { if (!mc.innerHTML.trim()) { obs.disconnect(); window._clResolve(null); } });
+      obs.observe(mc, { childList: true });
+    });
+
+    if (!answers || !answers.done) {
+      if (answers !== null) UI.toast('Auftrag nicht abgeschlossen – Status unverändert.', 'warning');
+      return;
+    }
+    if (answers.material && !MonteurViews.getExtraRows().length) {
+      UI.toast('Hinweis: Bitte zusätzliches Material unter "Zusätzliche Positionen" eintragen.', 'warning');
+    }
 
     const now = new Date();
     const toEl = document.getElementById('f-work-to');
