@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const { getDb } = require('../lib/database');
 const { requireLogin } = require('../middleware/auth');
+const drive = require('../lib/drive');
 
 const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(__dirname, '..', 'uploads');
 
@@ -130,21 +131,38 @@ router.post('/send', requireLogin, async (req, res) => {
     const attachments = db.prepare('SELECT * FROM order_attachments WHERE order_id = ?').all(orderId);
 
     const mailAttachments = attachments.map(att => {
-      const fp = path.join(UPLOADS_DIR, String(orderId), att.filename);
-      if (fs.existsSync(fp)) {
-        return { filename: att.original_name, path: fp };
-      }
+      const candidates = [];
+      if (att.dir_name) candidates.push(path.join(UPLOADS_DIR, att.dir_name, att.filename));
+      candidates.push(path.join(UPLOADS_DIR, String(orderId), att.filename));
+      const fp = candidates.find(p => fs.existsSync(p));
+      if (fp) return { filename: att.original_name, path: fp };
       return null;
     }).filter(Boolean);
+
+    const htmlReport = buildHtmlReport(parsedOrder, attachments, []);
 
     const transporter = getTransporter();
     await transporter.sendMail({
       from:    `"Helbling Rapporte" <${smtpCfg.from || smtpCfg.user}>`,
       to,
       subject: subject || `Montagerapport ${order.order_number} – ${order.customer_name || ''}`,
-      html:    buildHtmlReport(parsedOrder, attachments, []),
+      html:    htmlReport,
       attachments: mailAttachments
     });
+
+    // Rapport als HTML in Drive speichern
+    if (drive.isDriveEnabled()) {
+      const tmpFile = path.join(require('os').tmpdir(), `rapport_${order.order_number || orderId}_${Date.now()}.html`);
+      fs.writeFileSync(tmpFile, htmlReport, 'utf8');
+      const dirName = (() => {
+        const att = db.prepare('SELECT dir_name FROM order_attachments WHERE order_id = ? AND dir_name IS NOT NULL LIMIT 1').get(orderId);
+        const ph  = db.prepare('SELECT dir_name FROM order_photos    WHERE order_id = ? AND dir_name IS NOT NULL LIMIT 1').get(orderId);
+        return (att || ph)?.dir_name || null;
+      })();
+      drive.uploadFile(tmpFile, `Rapport_${order.order_number || orderId}.html`, 'text/html', dirName)
+        .then(() => { try { fs.unlinkSync(tmpFile); } catch {} })
+        .catch(e => { console.error('[Drive] Rapport upload error:', e.message); try { fs.unlinkSync(tmpFile); } catch {} });
+    }
 
     res.json({ ok: true, message: `E-Mail an ${to} gesendet` });
   } catch (e) {
