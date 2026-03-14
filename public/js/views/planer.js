@@ -199,6 +199,7 @@ const PlanerViews = {
         await API.updateOrder(orderId, { status: val });
         const idx = PlanerViews._allOrders.findIndex(o => o.id === orderId);
         if (idx >= 0) PlanerViews._allOrders[idx].status = val;
+        UI.toast(`Status gesetzt: ${UI.statusName(val)}`, 'success');
         PlanerViews.applyFilter();
       } catch(err) {
         PlanerViews.applyFilter();
