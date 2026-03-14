@@ -1,7 +1,7 @@
 // ── API Client ───────────────────────────────────────────────────────────
 const API = {
   async _req(method, url, body, isFormData) {
-    const opts = { method, headers: {} };
+    const opts = { method, headers: {}, credentials: 'same-origin' };
     if (body && !isFormData) {
       opts.headers['Content-Type'] = 'application/json';
       opts.body = JSON.stringify(body);
