@@ -1,15 +1,15 @@
-# fly.toml app configuration file generated for helbling-rapporte-c-1afq on 2026-03-14T17:57:29Z
+# fly.toml app configuration file generated for helbling-rapporte-qanzhw on 2026-03-14T19:39:03Z
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = 'helbling-rapporte-c-1afq'
-primary_region = 'iad'
+app = 'helbling-rapporte-qanzhw'
+primary_region = 'ams'
 
 [build]
 
 [http_service]
-  internal_port = 3000
+  internal_port = 8080
   force_https = true
   auto_stop_machines = 'stop'
   auto_start_machines = true
