@@ -89,6 +89,10 @@ ${order.additional_material && order.additional_material.length ? `
   <tr><td>Schlüssel</td><td>${fmt(order.keys_data?.type)} ${order.keys_data?.count ? `– ${order.keys_data.count} Stk.` : ''} ${order.keys_data?.id ? `Nr. ${order.keys_data.id}` : ''} ${order.keys_data?.note || ''}</td></tr>
 </table>
 
+${photos && photos.length ? `
+<h2>Fotos (${photos.length})</h2>
+<p style="font-size:12px;color:#555">${photos.length} Foto(s) als Anhang beigefügt.</p>` : ''}
+
 ${order.signature_data ? `
 <h2>Unterschrift</h2>
 <p><img src="${order.signature_data}" style="border:1px solid #ccc;max-width:300px;max-height:150px"></p>` : ''}
@@ -129,17 +133,22 @@ router.post('/send', requireLogin, async (req, res) => {
     };
 
     const attachments = db.prepare('SELECT * FROM order_attachments WHERE order_id = ?').all(orderId);
+    const photos      = db.prepare('SELECT * FROM order_photos      WHERE order_id = ?').all(orderId);
 
-    const mailAttachments = attachments.map(att => {
+    const resolveFile = (row) => {
       const candidates = [];
-      if (att.dir_name) candidates.push(path.join(UPLOADS_DIR, att.dir_name, att.filename));
-      candidates.push(path.join(UPLOADS_DIR, String(orderId), att.filename));
+      if (row.dir_name) candidates.push(path.join(UPLOADS_DIR, row.dir_name, row.filename));
+      candidates.push(path.join(UPLOADS_DIR, String(orderId), row.filename));
       const fp = candidates.find(p => fs.existsSync(p));
-      if (fp) return { filename: att.original_name, path: fp };
-      return null;
-    }).filter(Boolean);
+      return fp ? { filename: row.original_name, path: fp } : null;
+    };
 
-    const htmlReport = buildHtmlReport(parsedOrder, attachments, []);
+    const mailAttachments = [
+      ...attachments.map(resolveFile),
+      ...photos.map(resolveFile),
+    ].filter(Boolean);
+
+    const htmlReport = buildHtmlReport(parsedOrder, attachments, photos);
 
     const transporter = getTransporter();
     await transporter.sendMail({
