@@ -1,5 +1,5 @@
 app = "helbling-rapporte-qanzhw"
-primary_region = "fra"
+primary_region = "ams"
 
 [build]
   dockerfile = "Dockerfile"
@@ -15,6 +15,12 @@ primary_region = "fra"
   auto_stop_machines = false
   auto_start_machines = true
   min_machines_running = 1
+  processes = ["app"]
+
+[[vm]]
+  memory = "1gb"
+  cpu_kind = "shared"
+  cpus = 1
 
 [[mounts]]
   source = "rapporte_data"
