@@ -1,12 +1,10 @@
 // ── Planer Views ─────────────────────────────────────────────────────────
 const PlanerViews = {
   _options: null,
-  _customers: null,
   _monteure: null,
 
   async _loadMeta() {
     if (!this._options) this._options = await API.getOptions();
-    if (!this._customers) this._customers = await API.getCustomers();
     if (!this._monteure) this._monteure = await API.getMonteure();
   },
 
@@ -346,7 +344,6 @@ const PlanerViews = {
     if (orderId) order = await API.getOrder(orderId);
 
     const opts = this._options;
-    const customers = this._customers;
     const monteure = this._monteure;
     const sel = (v) => (list, key) => list.map(i => `<option value="${i[key]||i.id}" ${(order?.[v])===String(i[key]||i.id)?'selected':''}>${UI.esc(i.name||i.full_name)}</option>`).join('');
 
@@ -372,11 +369,7 @@ const PlanerViews = {
           <div class="form-grid">
             <div class="field">
               <label>Kundenname <span class="req">*</span></label>
-              <select id="f-customer-id" onchange="PlanerViews.onCustomerChange()">
-                <option value="">– Bitte wählen –</option>
-                ${customers.map(c => `<option value="${c.id}" ${order?.customer_id==c.id?'selected':''}>${UI.esc(c.name)}</option>`).join('')}
-                <option value="__new">+ Neuer Kunde…</option>
-              </select>
+              <input type="text" id="f-customer-name" value="${UI.esc(order?.customer_name||'')}" placeholder="z.B. Muster AG">
             </div>
             <div class="field">
               <label>Kundenadresse</label>
@@ -481,13 +474,6 @@ const PlanerViews = {
 
     PlanerViews._planerItemCount = (order?.items_table||[]).length;
 
-    if (order?.customer_id) {
-      const cust = customers.find(c => c.id == order.customer_id);
-      if (cust?.address && !order.customer_address) {
-        document.getElementById('f-customer-address').value = cust.address;
-      }
-    }
-
     window._currentOrderId = orderId;
   },
 
@@ -569,64 +555,10 @@ const PlanerViews = {
     } catch(e) { UI.toast(e.message,'error'); }
   },
 
-  onCustomerChange() {
-    const val = document.getElementById('f-customer-id').value;
-    if (val === '__new') {
-      PlanerViews.openNewCustomerModal();
-      return;
-    }
-    const cust = PlanerViews._customers?.find(c => c.id == val);
-    if (cust) {
-      const addr = document.getElementById('f-customer-address');
-      if (!addr.value) addr.value = cust.address || '';
-    }
-  },
-
-  async openNewCustomerModal() {
-    UI.modal('Neuer Kunde',
-      `<div class="form-grid">
-        <div class="field span-2"><label>Name <span class="req">*</span></label><input type="text" id="nc-name"></div>
-        <div class="field span-2"><label>Adresse</label><input type="text" id="nc-addr"></div>
-        <div class="field"><label>Kontaktperson</label><input type="text" id="nc-contact"></div>
-        <div class="field"><label>Telefon</label><input type="text" id="nc-phone"></div>
-      </div>`,
-      `<button class="btn btn-ghost" onclick="UI.closeModal()">Abbrechen</button>
-       <button class="btn btn-primary" onclick="PlanerViews.saveNewCustomer()">Erstellen</button>`
-    );
-  },
-
-  async saveNewCustomer() {
-    const d = {
-      name: document.getElementById('nc-name').value.trim(),
-      address: document.getElementById('nc-addr').value.trim(),
-      contact_name: document.getElementById('nc-contact').value.trim(),
-      contact_phone: document.getElementById('nc-phone').value.trim(),
-    };
-    if (!d.name) { UI.toast('Name erforderlich','error'); return; }
-    try {
-      const cust = await API.createCustomer(d);
-      PlanerViews._customers = null; // refresh cache
-      PlanerViews._customers = await API.getCustomers();
-      const sel = document.getElementById('f-customer-id');
-      const opt = document.createElement('option');
-      opt.value = cust.id; opt.textContent = cust.name; opt.selected = true;
-      const lastOpt = sel.querySelector('[value="__new"]');
-      sel.insertBefore(opt, lastOpt);
-      sel.value = cust.id;
-      if (cust.address) document.getElementById('f-customer-address').value = cust.address;
-      UI.closeModal(); UI.toast('Kunde erstellt','success');
-    } catch(e) { UI.toast(e.message,'error'); }
-  },
-
   async saveOrder(orderId) {
-    const customerId = document.getElementById('f-customer-id').value;
-    const customerName = customerId && customerId !== '__new'
-      ? PlanerViews._customers?.find(c => c.id == customerId)?.name || ''
-      : '';
-
     const data = {
-      customer_id:           customerId || null,
-      customer_name:         customerName,
+      customer_id:           null,
+      customer_name:         document.getElementById('f-customer-name').value.trim(),
       customer_address:      document.getElementById('f-customer-address').value.trim(),
       orderer:               document.getElementById('f-orderer').value.trim(),
       on_site_contact:       document.getElementById('f-on-site-contact').value.trim(),
@@ -643,7 +575,7 @@ const PlanerViews = {
       project_number:        document.getElementById('f-project-number')?.value.trim() || null,
     };
 
-    if (!data.customer_id && !data.customer_name) { UI.toast('Kunde erforderlich','error'); return; }
+    if (!data.customer_name) { UI.toast('Kundenname erforderlich','error'); return; }
     if (!data.orderer) { UI.toast('Besteller erforderlich','error'); return; }
     if (!data.installation_address) { UI.toast('Montageadresse erforderlich','error'); return; }
     if (!data.planned_date) { UI.toast('Vorgesehenes Montagedatum erforderlich','error'); return; }
