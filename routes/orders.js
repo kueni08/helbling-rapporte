@@ -5,6 +5,7 @@ const path = require('path');
 const { getDb } = require('../lib/database');
 const { requireLogin, requireRole } = require('../middleware/auth');
 const { v4: uuidv4 } = require('uuid');
+const { sendCompletionEmail } = require('../lib/mailer');
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -437,7 +438,16 @@ router.put('/:id', requireLogin, (req, res) => {
     );
   }
 
-  res.json(formatOrder(db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id)));
+  const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
+  res.json(formatOrder(updatedOrder));
+
+  // Abschluss-Mail automatisch versenden wenn Status neu auf "abgeschlossen" gesetzt
+  const newStatus = (role === 'monteur' ? b.status : b.status) || order.status;
+  if (newStatus === 'abgeschlossen' && order.status !== 'abgeschlossen') {
+    sendCompletionEmail(req.params.id).catch(e =>
+      console.error('[Mailer] sendCompletionEmail Fehler:', e.message)
+    );
+  }
 
 });
 
