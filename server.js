@@ -69,5 +69,21 @@ app.get('*', (req, res) => {
 initDatabase();
 app.listen(PORT, () => {
   console.log(`\n✅ Helbling Rapporte läuft auf http://localhost:${PORT}`);
-  console.log(`   Standard-Login: admin / admin123\n`);
+  console.log(`   Standard-Login: admin / admin123`);
+
+  // Drive-Status beim Start loggen
+  const { isDriveEnabled } = require('./lib/drive');
+  const driveOk = isDriveEnabled();
+  console.log(`\n📁 Google Drive: ${driveOk ? '✅ aktiv' : '❌ nicht aktiv'}`);
+  if (!driveOk) {
+    if (!process.env.GOOGLE_SERVICE_ACCOUNT_JSON && !process.env.GOOGLE_SERVICE_ACCOUNT_FILE) {
+      console.log('   → GOOGLE_SERVICE_ACCOUNT_JSON fehlt');
+    }
+    if (!process.env.GOOGLE_DRIVE_FOLDER_ID) {
+      console.log('   → GOOGLE_DRIVE_FOLDER_ID fehlt');
+    }
+  } else {
+    console.log(`   → Folder: ${process.env.GOOGLE_DRIVE_FOLDER_ID}`);
+  }
+  console.log('');
 });
