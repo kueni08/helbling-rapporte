@@ -213,10 +213,10 @@ const MonteurViews = {
           <h3>\ud83d\udce6 LS-Artikel (Lieferschein)</h3><span class="toggle">\u25b6</span>
         </div>
         <div class="section-body collapsed">
-          <p class="text-sm text-muted mb-2">Vom Planer/Import vordefinierte Positionen. Artikelname ist nicht \u00e4nderbar, Mengen\u00e4nderungen werden hervorgehoben.</p>
+          <p class="text-sm text-muted mb-2">Vom Planer/Import vordefinierte Positionen. Nur löschen möglich – gelöschte Artikel erscheinen im Rapport durchgestrichen.</p>
           <table class="items-table" id="ls-items-table">
             <thead><tr>
-              <th>Artikel / Beschreibung</th><th style="width:80px">Menge</th><th style="width:70px">Einheit</th>
+              <th>Artikel / Beschreibung</th><th style="width:80px">Menge</th><th style="width:70px">Einheit</th><th style="width:36px"></th>
             </tr></thead>
             <tbody id="ls-items-rows">
               ${lsItems.map((item, i) => MonteurViews.lsItemRow(i, item)).join('')}
@@ -493,50 +493,48 @@ const MonteurViews = {
     }
   },
 
-  // ── LS Item Row (read-only name, editable quantity with highlight) ─────
+  // ── LS Item Row (read-only, nur löschen möglich) ─────────────────
   lsItemRow(i, item = {}) {
-    return `<tr id="ls-item-row-${i}">
-      <td>
+    const deleted = !!item._deleted;
+    const s = deleted ? 'text-decoration:line-through;opacity:0.45;' : '';
+    return `<tr id="ls-item-row-${i}" data-deleted="${deleted}">
+      <td style="${s}">
         <span style="font-weight:500">${UI.esc(item.name||'')}</span>
         ${item.article_number ? `<br><code style="font-size:11px;color:var(--text2)">${UI.esc(item.article_number)}</code>` : ''}
       </td>
-      <td><input type="number" id="ls-item-qty-${i}" value="${UI.esc(String(item.quantity||''))}" min="0" step="0.1"
-        data-orig="${UI.esc(String(item.quantity||''))}"
-        onchange="MonteurViews._highlightLsQty(this)"
-        style="width:70px"></td>
-      <td style="color:var(--text2);font-size:12px">${UI.esc(item.unit||'Stk.')}</td>
+      <td style="${s}color:var(--text2);font-size:12px">${UI.esc(String(item.quantity||''))}</td>
+      <td style="${s}color:var(--text2);font-size:12px">${UI.esc(item.unit||'Stk.')}</td>
+      <td><button class="del-btn" onclick="MonteurViews.toggleLsItemDeleted(${i})" title="${deleted ? 'Wiederherstellen' : 'Löschen'}">${deleted ? '↩' : '×'}</button></td>
     </tr>`;
   },
 
-  _highlightLsQty(input) {
-    const orig = input.dataset.orig;
-    const changed = input.value !== orig;
-    input.style.borderColor = changed ? '#d48a00' : '';
-    input.style.background = changed ? 'rgba(212,138,0,.1)' : '';
-    // Add/remove "ge\u00e4ndert" indicator
-    const row = input.closest('tr');
-    let badge = row.querySelector('.qty-changed-badge');
-    if (changed && !badge) {
-      input.insertAdjacentHTML('afterend', '<span class="qty-changed-badge" style="font-size:10px;color:#d48a00;font-weight:600;margin-left:4px">ge\u00e4ndert</span>');
-    } else if (!changed && badge) {
-      badge.remove();
-    }
+  toggleLsItemDeleted(i) {
+    const row = document.getElementById(`ls-item-row-${i}`);
+    if (!row) return;
+    const deleted = row.dataset.deleted !== 'true';
+    row.dataset.deleted = deleted;
+    const s = deleted ? 'text-decoration:line-through;opacity:0.45;' : '';
+    row.querySelectorAll('td').forEach((td, idx) => {
+      if (idx < 3) td.style.cssText = s + (idx > 0 ? 'color:var(--text2);font-size:12px' : '');
+    });
+    const btn = row.querySelector('.del-btn');
+    if (btn) { btn.textContent = deleted ? '↩' : '×'; btn.title = deleted ? 'Wiederherstellen' : 'Löschen'; }
   },
 
   getLsItemRows() {
-    const items = [];
     const lsItems = MonteurViews._lsItems || [];
-    lsItems.forEach((orig, i) => {
-      const qtyEl = document.getElementById(`ls-item-qty-${i}`);
-      items.push({
+    return lsItems.map((orig, i) => {
+      const row = document.getElementById(`ls-item-row-${i}`);
+      const deleted = row?.dataset.deleted === 'true';
+      return {
         name: orig.name,
         article_number: orig.article_number || null,
-        quantity: qtyEl ? (parseFloat(qtyEl.value) || orig.quantity) : orig.quantity,
+        quantity: orig.quantity,
         unit: orig.unit || 'Stk.',
-        _source: 'planer'
-      });
+        _source: 'planer',
+        ...(deleted ? { _deleted: true } : {}),
+      };
     });
-    return items;
   },
 
   // ── Monteur Item Row (fully editable) ──────────────────────────────────
