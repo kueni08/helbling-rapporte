@@ -49,8 +49,9 @@ app.use('/api/orders',   require('./routes/orders'));
 app.use('/api/settings', require('./routes/settings'));
 app.use('/api/files',    require('./routes/files'));
 app.use('/api/email',    require('./routes/email'));
-app.use('/api/anfrage',  require('./routes/anfrage'));  // public customer form submit
-app.use('/api/anfragen', require('./routes/anfrage'));  // admin list/manage
+app.use('/api/anfrage',       require('./routes/anfrage'));      // public customer form submit
+app.use('/api/anfragen',      require('./routes/anfrage'));      // admin list/manage
+app.use('/api/lieferschein',  require('./routes/lieferschein')); // PDF auto-import
 
 // Public customer inquiry form (new submission + token-based edit)
 app.get('/anfrage', (req, res) => {
@@ -70,6 +71,10 @@ initDatabase();
 app.listen(PORT, () => {
   console.log(`\n✅ Helbling Rapporte läuft auf http://localhost:${PORT}`);
   console.log(`   Standard-Login: admin / admin123`);
+
+  // Lieferschein-Watcher starten
+  const { startWatcher } = require('./lib/lieferschein-watcher');
+  startWatcher();
 
   // Drive-Status beim Start loggen
   const { isDriveEnabled } = require('./lib/drive');

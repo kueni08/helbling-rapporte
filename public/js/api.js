@@ -84,4 +84,11 @@ const API = {
   linkAnfrageOrder:    (id, oid)  => API.post(`/api/anfragen/${id}/link-order`, { order_id: oid }),
   convertAnfrage:      (id)       => API.post(`/api/anfragen/${id}/convert`),
   deleteAnfrage:       (id)       => API.delete(`/api/anfragen/${id}`),
+
+  // Lieferschein Auto-Import
+  getLsStatus:         ()         => API.get('/api/lieferschein/status'),
+  getLsImports:        ()         => API.get('/api/lieferschein/imports'),
+  uploadLieferschein:  (form)     => API.upload('/api/lieferschein/upload', form),
+  retryLsImport:       (id)       => API.post(`/api/lieferschein/retry/${id}`),
+  deleteLsImport:      (id)       => API.delete(`/api/lieferschein/imports/${id}`),
 };
