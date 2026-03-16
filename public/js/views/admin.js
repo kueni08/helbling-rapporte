@@ -388,9 +388,12 @@ const AdminViews = {
     let status = { active: false, inbox_dir: '–', inbox_files: [] };
     let imports = [];
     let driveStatus = { active: false, inbox_folder_id: null };
+    let monteure = [];
+    let importDefaults = { default_monteur_id: null };
     try {
-      [status, imports, driveStatus] = await Promise.all([
-        API.getLsStatus(), API.getLsImports(), API.getLsDriveStatus()
+      [status, imports, driveStatus, monteure, importDefaults] = await Promise.all([
+        API.getLsStatus(), API.getLsImports(), API.getLsDriveStatus(),
+        API.getMonteure(), API.getImportDefaults()
       ]);
     } catch(e) {}
 
@@ -457,9 +460,26 @@ const AdminViews = {
       </tr>`;
     }).join('') : '<tr><td colspan="10" class="text-muted text-sm text-center">Noch keine Importe</td></tr>';
 
+    const monteurOptions = monteure.map(m =>
+      `<option value="${m.id}" ${importDefaults.default_monteur_id === m.id ? 'selected' : ''}>${UI.esc(m.full_name)}</option>`
+    ).join('');
+
     el.innerHTML = `
       ${statusBanner}
       ${driveCard}
+      <div class="card">
+        <div class="card-title">⚙️ Import-Einstellungen</div>
+        <div class="form-grid" style="max-width:400px">
+          <div class="field">
+            <label>Standard-Monteur Zuweisung</label>
+            <select id="import-default-monteur">
+              <option value="">– Kein Standard –</option>
+              ${monteurOptions}
+            </select>
+          </div>
+        </div>
+        <button class="btn btn-primary btn-sm mt-2" onclick="AdminViews.saveImportDefaults()">Speichern</button>
+      </div>
       <div class="card">
         <div class="card-title">📥 Lieferschein Auto-Import ${statusBadge}</div>
         <p class="text-muted text-sm mb-1">
@@ -493,6 +513,14 @@ const AdminViews = {
           </table>
         </div>
       </div>`;
+  },
+
+  async saveImportDefaults() {
+    const val = document.getElementById('import-default-monteur')?.value;
+    try {
+      await API.saveImportDefaults({ default_monteur_id: val ? parseInt(val) : null });
+      UI.toast('Import-Einstellungen gespeichert', 'success');
+    } catch(e) { UI.toast(e.message, 'error'); }
   },
 
   async uploadLieferschein(input) {

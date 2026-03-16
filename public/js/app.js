@@ -77,6 +77,9 @@ const App = {
       navItems.push({ id: 'planer-orders',       icon: '📋', label: 'Aufträge' });
       navItems.push({ id: 'planer-anfragen',     icon: '📩', label: 'Kundenanfragen' });
       navItems.push({ id: 'tagesuebersicht',     icon: '📊', label: 'Tagesübersicht' });
+      if (role === 'planer') {
+        navItems.push({ id: 'planer-lieferschein', icon: '📥', label: 'LS-Import' });
+      }
     }
 
     if (role === 'admin') {
@@ -107,6 +110,7 @@ const App = {
       'monteur-orders':   'Meine Aufträge',
       'planer-orders':    'Aufträge',
       'planer-anfragen':  'Kundenanfragen',
+      'planer-lieferschein': 'LS-Import',
       'admin-orders':     'Alle Aufträge',
       'admin-users':      'Benutzer',
       'admin-settings':   'Einstellungen',
@@ -119,7 +123,8 @@ const App = {
     switch(viewId) {
       case 'monteur-orders':   MonteurViews.renderMyOrders(); break;
       case 'planer-orders':    PlanerViews.renderOrders(); break;
-      case 'planer-anfragen':  PlanerViews.renderAnfragen(); break;
+      case 'planer-anfragen':     PlanerViews.renderAnfragen(); break;
+      case 'planer-lieferschein': PlanerViews.renderLieferschein(); break;
       case 'admin-orders':     PlanerViews.renderOrders(); break;
       case 'admin-users':      AdminViews.renderUsers(); break;
       case 'admin-settings':   AdminViews.renderSettings(); break;

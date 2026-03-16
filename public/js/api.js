@@ -75,6 +75,10 @@ const API = {
   getSmtp:        ()     => API.get('/api/settings/smtp'),
   saveSmtp:       (d)    => API.put('/api/settings/smtp', d),
 
+  // Settings – Import-Einstellungen
+  getImportDefaults:    ()  => API.get('/api/settings/import-defaults'),
+  saveImportDefaults:   (d) => API.put('/api/settings/import-defaults', d),
+
   // Settings – KI-Extraktions-Prompt
   getExtractionPrompt:  ()     => API.get('/api/settings/extraction-prompt'),
   saveExtractionPrompt: (d)    => API.put('/api/settings/extraction-prompt', d),
