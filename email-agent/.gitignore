@@ -1,0 +1,12 @@
+.env
+__pycache__/
+*.pyc
+*.pyo
+output/attachments/
+output/logs/
+output/drafts/
+output/tasks/
+knowledge_base/web_cache/*/
+!knowledge_base/web_cache/.gitkeep
+*.xlsx
+*.pdf

@@ -1,0 +1,16 @@
+Artikel,Bezeichnung,Preis_CHF,Einheit,Bemerkung
+FS-100,FACETTESTAR FS-100 Tisch-Entgratmaschine,3850.00,Stk,230V inkl. Grundwerkzeug-Set
+FS-200,FACETTESTAR FS-200 Universelle Entgratmaschine,8900.00,Stk,400V inkl. Grundwerkzeug-Set
+FS-300,FACETTESTAR FS-300 CNC-Entgratmaschine,28500.00,Stk,Auf Anfrage Konfiguration
+FS-PIPE-P,FACETTESTAR FS-PIPE Pneumatisch,650.00,Stk,inkl. 3 Köpfe
+FS-PIPE-E,FACETTESTAR FS-PIPE Elektrisch 18V Akku,890.00,Stk,inkl. Akku und Ladegerät
+WZ-CARBID-SET,Carbid-Werkzeug-Set Standard (10 Stk),320.00,Set,
+WZ-DIAMANT,Diamant-Schleifscheibe 125mm,85.00,Stk,
+WZ-ANFAS-15,Anfas-Kopf 15°,95.00,Stk,für FS-PIPE
+WZ-ANFAS-30,Anfas-Kopf 30°,95.00,Stk,für FS-PIPE
+WZ-ANFAS-45,Anfas-Kopf 45°,95.00,Stk,für FS-PIPE
+SERVICE-IBN,Inbetriebnahme und Schulung,450.00,Tag,bei Kunde vor Ort
+SERVICE-WART,Jährliche Wartung FS-100/200,380.00,Stk,
+SERVICE-WART-CNC,Jährliche Wartung FS-300 CNC,850.00,Stk,
+TRANSPORT-CH,Transport Schweiz,180.00,Stk,FS-100/200
+TRANSPORT-CH-CNC,Transport Schweiz CNC-Maschine,450.00,Stk,FS-300 inkl. Kran
