@@ -149,6 +149,11 @@ def create_app(config: dict = None) -> Flask:
         open_tasks = [t for t in tasks if t.get("status") == "offen"]
         high_prio = [t for t in open_tasks if t.get("prioritaet") == "hoch"]
 
+        # Feedback-Statistiken
+        feedback_gut = sum(1 for d in drafts if d.get("feedback_rating") == "gut")
+        feedback_schlecht = sum(1 for d in drafts if d.get("feedback_rating") == "schlecht")
+        drafts_with_markers = sum(1 for d in drafts if d.get("has_check_markers"))
+
         return jsonify({
             "total_emails": len(results),
             "total_drafts": len(drafts),
@@ -158,6 +163,9 @@ def create_app(config: dict = None) -> Flask:
             "today_emails": today_count,
             "by_bereich": by_bereich,
             "by_aktionstyp": by_aktionstyp,
+            "feedback_gut": feedback_gut,
+            "feedback_schlecht": feedback_schlecht,
+            "drafts_with_markers": drafts_with_markers,
         })
 
     @app.route("/api/emails")
@@ -197,6 +205,83 @@ def create_app(config: dict = None) -> Flask:
             return jsonify({"error": "Nicht gefunden"}), 404
         with open(md_path) as f:
             return jsonify({"text": f.read()})
+
+    @app.route("/api/drafts/<file_id>/feedback", methods=["POST"])
+    def api_draft_feedback(file_id):
+        """Speichert Feedback zu einem Entwurf (gut/schlecht + optionaler Kommentar)."""
+        draft_path = output_path / "drafts" / f"{file_id}_draft.json"
+        if not draft_path.exists():
+            return jsonify({"error": "Nicht gefunden"}), 404
+        data = request.get_json() or {}
+        rating = data.get("rating")   # "gut" | "schlecht" | "neutral"
+        comment = data.get("comment", "")
+        edited_text = data.get("edited_text", "")
+
+        with open(draft_path) as f:
+            draft = json.load(f)
+
+        draft["feedback_rating"] = rating
+        draft["feedback_comment"] = comment
+        draft["feedback_at"] = datetime.now().isoformat()
+        if edited_text:
+            draft["draft_text_edited"] = edited_text
+
+        with open(draft_path, "w") as f:
+            json.dump(draft, f, ensure_ascii=False, indent=2)
+
+        # Feedback-Log aktualisieren
+        feedback_log = output_path / "logs" / "draft_feedback.json"
+        log_entries = []
+        if feedback_log.exists():
+            try:
+                with open(feedback_log) as f:
+                    log_entries = json.load(f)
+            except Exception:
+                pass
+        log_entries.append({
+            "email_id": file_id,
+            "rating": rating,
+            "comment": comment,
+            "timestamp": datetime.now().isoformat(),
+            "bereich": draft.get("classification_bereich"),
+            "aktionstyp": draft.get("classification_aktionstyp"),
+        })
+        with open(feedback_log, "w") as f:
+            json.dump(log_entries, f, ensure_ascii=False, indent=2)
+
+        return jsonify({"ok": True})
+
+    @app.route("/api/drafts/<file_id>/edit", methods=["POST"])
+    def api_draft_edit(file_id):
+        """Speichert einen manuell bearbeiteten Entwurf."""
+        draft_path = output_path / "drafts" / f"{file_id}_draft.json"
+        if not draft_path.exists():
+            return jsonify({"error": "Nicht gefunden"}), 404
+        data = request.get_json() or {}
+        new_text = data.get("text", "")
+        if not new_text:
+            return jsonify({"error": "Kein Text"}), 400
+
+        with open(draft_path) as f:
+            draft = json.load(f)
+        draft["draft_text_edited"] = new_text
+        draft["edited_at"] = datetime.now().isoformat()
+        with open(draft_path, "w") as f:
+            json.dump(draft, f, ensure_ascii=False, indent=2)
+
+        # Auch .md aktualisieren
+        md_path = output_path / "drafts" / f"{file_id}_draft.md"
+        if md_path.exists():
+            with open(md_path) as f:
+                existing = f.read()
+            # Alten Entwurfstext ersetzen
+            separator = "\n\n---\n\n"
+            if separator in existing:
+                header = existing.split(separator)[0]
+                with open(md_path, "w") as f:
+                    f.write(header + separator + new_text)
+
+        return jsonify({"ok": True})
 
     @app.route("/api/tasks")
     def api_tasks():

@@ -102,6 +102,7 @@ class KnowledgeBase:
         logger.info(
             f"Wissensdatenbank geladen: {total_files} Dateien, {len(self.chunks)} Chunks"
         )
+        self.build_tfidf_index()
 
     def _load_file(self, file_path: Path) -> list:
         """Lädt eine einzelne Datei und zerlegt sie in Chunks."""
@@ -257,9 +258,40 @@ class KnowledgeBase:
             return "facettestar"
         return "allgemein"
 
+    def build_tfidf_index(self):
+        """Baut einen TF-IDF-Index über alle Chunks."""
+        if not self.chunks:
+            return
+        try:
+            from sklearn.feature_extraction.text import TfidfVectorizer
+            import numpy as np
+            corpus = [c.content for c in self.chunks]
+            # Schweizer Deutsch: kein Standard-Stopword-Set, eigene Liste
+            stopwords_de = [
+                "und", "oder", "die", "der", "das", "ist", "in", "zu", "von",
+                "für", "mit", "an", "auf", "bei", "aus", "nach", "wie", "auch",
+                "wird", "haben", "sind", "werden", "durch", "kann", "als",
+                "einer", "einen", "eine", "sich", "sie", "wir", "ich",
+            ]
+            self._tfidf = TfidfVectorizer(
+                analyzer="word",
+                token_pattern=r"(?u)\b\w{2,}\b",
+                ngram_range=(1, 2),
+                max_df=0.85,
+                min_df=1,
+                stop_words=stopwords_de,
+                sublinear_tf=True,
+            )
+            self._tfidf_matrix = self._tfidf.fit_transform(corpus)
+            self._np = np
+            logger.debug(f"TF-IDF Index gebaut: {self._tfidf_matrix.shape}")
+        except ImportError:
+            self._tfidf = None
+            logger.info("scikit-learn nicht verfügbar, verwende Keyword-Matching")
+
     def retrieve(self, query: str, top_k: int = None, category: str = None) -> list:
         """
-        Sucht relevante Chunks für eine Anfrage.
+        Sucht relevante Chunks für eine Anfrage via TF-IDF (Fallback: Keyword).
         Gibt top_k Chunks sortiert nach Relevanz zurück.
         """
         if not self._loaded:
@@ -269,49 +301,67 @@ class KnowledgeBase:
             return []
 
         k = top_k or self.top_k
+
+        # TF-IDF Suche (bevorzugt)
+        if hasattr(self, "_tfidf") and self._tfidf is not None:
+            return self._retrieve_tfidf(query, k, category)
+
+        # Keyword-Fallback
+        return self._retrieve_keywords(query, k, category)
+
+    def _retrieve_tfidf(self, query: str, k: int, category: str = None) -> list:
+        """TF-IDF basiertes Retrieval."""
+        try:
+            query_vec = self._tfidf.transform([query])
+            scores = (self._tfidf_matrix * query_vec.T).toarray().flatten()
+
+            scored = []
+            for i, (score, chunk) in enumerate(zip(scores, self.chunks)):
+                if score <= 0:
+                    continue
+                if category and chunk.category != "allgemein" and chunk.category != category:
+                    continue
+                scored.append((float(score), chunk))
+
+            scored.sort(key=lambda x: x[0], reverse=True)
+            result = []
+            for score, chunk in scored[:k]:
+                chunk.relevance_score = round(score, 3)
+                result.append(chunk)
+            return result
+        except Exception as e:
+            logger.warning(f"TF-IDF Retrieval fehlgeschlagen: {e}, Fallback auf Keywords")
+            return self._retrieve_keywords(query, k, category)
+
+    def _retrieve_keywords(self, query: str, k: int, category: str = None) -> list:
+        """Keyword-basiertes Retrieval (Fallback)."""
+        query_terms = set(re.findall(r"\w+", query.lower()))
         scored = []
 
-        query_lower = query.lower()
-        query_terms = set(re.findall(r"\w+", query_lower))
-
         for chunk in self.chunks:
-            # Kategorie-Filter
             if category and chunk.category != "allgemein" and chunk.category != category:
                 continue
-
             score = self._compute_relevance(query_terms, chunk.content.lower())
             if score > 0:
                 scored.append((score, chunk))
 
-        # Sortieren und Top-K zurückgeben
         scored.sort(key=lambda x: x[0], reverse=True)
         result = []
         for score, chunk in scored[:k]:
             chunk.relevance_score = score
             result.append(chunk)
-
         return result
 
     def _compute_relevance(self, query_terms: set, content: str) -> float:
-        """Berechnet einen einfachen TF-IDF-ähnlichen Relevanz-Score."""
+        """Einfacher Keyword-Relevanz-Score (Fallback ohne scikit-learn)."""
         if not query_terms or not content:
             return 0.0
-
         content_terms = set(re.findall(r"\w+", content))
         matches = query_terms & content_terms
-
         if not matches:
             return 0.0
-
-        # Basis-Score: Anteil der Query-Terms die gefunden wurden
         precision = len(matches) / len(query_terms)
-
-        # Bonus für exakte Phrasen-Matches
-        phrase_bonus = 0.0
-        for term in query_terms:
-            if len(term) > 4 and term in content:
-                phrase_bonus += 0.1
-
+        phrase_bonus = sum(0.1 for t in query_terms if len(t) > 4 and t in content)
         return min(precision + phrase_bonus, 1.0)
 
     def get_status(self) -> dict:

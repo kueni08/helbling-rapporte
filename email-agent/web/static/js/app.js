@@ -220,21 +220,46 @@ async function showDraftById(fileId) {
     const draftText = draft.draft_text || textData.text || '';
     const highlighted = highlightCheckMarkers(draftText);
 
+    const feedbackRating = draft.feedback_rating || '';
+    const feedbackBtns = `
+      <div style="display:flex;gap:6px;align-items:center;margin-top:4px">
+        <span style="font-size:12px;color:var(--text-dim)">Bewertung:</span>
+        <button class="btn btn-sm ${feedbackRating === 'gut' ? 'btn-success' : 'btn-secondary'}"
+          onclick="rateDraft('${fileId}', 'gut')">👍 Gut</button>
+        <button class="btn btn-sm ${feedbackRating === 'schlecht' ? 'btn-danger' : 'btn-secondary'}"
+          onclick="rateDraft('${fileId}', 'schlecht')">👎 Schlecht</button>
+        ${feedbackRating ? `<span style="font-size:11px;color:var(--text-dim)">— ${feedbackRating === 'gut' ? '✓ Als gut bewertet' : '✗ Als schlecht bewertet'}</span>` : ''}
+      </div>`;
+
+    const activeText = draft.draft_text_edited || draftText;
+    const hasEdited = !!draft.draft_text_edited;
+
     content.innerHTML = `
       <h2 style="margin-bottom:16px;font-size:16px">${draft.subject || 'Entwurf'}</h2>
       <div class="detail-section">
         <h3>Metadaten</h3>
         <div class="detail-row"><span class="detail-label">An:</span><span>${draft.recipient || '—'}</span></div>
         <div class="detail-row"><span class="detail-label">Bereich:</span>${bereichBadge(draft.classification_bereich)}</div>
-        ${draft.used_knowledge_sources?.length ? `<div class="detail-row"><span class="detail-label">Quellen:</span><span style="font-size:11px;color:var(--text-dim)">${draft.used_knowledge_sources.join(', ')}</span></div>` : ''}
-        ${draft.has_check_markers ? '<div style="color:var(--orange);margin-top:8px">⚠ Enthält [PRÜFEN: ...] Markierungen — bitte manuell prüfen</div>' : '<div style="color:var(--green);margin-top:8px">✓ Kein manueller Check erforderlich</div>'}
+        ${draft.used_knowledge_sources?.length ? `<div class="detail-row"><span class="detail-label">Quellen:</span><span style="font-size:11px;color:var(--text-dim)">${draft.used_knowledge_sources.slice(0,3).join(', ')}</span></div>` : ''}
+        ${draft.has_check_markers ? '<div style="color:var(--orange);margin-top:6px">⚠ Enthält [PRÜFEN: ...] Markierungen</div>' : '<div style="color:var(--green);margin-top:6px">✓ Kein manueller Check erforderlich</div>'}
+        ${feedbackBtns}
       </div>
       <div class="detail-section">
-        <h3>Entwurfstext</h3>
-        <div class="draft-text">${highlighted}</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <h3 style="margin:0">${hasEdited ? 'Bearbeiteter Entwurf ✎' : 'Entwurfstext (KI-generiert)'}</h3>
+          <button class="btn btn-secondary btn-sm" onclick="toggleEditMode('${fileId}', ${JSON.stringify(activeText)})">✎ Bearbeiten</button>
+        </div>
+        <div id="draft-view-${fileId}" class="draft-text">${highlightCheckMarkers(activeText)}</div>
+        <div id="draft-edit-${fileId}" style="display:none">
+          <textarea id="draft-textarea-${fileId}" style="width:100%;height:300px;background:var(--bg);border:1px solid var(--accent);color:var(--text);padding:12px;border-radius:6px;font-family:monospace;font-size:13px;resize:vertical">${activeText}</textarea>
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button class="btn btn-primary btn-sm" onclick="saveDraftEdit('${fileId}')">💾 Speichern</button>
+            <button class="btn btn-secondary btn-sm" onclick="cancelEdit('${fileId}')">Abbrechen</button>
+          </div>
+        </div>
       </div>
-      <div style="display:flex;gap:8px;margin-top:12px">
-        <button class="btn btn-primary btn-sm" onclick="copyDraft(${JSON.stringify(draftText)})">📋 In Zwischenablage</button>
+      <div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap">
+        <button class="btn btn-primary btn-sm" onclick="copyDraft(${JSON.stringify(activeText)})">📋 In Zwischenablage</button>
       </div>
     `;
   } catch (e) {
@@ -244,6 +269,45 @@ async function showDraftById(fileId) {
 
 function copyDraft(text) {
   navigator.clipboard.writeText(text).then(() => showToast('In Zwischenablage kopiert', 'success'));
+}
+
+async function rateDraft(fileId, rating) {
+  try {
+    await API.post(`/api/drafts/${fileId}/feedback`, { rating });
+    showToast(`Entwurf als "${rating}" bewertet`, 'success');
+    showDraftById(fileId);  // Neu laden um Bewertung anzuzeigen
+  } catch(e) {
+    showToast('Fehler: ' + e.message, 'error');
+  }
+}
+
+function toggleEditMode(fileId, text) {
+  const view = document.getElementById(`draft-view-${fileId}`);
+  const edit = document.getElementById(`draft-edit-${fileId}`);
+  if (edit.style.display === 'none') {
+    view.style.display = 'none';
+    edit.style.display = 'block';
+    document.getElementById(`draft-textarea-${fileId}`).focus();
+  } else {
+    view.style.display = 'block';
+    edit.style.display = 'none';
+  }
+}
+
+function cancelEdit(fileId) {
+  document.getElementById(`draft-view-${fileId}`).style.display = 'block';
+  document.getElementById(`draft-edit-${fileId}`).style.display = 'none';
+}
+
+async function saveDraftEdit(fileId) {
+  const text = document.getElementById(`draft-textarea-${fileId}`).value;
+  try {
+    await API.post(`/api/drafts/${fileId}/edit`, { text });
+    showToast('Entwurf gespeichert', 'success');
+    showDraftById(fileId);
+  } catch(e) {
+    showToast('Fehler: ' + e.message, 'error');
+  }
 }
 
 // --- TASKS ---
@@ -510,6 +574,8 @@ async function loadStats() {
         <div class="stat-card"><div class="stat-value">${stats.total_tasks}</div><div class="stat-label">Aufgaben</div></div>
         <div class="stat-card"><div class="stat-value" style="color:var(--yellow)">${stats.open_tasks}</div><div class="stat-label">Offene Aufgaben</div></div>
         <div class="stat-card"><div class="stat-value" style="color:var(--red)">${stats.high_prio_tasks}</div><div class="stat-label">Hohe Priorität</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:var(--green)">${stats.feedback_gut || 0}</div><div class="stat-label">Entwürfe 👍</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:var(--orange)">${stats.drafts_with_markers || 0}</div><div class="stat-label">Prüfen-Marker</div></div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
         ${Object.keys(stats.by_bereich || {}).length ? barChart(stats.by_bereich, 'E-Mails nach Bereich') : ''}

@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 from rich import print as rprint
 
 # Sicherstellen dass src im Pfad ist
@@ -58,16 +59,39 @@ def cmd_process(args):
         with console.status(f"Verarbeite {file_path.name}..."):
             result = processor.process_file(str(file_path), force=args.force)
 
-        _print_result(result)
+        _print_result(result, show_draft=getattr(args, "show_draft", False))
 
     elif args.all:
         # Alle E-Mails
-        with console.status("Verarbeite alle E-Mails im Inbox..."):
-            results = processor.process_all(force=args.force)
+        eml_files = sorted(
+            (resolve_path(config.get("paths", {}).get("inbox", "./inbox"))).glob("*.eml")
+        )
+        if not eml_files:
+            console.print("[yellow]Keine .eml-Dateien im Inbox.[/yellow]")
+            return
 
-        console.print(f"\n[green]✓ {len(results)} E-Mail(s) verarbeitet[/green]")
-        for r in results:
-            _print_result_summary(r)
+        results = []
+        errors = []
+
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            console=console,
+        ) as progress:
+            task = progress.add_task("Verarbeite E-Mails...", total=len(eml_files))
+            for eml_file in eml_files:
+                progress.update(task, description=f"[cyan]{eml_file.name}[/cyan]")
+                try:
+                    result = processor.process_file(str(eml_file), force=args.force)
+                    results.append(result)
+                except Exception as e:
+                    errors.append((eml_file.name, str(e)))
+                finally:
+                    progress.advance(task)
+
+        _print_batch_summary(results, errors, args)
 
     else:
         console.print("[yellow]Bitte --file oder --all angeben.[/yellow]")
@@ -306,7 +330,7 @@ def cmd_dashboard(args):
     app.run(host=host, port=port, debug=dash_cfg.get("debug", False))
 
 
-def _print_result(result):
+def _print_result(result, show_draft: bool = False):
     """Gibt ein Verarbeitungsergebnis detailliert aus."""
     clf = result.classification
     ta = result.thread_analysis
@@ -318,53 +342,141 @@ def _print_result(result):
         clf.dringlichkeit, "white"
     )
 
+    draft_line = "✓ generiert" if result.draft else "✗ nicht nötig"
+    if result.draft and result.draft.has_check_markers:
+        draft_line += " [yellow]⚠ enthält [PRÜFEN:] Markierungen[/yellow]"
+
+    task_line = "✗ nicht nötig"
+    if result.task:
+        task_line = f"✓ erstellt — ID: [bold]{result.task.id}[/bold], fällig: {result.task.faellig_bis}"
+
     console.print(Panel(
-        f"[bold]Betreff:[/bold] {result.parsed_email.subject}\n"
-        f"[bold]Von:[/bold] {result.parsed_email.from_addr}\n"
-        f"[bold]Bereich:[/bold] [{bereich_color}]{clf.bereich}[/{bereich_color}]\n"
-        f"[bold]Typ:[/bold] {clf.aktionstyp}\n"
+        f"[bold]Betreff:[/bold]       {result.parsed_email.subject}\n"
+        f"[bold]Von:[/bold]           {result.parsed_email.from_addr}\n"
+        f"[bold]Bereich:[/bold]       [{bereich_color}]{clf.bereich}[/{bereich_color}]\n"
+        f"[bold]Typ:[/bold]           {clf.aktionstyp}\n"
         f"[bold]Dringlichkeit:[/bold] [{prio_color}]{clf.dringlichkeit}[/{prio_color}]\n"
         f"[bold]Zusammenfassung:[/bold] {clf.zusammenfassung}\n\n"
-        f"[bold]Thread:[/bold] {ta.anzahl_nachrichten} Nachricht(en)\n"
-        f"[bold]Tonalität:[/bold] {ta.tonalitaet}\n"
+        f"[bold]Thread:[/bold]       {ta.anzahl_nachrichten} Nachricht(en), "
+        f"Tonalität: {ta.tonalitaet}\n"
         f"[bold]Nächster Schritt:[/bold] {ta.naechster_schritt}\n\n"
-        f"[bold]Entwurf:[/bold] {'✓ generiert' if result.draft else '✗ nicht nötig'}\n"
-        f"[bold]Aufgabe:[/bold] {'✓ erstellt' if result.task else '✗ nicht nötig'}",
-        title=f"Ergebnis: {result.email_id}",
-        style="green" if not result.error else "red"
+        f"[bold]Entwurf:[/bold]       {draft_line}\n"
+        f"[bold]Aufgabe:[/bold]       {task_line}",
+        title=f"[bold]Ergebnis[/bold] — {result.email_id}",
+        style="green" if not result.error else "red",
+        expand=False,
     ))
 
-    if result.draft:
-        console.print(f"\n[bold cyan]Antwortentwurf:[/bold cyan]")
-        console.print(result.draft.draft_text[:800])
-        if len(result.draft.draft_text) > 800:
-            console.print("[dim]... (gekürzt)[/dim]")
+    if result.task and result.task.teilaufgaben:
+        console.print("[bold yellow]Teilaufgaben:[/bold yellow]")
+        for t in result.task.teilaufgaben[:5]:
+            console.print(f"  • {t}")
 
-    if result.task:
-        task = result.task
-        console.print(f"\n[bold yellow]Aufgabe erstellt:[/bold yellow]")
-        console.print(f"  ID: {task.id}")
-        console.print(f"  Titel: {task.titel}")
-        console.print(f"  Fällig: {task.faellig_bis}")
-        if task.teilaufgaben:
-            for t in task.teilaufgaben[:3]:
-                console.print(f"  - {t}")
+    if result.draft:
+        draft_len = len(result.draft.draft_text)
+        limit = 0 if show_draft else 600
+        if show_draft or draft_len <= limit:
+            console.print("\n[bold cyan]Antwortentwurf:[/bold cyan]")
+            console.print(result.draft.draft_text)
+        else:
+            console.print(f"\n[bold cyan]Antwortentwurf[/bold cyan] [dim](erste 600 von {draft_len} Zeichen — "
+                          f"--show-draft für vollständige Anzeige)[/dim]")
+            console.print(result.draft.draft_text[:600] + "\n[dim]...[/dim]")
 
 
 def _print_result_summary(result):
-    """Gibt eine kurze Zusammenfassung aus."""
+    """Gibt eine kurze Zusammenfassung aus (für Watch-Modus)."""
     clf = result.classification
+    bereich_color = {"SIBOX": "blue", "FACETTESTAR": "magenta", "ALLGEMEIN": "cyan"}.get(
+        clf.bereich, "white"
+    )
     icons = []
     if result.draft:
-        icons.append("✉ Entwurf")
+        marker = " ⚠" if result.draft.has_check_markers else ""
+        icons.append(f"✉ Entwurf{marker}")
     if result.task:
-        icons.append(f"📋 Aufgabe ({result.task.id})")
+        icons.append(f"📋 {result.task.id}")
 
-    status = " | ".join(icons) or "Archiviert"
+    status = " | ".join(icons) or "archiviert"
     console.print(
-        f"  [cyan]{result.parsed_email.subject[:50]}[/cyan] "
-        f"[{clf.bereich}] {clf.aktionstyp} → {status}"
+        f"  [{bereich_color}]{clf.bereich}[/{bereich_color}] "
+        f"[bold]{clf.aktionstyp}[/bold]  "
+        f"[cyan]{result.parsed_email.subject[:45]}[/cyan]  →  {status}"
     )
+
+
+def _print_batch_summary(results: list, errors: list, args):
+    """Gibt eine Gesamtübersicht nach --all aus."""
+    total = len(results) + len(errors)
+    console.print()
+
+    if not results and not errors:
+        console.print("[yellow]Keine E-Mails verarbeitet.[/yellow]")
+        return
+
+    # Summary table
+    table = Table(
+        title=f"Verarbeitungs-Übersicht  ({len(results)}/{total} erfolgreich)",
+        show_lines=False,
+        expand=False,
+    )
+    table.add_column("#", style="dim", width=3)
+    table.add_column("Datei", style="cyan", no_wrap=True)
+    table.add_column("Betreff")
+    table.add_column("Bereich", style="magenta")
+    table.add_column("Typ")
+    table.add_column("Prio")
+    table.add_column("Entwurf")
+    table.add_column("Aufgabe")
+
+    for i, result in enumerate(results, 1):
+        clf = result.classification
+        prio_color = {"hoch": "red", "mittel": "yellow", "niedrig": "green"}.get(
+            clf.dringlichkeit, "white"
+        )
+        draft_cell = "[green]✓[/green]"
+        if result.draft and result.draft.has_check_markers:
+            draft_cell = "[yellow]✓⚠[/yellow]"
+        elif not result.draft:
+            draft_cell = "[dim]–[/dim]"
+
+        task_cell = f"[green]{result.task.id[:16]}[/green]" if result.task else "[dim]–[/dim]"
+
+        table.add_row(
+            str(i),
+            Path(result.source_file).name[:25],
+            result.parsed_email.subject[:40],
+            clf.bereich,
+            clf.aktionstyp,
+            f"[{prio_color}]{clf.dringlichkeit}[/{prio_color}]",
+            draft_cell,
+            task_cell,
+        )
+
+    for name, err in errors:
+        table.add_row("!", name[:25], f"[red]FEHLER: {err[:35]}[/red]", "", "", "", "", "")
+
+    console.print(table)
+
+    # Stats line
+    drafts_count = sum(1 for r in results if r.draft)
+    tasks_count = sum(1 for r in results if r.task)
+    markers_count = sum(1 for r in results if r.draft and r.draft.has_check_markers)
+    console.print(
+        f"\n[green]✓[/green] {len(results)} E-Mails verarbeitet  "
+        f"✉ {drafts_count} Entwürfe  "
+        f"📋 {tasks_count} Aufgaben"
+        + (f"  [yellow]⚠ {markers_count} mit [PRÜFEN:][/yellow]" if markers_count else "")
+    )
+
+    if getattr(args, "show_draft", False) and results:
+        for result in results:
+            if result.draft:
+                console.print(
+                    f"\n[bold cyan]Entwurf: {result.parsed_email.subject[:50]}[/bold cyan]"
+                )
+                console.print(result.draft.draft_text)
+                console.print("[dim]" + "─" * 60 + "[/dim]")
 
 
 def main():
@@ -381,6 +493,8 @@ def main():
     p_process.add_argument("--file", help="Einzelne .eml-Datei")
     p_process.add_argument("--all", action="store_true", help="Alle E-Mails im Inbox")
     p_process.add_argument("--force", action="store_true", help="Erneut verarbeiten")
+    p_process.add_argument("--show-draft", action="store_true", dest="show_draft",
+                           help="Vollständigen Entwurf anzeigen")
     p_process.set_defaults(func=cmd_process)
 
     # parse
