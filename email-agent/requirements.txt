@@ -1,0 +1,15 @@
+anthropic>=0.40.0
+pyyaml
+python-dotenv
+rich
+watchdog
+pandas
+openpyxl
+beautifulsoup4
+chardet
+requests
+markdownify
+PyPDF2
+flask
+scikit-learn
+numpy

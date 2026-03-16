@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Helbling E-Mail Agent</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-left">
+      <span class="logo">⚙ Helbling</span>
+      <span class="subtitle">E-Mail-Verarbeitungssystem</span>
+    </div>
+    <div class="header-right">
+      <span id="notification-badge" class="badge hidden">0</span>
+      <button class="btn btn-sm btn-primary" onclick="processAll()">▶ Inbox verarbeiten</button>
+      <span id="auto-refresh-indicator" class="dim">⟳ Auto-Refresh</span>
+    </div>
+  </header>
+
+  <nav class="tab-nav">
+    <button class="tab-btn active" data-tab="inbox">📬 Inbox</button>
+    <button class="tab-btn" data-tab="drafts">✉ Entwürfe</button>
+    <button class="tab-btn" data-tab="tasks">📋 Aufgaben</button>
+    <button class="tab-btn" data-tab="knowledge">🗄 Wissensdatenbank</button>
+    <button class="tab-btn" data-tab="stats">📊 Statistik</button>
+  </nav>
+
+  <main class="content">
+
+    <!-- TAB: INBOX -->
+    <section id="tab-inbox" class="tab-content active">
+      <div class="section-header">
+        <h2>Verarbeitete E-Mails</h2>
+        <div class="filters">
+          <select id="filter-bereich" onchange="loadEmails()">
+            <option value="">Alle Bereiche</option>
+            <option value="SIBOX">SIBOX</option>
+            <option value="FACETTESTAR">FACETTESTAR</option>
+            <option value="ALLGEMEIN">Allgemein</option>
+          </select>
+        </div>
+      </div>
+      <div id="emails-table-container">
+        <p class="loading">Lade E-Mails...</p>
+      </div>
+      <!-- Detail Panel -->
+      <div id="email-detail-panel" class="detail-panel hidden">
+        <button class="close-btn" onclick="closePanel('email-detail-panel')">✕</button>
+        <div id="email-detail-content"></div>
+      </div>
+    </section>
+
+    <!-- TAB: DRAFTS -->
+    <section id="tab-drafts" class="tab-content">
+      <div class="section-header">
+        <h2>Antwortentwürfe</h2>
+      </div>
+      <div id="drafts-container">
+        <p class="loading">Lade Entwürfe...</p>
+      </div>
+      <div id="draft-detail-panel" class="detail-panel hidden">
+        <button class="close-btn" onclick="closePanel('draft-detail-panel')">✕</button>
+        <div id="draft-detail-content"></div>
+      </div>
+    </section>
+
+    <!-- TAB: TASKS -->
+    <section id="tab-tasks" class="tab-content">
+      <div class="section-header">
+        <h2>Aufgaben</h2>
+        <div class="filters">
+          <select id="filter-task-status" onchange="loadTasks()">
+            <option value="">Alle</option>
+            <option value="offen">Offen</option>
+            <option value="in_bearbeitung">In Bearbeitung</option>
+            <option value="erledigt">Erledigt</option>
+          </select>
+          <select id="filter-task-bereich" onchange="loadTasks()">
+            <option value="">Alle Bereiche</option>
+            <option value="SIBOX">SIBOX</option>
+            <option value="FACETTESTAR">FACETTESTAR</option>
+            <option value="ALLGEMEIN">Allgemein</option>
+          </select>
+        </div>
+      </div>
+      <div id="tasks-container">
+        <p class="loading">Lade Aufgaben...</p>
+      </div>
+      <div id="task-detail-panel" class="detail-panel hidden">
+        <button class="close-btn" onclick="closePanel('task-detail-panel')">✕</button>
+        <div id="task-detail-content"></div>
+      </div>
+    </section>
+
+    <!-- TAB: KNOWLEDGE -->
+    <section id="tab-knowledge" class="tab-content">
+      <div class="section-header">
+        <h2>Wissensdatenbank</h2>
+        <div class="actions">
+          <button class="btn btn-secondary" onclick="reloadKnowledge()">🔄 Neu laden</button>
+          <button class="btn btn-secondary" onclick="scrapeAll()">🌐 Web-Quellen aktualisieren</button>
+        </div>
+      </div>
+      <div id="kb-status-container">
+        <p class="loading">Lade Status...</p>
+      </div>
+      <h3>Lokale Dateien</h3>
+      <div id="kb-files-container">
+        <p class="loading">Lade Dateien...</p>
+      </div>
+      <h3>Web-Quellen</h3>
+      <div id="kb-web-container">
+        <p class="loading">Lade Web-Quellen...</p>
+      </div>
+    </section>
+
+    <!-- TAB: STATS -->
+    <section id="tab-stats" class="tab-content">
+      <div class="section-header">
+        <h2>Statistiken</h2>
+      </div>
+      <div id="stats-container">
+        <p class="loading">Lade Statistiken...</p>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>

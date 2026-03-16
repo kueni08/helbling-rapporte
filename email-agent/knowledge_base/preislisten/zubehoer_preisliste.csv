@@ -1,0 +1,8 @@
+Artikel,Bezeichnung,Preis_CHF,Einheit,Bemerkung
+VERP-STANDARD,Verpackung Standard,15.00,Stk,
+VERP-EXPORT,Verpackung Export/Holzkiste,45.00,Stk,
+LIEF-EXPRESS,Expresslieferung (1-2 Tage),65.00,Stk,
+LIEF-STANDARD,Standardlieferung (3-5 Tage),25.00,Stk,ab 5 kg
+LIEF-FREI,Freihaus (ab CHF 500 Warenwert),0.00,Stk,Schweiz
+PLAN-KONSULT,Planungs-/Beratungspauschale,180.00,Std,
+PLAN-PROJEKT,Projektplanung pauschal,Auf Anfrage,Projekt,je nach Umfang

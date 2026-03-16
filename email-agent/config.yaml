@@ -1,0 +1,127 @@
+# Helbling & Co. AG — E-Mail-Verarbeitungssystem Konfiguration
+
+# Pfade
+paths:
+  inbox: "./inbox"
+  knowledge_base: "./knowledge_base"
+  output: "./output"
+  archive: "./archive"
+
+# Anthropic API
+api:
+  model: "claude-sonnet-4-20250514"
+  max_tokens: 2000
+  temperature: 0.3
+
+# Firma
+company:
+  name: "Helbling & Co. AG"
+  domains:
+    - "helbling.ch"
+    - "helbling-co.ch"
+  erpnext_url: ""  # z.B. https://erp.helbling.ch
+
+# Klassifikation
+classification:
+  default_bereich: "ALLGEMEIN"
+  keywords_sibox:
+    - "sibox"
+    - "schlüsseldepot"
+    - "schlüssel depot"
+    - "notöffnung"
+    - "schliesszylinder"
+    - "schliessanlage"
+    - "keso"
+    - "kaba"
+    - "sea"
+    - "profilzylinder"
+    - "zugangskontrolle"
+  keywords_facettestar:
+    - "facettestar"
+    - "entgrat"
+    - "anfas"
+    - "chamfer"
+    - "deburr"
+    - "entgraten"
+    - "anfasen"
+    - "gratfrei"
+
+# Aufgaben
+tasks:
+  default_zugewiesen: "Kueni"
+  nachfass_tage: 3
+  prioritaet_mapping:
+    REKLAMATION: "hoch"
+    ANGEBOT_ANFRAGE: "hoch"
+    BESTELLUNG: "hoch"
+    TERMIN: "mittel"
+    NACHFASSEN: "mittel"
+    ANFRAGE: "mittel"
+    INFO: "niedrig"
+    INTERN: "niedrig"
+
+# Entwürfe
+drafts:
+  signatur: |
+    Freundliche Grüsse
+
+    Helbling & Co. AG
+    Werkstrasse 18
+    8645 Rapperswil-Jona
+    Tel. +41 55 225 55 00
+    info@helbling.ch
+    www.helbling.ch
+  sprache: "de-CH"
+  stil: "professionell-freundlich"
+
+# Web-Scraping
+web_sources:
+  - name: "Helbling Homepage"
+    url: "https://www.helbling.ch"
+    crawl_depth: 2
+    include_patterns:
+      - "/produkte/"
+      - "/dienstleistungen/"
+      - "/ueber-uns/"
+      - "/kontakt/"
+    exclude_patterns:
+      - "/blog/"
+      - "/impressum/"
+      - "/datenschutz/"
+    category: "allgemein"
+    refresh_interval_hours: 168
+  - name: "SIBOX Website"
+    url: "https://www.sibox.ch"
+    crawl_depth: 2
+    include_patterns:
+      - "*"
+    exclude_patterns: []
+    category: "sibox"
+    refresh_interval_hours: 168
+  - name: "FACETTESTAR Info"
+    url: "https://www.facettestar.ch"
+    crawl_depth: 2
+    include_patterns:
+      - "*"
+    exclude_patterns: []
+    category: "facettestar"
+    refresh_interval_hours: 168
+
+# Knowledge Base
+knowledge:
+  chunk_size: 1000       # Zeichen pro Chunk
+  chunk_overlap: 200     # Überlappung
+  top_k: 5              # Anzahl Chunks für Kontext
+  min_relevance: 0.1    # Minimaler Relevanz-Score
+
+# Dashboard
+dashboard:
+  host: "127.0.0.1"
+  port: 5000
+  debug: false
+  auto_refresh_seconds: 30
+
+# Logging
+logging:
+  level: "INFO"          # DEBUG, INFO, WARNING, ERROR
+  file: "./output/logs/processing.log"
