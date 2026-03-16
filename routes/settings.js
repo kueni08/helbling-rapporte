@@ -4,6 +4,8 @@ const { requireLogin, requireRole } = require('../middleware/auth');
 const XLSX = require('xlsx');
 const multer = require('multer');
 const uploadMem = multer({ storage: multer.memoryStorage() });
+const Anthropic = require('@anthropic-ai/sdk');
+const { DEFAULT_EXTRACTION_PROMPT } = require('../lib/lieferschein-watcher');
 
 // GET /api/settings/options  – all active options grouped by field_name
 router.get('/options', requireLogin, (req, res) => {
@@ -152,6 +154,77 @@ router.put('/smtp', requireRole('admin'), (req, res) => {
   if (pass && pass !== '***') upsert.run('smtp_pass', pass);
   if (from !== undefined) upsert.run('smtp_from', from);
   res.json({ ok: true });
+});
+
+// ── KI-Extraktions-Prompt ─────────────────────────────────────────────────────
+router.get('/extraction-prompt-default', requireRole('admin'), (req, res) => {
+  res.json({ prompt: DEFAULT_EXTRACTION_PROMPT });
+});
+
+router.get('/extraction-prompt', requireRole('admin'), (req, res) => {
+  const db = getDb();
+  const saved = db.prepare('SELECT value FROM settings WHERE key = ?').get('extraction_prompt')?.value;
+  res.json({ prompt: saved || DEFAULT_EXTRACTION_PROMPT });
+});
+
+router.put('/extraction-prompt', requireRole('admin'), (req, res) => {
+  const { prompt } = req.body;
+  if (!prompt || typeof prompt !== 'string') return res.status(400).json({ error: 'prompt erforderlich' });
+  const db = getDb();
+  db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('extraction_prompt', prompt);
+  res.json({ ok: true });
+});
+
+router.post('/prompt-chat', requireRole('admin'), async (req, res) => {
+  const { message, currentPrompt } = req.body;
+  if (!message) return res.status(400).json({ error: 'message erforderlich' });
+
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return res.status(503).json({ error: 'ANTHROPIC_API_KEY nicht konfiguriert' });
+
+  const client = new Anthropic({ apiKey });
+
+  const systemPrompt = `Du bist ein Experte für Prompt-Engineering, spezialisiert auf Datenextraktion aus Schweizer Lieferscheinen.
+Du bekommst den aktuellen Extraktions-Prompt und eine Anfrage des Benutzers.
+Passe den Prompt entsprechend an.
+
+Antworte IMMER in diesem JSON-Format:
+{
+  "explanation": "Kurze Erklärung was du geändert hast (1-2 Sätze, auf Deutsch)",
+  "newPrompt": "Der vollständige, aktualisierte Prompt"
+}
+
+Regeln:
+- Behalte die Grundstruktur des Prompts bei
+- Das JSON-Ausgabeformat im Prompt muss immer vollständig bleiben
+- Antworte NUR mit dem JSON, kein weiterer Text`;
+
+  const userMsg = `Aktueller Prompt:
+\`\`\`
+${currentPrompt}
+\`\`\`
+
+Anfrage: ${message}`;
+
+  try {
+    const response = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 4096,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userMsg }],
+    });
+
+    const raw = response.content[0].text.trim()
+      .replace(/^```json?\s*/i, '').replace(/\s*```$/, '').trim();
+    const parsed = JSON.parse(raw);
+
+    if (!parsed.explanation || !parsed.newPrompt) {
+      return res.status(500).json({ error: 'Unerwartetes Antwortformat von Claude' });
+    }
+    res.json(parsed);
+  } catch (e) {
+    res.status(500).json({ error: `Claude API Fehler: ${e.message}` });
+  }
 });
 
 // ── Customers ────────────────────────────────────────────────────────────────
