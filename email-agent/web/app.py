@@ -10,6 +10,7 @@ from datetime import datetime
 from pathlib import Path
 
 from flask import Flask, jsonify, render_template, request, send_from_directory
+from werkzeug.utils import secure_filename
 
 # Projektroot zum Pfad hinzufügen
 project_root = Path(__file__).parent.parent
@@ -381,6 +382,49 @@ def create_app(config: dict = None) -> Flask:
             })
         except Exception as e:
             return jsonify({"error": str(e)}), 500
+
+    inbox_path = resolve_path(paths.get("inbox", "./inbox"))
+
+    @app.route("/api/upload", methods=["POST"])
+    def api_upload():
+        """Nimmt hochgeladene .eml-Dateien entgegen und verarbeitet sie."""
+        files = request.files.getlist("files")
+        if not files:
+            return jsonify({"error": "Keine Dateien hochgeladen"}), 400
+
+        saved = []
+        errors = []
+        for f in files:
+            name = secure_filename(f.filename or "upload.eml")
+            if not name.lower().endswith(".eml"):
+                errors.append(f"{name}: Nur .eml-Dateien erlaubt")
+                continue
+            dest = inbox_path / name
+            # Bei Namenskonflikt Suffix anhängen
+            counter = 1
+            while dest.exists():
+                stem = Path(name).stem
+                dest = inbox_path / f"{stem}_{counter}.eml"
+                counter += 1
+            f.save(str(dest))
+            saved.append(dest.name)
+
+        if not saved:
+            return jsonify({"error": "; ".join(errors)}), 400
+
+        # Sofort verarbeiten
+        results = []
+        try:
+            from src.processor import Processor
+            processor = Processor(config)
+            for filename in saved:
+                result = processor.process_file(inbox_path / filename)
+                if result:
+                    results.append(result)
+        except Exception as e:
+            return jsonify({"ok": True, "saved": saved, "warning": str(e)})
+
+        return jsonify({"ok": True, "saved": saved, "processed": len(results), "errors": errors})
 
     return app
 

@@ -608,8 +608,75 @@ function startAutoRefresh() {
   }, 30000);
 }
 
+// --- DRAG & DROP ---
+function initDropZone() {
+  const zone = document.getElementById('drop-zone');
+  if (!zone) return;
+
+  ['dragenter', 'dragover'].forEach(evt => {
+    zone.addEventListener(evt, e => {
+      e.preventDefault();
+      e.stopPropagation();
+      zone.classList.add('drag-over');
+    });
+  });
+
+  ['dragleave', 'drop'].forEach(evt => {
+    zone.addEventListener(evt, e => {
+      e.preventDefault();
+      e.stopPropagation();
+      zone.classList.remove('drag-over');
+    });
+  });
+
+  zone.addEventListener('drop', e => {
+    const files = e.dataTransfer.files;
+    if (files.length) uploadEmlFiles(files);
+  });
+}
+
+async function uploadEmlFiles(files) {
+  const zone = document.getElementById('drop-zone');
+  const emlFiles = Array.from(files).filter(f => f.name.toLowerCase().endsWith('.eml'));
+  if (!emlFiles.length) {
+    showToast('Nur .eml-Dateien werden akzeptiert', 'error');
+    return;
+  }
+
+  zone.classList.add('uploading');
+  const iconEl = zone.querySelector('.drop-zone-icon');
+  const textEl = zone.querySelector('.drop-zone-text');
+  const origIcon = iconEl.textContent;
+  const origText = textEl.textContent;
+  iconEl.textContent = '⏳';
+  textEl.textContent = `${emlFiles.length} Datei(en) werden verarbeitet…`;
+
+  const formData = new FormData();
+  emlFiles.forEach(f => formData.append('files', f));
+
+  try {
+    const r = await fetch('/api/upload', { method: 'POST', body: formData });
+    const data = await r.json();
+    if (data.ok) {
+      const msg = `${data.processed || 0} E-Mail(s) verarbeitet`;
+      showToast(msg, 'success');
+      loadEmails();
+    } else {
+      showToast(data.error || 'Fehler beim Upload', 'error');
+    }
+  } catch (err) {
+    showToast('Upload fehlgeschlagen', 'error');
+  } finally {
+    zone.classList.remove('uploading');
+    iconEl.textContent = origIcon;
+    textEl.textContent = origText;
+    document.getElementById('eml-file-input').value = '';
+  }
+}
+
 // --- INIT ---
 window.addEventListener('load', () => {
   loadEmails();
   startAutoRefresh();
+  initDropZone();
 });

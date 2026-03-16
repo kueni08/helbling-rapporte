@@ -476,6 +476,38 @@ select:focus, input[type="text"]:focus {
 .status-dot.yellow { background: var(--yellow); }
 .status-dot.red { background: var(--red); }
 
+/* DRAG & DROP ZONE */
+.drop-zone {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 28px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-bottom: 20px;
+  background: var(--bg2);
+}
+
+.drop-zone:hover, .drop-zone.drag-over {
+  border-color: var(--accent);
+  background: rgba(79,142,247,0.05);
+}
+
+[data-theme="light"] .drop-zone:hover,
+[data-theme="light"] .drop-zone.drag-over {
+  background: rgba(37,99,235,0.05);
+}
+
+.drop-zone-icon { font-size: 32px; margin-bottom: 8px; }
+.drop-zone-text { font-size: 14px; font-weight: 500; color: var(--text); }
+.drop-zone-hint { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+
+.drop-zone.uploading {
+  border-color: var(--yellow);
+  opacity: 0.8;
+  pointer-events: none;
+}
+
 /* Empty state */
 .empty-state {
   text-align: center;

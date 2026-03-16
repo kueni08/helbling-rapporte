@@ -43,6 +43,15 @@
           </select>
         </div>
       </div>
+
+      <!-- Drag & Drop Zone -->
+      <div id="drop-zone" class="drop-zone" onclick="document.getElementById('eml-file-input').click()">
+        <div class="drop-zone-icon">📧</div>
+        <div class="drop-zone-text">.eml-Dateien hier hineinziehen oder klicken zum Auswählen</div>
+        <div class="drop-zone-hint">Mehrere Dateien gleichzeitig möglich</div>
+        <input type="file" id="eml-file-input" accept=".eml" multiple style="display:none" onchange="uploadEmlFiles(this.files)" />
+      </div>
+
       <div id="emails-table-container">
         <p class="loading">Lade E-Mails...</p>
       </div>
