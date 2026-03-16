@@ -227,6 +227,24 @@ Anfrage: ${message}`;
   }
 });
 
+// ── Import-Einstellungen (admin + planer) ─────────────────────────────────────
+router.get('/import-defaults', requireRole('admin', 'planer'), (req, res) => {
+  const db = getDb();
+  const monteurId = db.prepare("SELECT value FROM settings WHERE key = ?").get('default_import_monteur_id')?.value;
+  res.json({ default_monteur_id: monteurId ? parseInt(monteurId) : null });
+});
+
+router.put('/import-defaults', requireRole('admin', 'planer'), (req, res) => {
+  const { default_monteur_id } = req.body;
+  const db = getDb();
+  if (default_monteur_id) {
+    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)").run('default_import_monteur_id', String(default_monteur_id));
+  } else {
+    db.prepare("DELETE FROM settings WHERE key = ?").run('default_import_monteur_id');
+  }
+  res.json({ ok: true });
+});
+
 // ── Customers ────────────────────────────────────────────────────────────────
 router.get('/customers', requireLogin, (req, res) => {
   res.json(getDb().prepare('SELECT * FROM customers ORDER BY name').all());

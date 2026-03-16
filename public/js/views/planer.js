@@ -384,6 +384,10 @@ const PlanerViews = {
               <input type="text" id="f-on-site-contact" value="${UI.esc(order?.on_site_contact||'')}">
             </div>
             <div class="field">
+              <label>Telefon Kontaktperson</label>
+              <input type="text" id="f-on-site-contact-phone" value="${UI.esc(order?.on_site_contact_phone||'')}" placeholder="z.B. 079 366 65 58">
+            </div>
+            <div class="field">
               <label>Montageadresse <span class="req">*</span></label>
               <input type="text" id="f-installation-address" value="${UI.esc(order?.installation_address||'')}">
             </div>
@@ -562,6 +566,7 @@ const PlanerViews = {
       customer_address:      document.getElementById('f-customer-address').value.trim(),
       orderer:               document.getElementById('f-orderer').value.trim(),
       on_site_contact:       document.getElementById('f-on-site-contact').value.trim(),
+      on_site_contact_phone: document.getElementById('f-on-site-contact-phone')?.value.trim() || null,
       installation_address:  document.getElementById('f-installation-address').value.trim(),
       arrival_time:          document.getElementById('f-arrival-time').value.trim(),
       planned_date:          document.getElementById('f-planned-date').value,
@@ -636,7 +641,7 @@ const PlanerViews = {
             ['Kundenadresse',  fv(order.customer_address || order.cust_address)],
             ['Besteller',      fv(order.orderer)],
             ['Montageadresse', fv(order.installation_address)],
-            ['Kontakt vor Ort',fv(order.on_site_contact)],
+            ['Kontakt vor Ort',fv(order.on_site_contact) + (order.on_site_contact_phone ? ` · ${order.on_site_contact_phone}` : '')],
             ['Ankunftszeit',   fv(order.arrival_time)],
             ['Montagedatum',   UI.fmtDate(order.planned_date)],
             ['Spätestes Datum',UI.fmtDate(order.latest_date)],
@@ -966,6 +971,15 @@ const PlanerViews = {
     navigator.clipboard.writeText(url)
       .then(() => UI.toast('Link kopiert: ' + url, 'success', 4000))
       .catch(() => UI.toast('Link: ' + url, 'info', 6000));
+  },
+
+  // ── Lieferschein Import (Planer) ─────────────────────────────────────────
+  async renderLieferschein() {
+    const el = document.getElementById('main-content');
+    el.innerHTML = `
+      <div class="page-header"><h2>📥 LS-Import</h2></div>
+      <div id="settings-content"><p class="text-muted text-sm">Lade…</p></div>`;
+    await AdminViews.renderLieferscheinImport();
   },
 
   // ── Excel Import ────────────────────────────────────────────────────────

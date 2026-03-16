@@ -310,10 +310,10 @@ router.post('/', requireRole('admin', 'planer'), (req, res) => {
   const result = db.prepare(`
     INSERT INTO orders (
       order_number, status, customer_id, customer_name, customer_address,
-      installation_address, orderer, on_site_contact, arrival_time,
+      installation_address, orderer, on_site_contact, on_site_contact_phone, arrival_time,
       planned_date, latest_date, work_types, notes_planer,
       assigned_to, created_by, sort_order, project_number
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
   `).run(
     orderNumber,
     b.status || 'geplant',
@@ -323,6 +323,7 @@ router.post('/', requireRole('admin', 'planer'), (req, res) => {
     b.installation_address || null,
     b.orderer || null,
     b.on_site_contact || null,
+    b.on_site_contact_phone || null,
     b.arrival_time || null,
     b.planned_date || null,
     b.latest_date || null,
@@ -387,7 +388,7 @@ router.put('/:id', requireLogin, (req, res) => {
     db.prepare(`
       UPDATE orders SET
         status = ?, customer_id = ?, customer_name = ?, customer_address = ?,
-        installation_address = ?, orderer = ?, on_site_contact = ?,
+        installation_address = ?, orderer = ?, on_site_contact = ?, on_site_contact_phone = ?,
         arrival_time = ?, planned_date = ?, latest_date = ?,
         work_types = ?, notes_planer = ?, assigned_to = ?, sort_order = ?,
         project_number = ?,
@@ -408,6 +409,7 @@ router.put('/:id', requireLogin, (req, res) => {
       b.installation_address ?? order.installation_address,
       b.orderer ?? order.orderer,
       b.on_site_contact ?? order.on_site_contact,
+      b.on_site_contact_phone !== undefined ? b.on_site_contact_phone || null : order.on_site_contact_phone,
       b.arrival_time ?? order.arrival_time,
       b.planned_date ?? order.planned_date,
       b.latest_date ?? order.latest_date,
