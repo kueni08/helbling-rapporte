@@ -318,16 +318,79 @@ def cmd_dashboard(args):
     """Startet das Web-Dashboard."""
     config = get_config()
     dash_cfg = config.get("dashboard", {})
-    host = dash_cfg.get("host", "127.0.0.1")
-    port = dash_cfg.get("port", 5000)
+    host = getattr(args, "host", None) or dash_cfg.get("host", "127.0.0.1")
+    port = getattr(args, "port", None) or dash_cfg.get("port", 5000)
+    online = getattr(args, "online", False)
+
+    if online:
+        host = "127.0.0.1"
+        console.print(f"[green]Starte Dashboard + Cloudflare Tunnel ...[/green]")
+        _start_with_tunnel(config, host, port)
+        return
 
     console.print(f"[green]Starte Dashboard auf http://{host}:{port}[/green]")
-
-    # Flask App importieren und starten
     sys.path.insert(0, str(Path(__file__).parent.parent))
     from web.app import create_app
     app = create_app(config)
     app.run(host=host, port=port, debug=dash_cfg.get("debug", False))
+
+
+def _start_with_tunnel(config, host, port):
+    """Startet Flask und Cloudflare Tunnel parallel."""
+    import threading
+    import subprocess
+    import shutil
+
+    # Flask in Hintergrundthread starten
+    def run_flask():
+        sys.path.insert(0, str(Path(__file__).parent.parent))
+        from web.app import create_app
+        app = create_app(config)
+        app.run(host=host, port=port, debug=False, use_reloader=False)
+
+    flask_thread = threading.Thread(target=run_flask, daemon=True)
+    flask_thread.start()
+
+    import time
+    time.sleep(2)
+
+    # cloudflared suchen
+    cloudflared = shutil.which("cloudflared")
+    base_dir = Path(__file__).parent.parent
+    local_cf = base_dir / "cloudflared.exe"
+    if local_cf.exists():
+        cloudflared = str(local_cf)
+
+    if not cloudflared:
+        console.print(
+            "[yellow]cloudflared nicht gefunden.[/yellow]\n"
+            "Bitte herunterladen und ins Projektverzeichnis legen:\n"
+            "[blue]https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe[/blue]\n"
+            "→ Umbenennen zu cloudflared.exe\n\n"
+            f"Dashboard läuft lokal auf [green]http://{host}:{port}[/green]"
+        )
+        flask_thread.join()
+        return
+
+    console.print(f"[cyan]Cloudflare Tunnel wird gestartet ...[/cyan]")
+    try:
+        proc = subprocess.Popen(
+            [cloudflared, "tunnel", "--url", f"http://127.0.0.1:{port}", "--no-autoupdate"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        import re
+        for line in proc.stdout:
+            m = re.search(r"https://[a-z0-9\-]+\.trycloudflare\.com", line)
+            if m:
+                console.print(f"\n[bold green]✓ Dashboard öffentlich erreichbar:[/bold green]")
+                console.print(f"  [bold white]{m.group(0)}[/bold white]")
+                console.print("[dim]Strg+C zum Beenden[/dim]\n")
+        proc.wait()
+    except KeyboardInterrupt:
+        proc.terminate()
+        console.print("\n[yellow]Beendet.[/yellow]")
 
 
 def _print_result(result, show_draft: bool = False):
@@ -524,6 +587,10 @@ def main():
 
     # dashboard
     p_dash = subparsers.add_parser("dashboard", help="Web-Dashboard starten")
+    p_dash.add_argument("--online", action="store_true",
+                        help="Cloudflare Tunnel starten (öffentlich erreichbar)")
+    p_dash.add_argument("--host", default=None, help="Host-Adresse (Standard: 127.0.0.1)")
+    p_dash.add_argument("--port", type=int, default=None, help="Port (Standard: 5000)")
     p_dash.set_defaults(func=cmd_dashboard)
 
     args = parser.parse_args()
