@@ -88,6 +88,7 @@ const API = {
   // Lieferschein Auto-Import
   getLsStatus:         ()         => API.get('/api/lieferschein/status'),
   getLsImports:        ()         => API.get('/api/lieferschein/imports'),
+  getLsDriveStatus:    ()         => API.get('/api/lieferschein/drive-status'),
   uploadLieferschein:  (form)     => API.upload('/api/lieferschein/upload', form),
   retryLsImport:       (id)       => API.post(`/api/lieferschein/retry/${id}`),
   deleteLsImport:      (id)       => API.delete(`/api/lieferschein/imports/${id}`),
