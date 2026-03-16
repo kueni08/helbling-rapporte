@@ -103,6 +103,7 @@ const AdminViews = {
         <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('articles')">Artikel</button>
         <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('customers')">Kunden</button>
         <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('email')">✉️ E-Mail</button>
+        <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('lieferschein')">📥 LS-Import</button>
       </div>
       <div id="settings-content"></div>`;
     await AdminViews.showSettingsTab('options');
@@ -110,11 +111,12 @@ const AdminViews = {
 
   async showSettingsTab(tab) {
     document.querySelectorAll('#settings-tabs .btn').forEach(b => b.classList.remove('btn-primary'));
-    document.querySelectorAll('#settings-tabs .btn')[['options','articles','customers','email'].indexOf(tab)]?.classList.add('btn-primary');
-    if (tab === 'options')    await AdminViews.renderOptions();
-    if (tab === 'articles')   await AdminViews.renderArticles();
-    if (tab === 'customers')  await AdminViews.renderCustomers();
-    if (tab === 'email')      await AdminViews.renderEmailSettings();
+    document.querySelectorAll('#settings-tabs .btn')[['options','articles','customers','email','lieferschein'].indexOf(tab)]?.classList.add('btn-primary');
+    if (tab === 'options')      await AdminViews.renderOptions();
+    if (tab === 'articles')     await AdminViews.renderArticles();
+    if (tab === 'customers')    await AdminViews.renderCustomers();
+    if (tab === 'email')        await AdminViews.renderEmailSettings();
+    if (tab === 'lieferschein') await AdminViews.renderLieferscheinImport();
   },
 
   async renderOptions() {
@@ -373,5 +375,116 @@ const AdminViews = {
       UI.toast('SMTP-Einstellungen gespeichert', 'success');
       await AdminViews.renderEmailSettings();
     } catch(e) { UI.toast(e.message, 'error'); }
+  },
+
+  // ── Lieferschein Auto-Import ─────────────────────────────────────────────
+  async renderLieferscheinImport() {
+    const el = document.getElementById('settings-content');
+    el.innerHTML = '<p class="text-muted text-sm">Lade…</p>';
+
+    let status = { active: false, inbox_dir: '–', inbox_files: [] };
+    let imports = [];
+    try { [status, imports] = await Promise.all([API.getLsStatus(), API.getLsImports()]); } catch(e) {}
+
+    const statusBadge = status.active
+      ? '<span class="badge badge-green">Aktiv</span>'
+      : '<span class="badge badge-gray">Inaktiv – ANTHROPIC_API_KEY fehlt</span>';
+
+    const statusBanner = !status.active ? `
+      <div class="card" style="border-left:4px solid #f59e0b;background:#fffbeb">
+        <p style="margin:0;font-size:0.875rem">
+          <strong>Einrichtung erforderlich:</strong> Trage <code>ANTHROPIC_API_KEY=sk-ant-...</code> in deine
+          <code>.env</code>-Datei ein und starte den Server neu.
+          Den API-Key erhältst du auf <a href="https://console.anthropic.com/" target="_blank" rel="noopener">console.anthropic.com</a>.
+        </p>
+      </div>` : '';
+
+    const importRows = imports.length ? imports.map(i => {
+      const statusMap = { success: 'badge-green', error: 'badge-red', processing: 'badge-blue', pending: 'badge-gray' };
+      const statusLabel = { success: 'Erfolgreich', error: 'Fehler', processing: 'Verarbeitung…', pending: 'Ausstehend' };
+      return `<tr>
+        <td style="font-size:0.8rem">${UI.esc(i.original_name)}</td>
+        <td><span class="badge ${statusMap[i.status]||'badge-gray'}">${statusLabel[i.status]||i.status}</span></td>
+        <td>${UI.esc(i.lieferschein_nr||'–')}</td>
+        <td>${UI.esc(i.kunde||'–')}</td>
+        <td>${UI.esc(i.projekt_nr||'–')}</td>
+        <td>${i.articles_imported||0}</td>
+        <td>${i.order_number ? `<a href="#" onclick="App.navigateTo('orders');return false">${UI.esc(i.order_number)}</a>` : '–'}</td>
+        <td style="font-size:0.75rem;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+            title="${UI.esc(i.error_message||'')}">
+          ${i.error_message ? `<span style="color:#dc2626">${UI.esc(i.error_message.substring(0,80))}</span>` : '–'}
+        </td>
+        <td style="font-size:0.75rem">${(i.created_at||'').substring(0,16).replace('T',' ')}</td>
+        <td class="text-right" style="white-space:nowrap">
+          ${i.status === 'error' ? `<button class="btn btn-ghost btn-sm" onclick="AdminViews.retryLsImport(${i.id})">↺ Retry</button>` : ''}
+          <button class="btn btn-danger btn-sm" onclick="AdminViews.deleteLsImport(${i.id})">✕</button>
+        </td>
+      </tr>`;
+    }).join('') : '<tr><td colspan="10" class="text-muted text-sm text-center">Noch keine Importe</td></tr>';
+
+    el.innerHTML = `
+      ${statusBanner}
+      <div class="card">
+        <div class="card-title">📥 Lieferschein Auto-Import ${statusBadge}</div>
+        <p class="text-muted text-sm mb-1">
+          PDFs in diesen Ordner legen → automatisch als Auftrag importiert:<br>
+          <code style="font-size:0.85rem;word-break:break-all">${UI.esc(status.inbox_dir)}</code>
+        </p>
+        <div class="flex gap-2 mt-2 flex-wrap">
+          <div>
+            <label class="btn btn-ghost btn-sm" style="cursor:pointer">
+              📂 PDF manuell hochladen
+              <input type="file" accept=".pdf" style="display:none" onchange="AdminViews.uploadLieferschein(this)">
+            </label>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('lieferschein')">↺ Aktualisieren</button>
+        </div>
+        ${status.inbox_files.length ? `
+          <p class="text-sm mt-2"><strong>Inbox (${status.inbox_files.length} PDF${status.inbox_files.length>1?'s':''} ausstehend):</strong></p>
+          <ul class="text-sm text-muted" style="margin:4px 0 0 16px">
+            ${status.inbox_files.map(f => `<li>${UI.esc(f.name)}</li>`).join('')}
+          </ul>` : ''}
+      </div>
+      <div class="card">
+        <div class="card-title">Import-Verlauf</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Datei</th><th>Status</th><th>LS-Nr.</th><th>Kunde</th>
+              <th>Projekt-Nr.</th><th>Artikel</th><th>Auftrag</th><th>Fehler</th><th>Datum</th><th></th>
+            </tr></thead>
+            <tbody>${importRows}</tbody>
+          </table>
+        </div>
+      </div>`;
+  },
+
+  async uploadLieferschein(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const form = new FormData();
+    form.append('file', file);
+    try {
+      UI.toast('PDF wird verarbeitet…', 'info', 3000);
+      await API.uploadLieferschein(form);
+      UI.toast('Verarbeitung gestartet – Seite lädt in 3s neu', 'success', 3000);
+      setTimeout(() => AdminViews.showSettingsTab('lieferschein'), 3500);
+    } catch (e) { UI.toast(e.message, 'error'); }
+    input.value = '';
+  },
+
+  async retryLsImport(id) {
+    try {
+      UI.toast('Retry gestartet…', 'info', 2000);
+      await API.retryLsImport(id);
+      UI.toast('Erneuter Versuch gestartet', 'success');
+      setTimeout(() => AdminViews.showSettingsTab('lieferschein'), 2000);
+    } catch(e) { UI.toast(e.message, 'error'); }
+  },
+
+  async deleteLsImport(id) {
+    if (!await UI.confirm('Import-Eintrag löschen?')) return;
+    try { await API.deleteLsImport(id); await AdminViews.showSettingsTab('lieferschein'); }
+    catch(e) { UI.toast(e.message, 'error'); }
   },
 };
