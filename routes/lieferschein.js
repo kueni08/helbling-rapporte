@@ -97,6 +97,12 @@ router.post('/retry/:id', requireRole('admin', 'planer'), async (req, res) => {
   }
 });
 
+// GET /api/lieferschein/drive-status  – Google Drive Poller Status
+router.get('/drive-status', requireRole('admin', 'planer'), (req, res) => {
+  const { getPollerStatus } = require('../lib/drive-poller');
+  res.json(getPollerStatus());
+});
+
 // DELETE /api/lieferschein/imports/:id  – Import-Eintrag löschen
 router.delete('/imports/:id', requireRole('admin', 'planer'), (req, res) => {
   getDb().prepare('DELETE FROM lieferschein_imports WHERE id = ?').run(req.params.id);

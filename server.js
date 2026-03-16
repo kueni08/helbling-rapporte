@@ -72,9 +72,13 @@ app.listen(PORT, () => {
   console.log(`\n✅ Helbling Rapporte läuft auf http://localhost:${PORT}`);
   console.log(`   Standard-Login: admin / admin123`);
 
-  // Lieferschein-Watcher starten
+  // Lieferschein-Watcher starten (lokaler Ordner)
   const { startWatcher } = require('./lib/lieferschein-watcher');
   startWatcher();
+
+  // Google Drive Poller starten
+  const { startPoller } = require('./lib/drive-poller');
+  startPoller().catch(e => console.error('[Drive-Poller] Start fehlgeschlagen:', e.message));
 
   // Drive-Status beim Start loggen
   const { isDriveEnabled } = require('./lib/drive');
