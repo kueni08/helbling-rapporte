@@ -75,6 +75,11 @@ const API = {
   getSmtp:        ()     => API.get('/api/settings/smtp'),
   saveSmtp:       (d)    => API.put('/api/settings/smtp', d),
 
+  // Settings – KI-Extraktions-Prompt
+  getExtractionPrompt:  ()     => API.get('/api/settings/extraction-prompt'),
+  saveExtractionPrompt: (d)    => API.put('/api/settings/extraction-prompt', d),
+  promptChat:           (d)    => API.post('/api/settings/prompt-chat', d),
+
   // Kundenanfragen
   getAnfragen:         ()         => API.get('/api/anfragen'),
   getAnfrage:          (id)       => API.get(`/api/anfragen/${id}`),

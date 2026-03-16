@@ -104,19 +104,22 @@ const AdminViews = {
         <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('customers')">Kunden</button>
         <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('email')">✉️ E-Mail</button>
         <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('lieferschein')">📥 LS-Import</button>
+        <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('prompt')">🤖 KI-Prompt</button>
       </div>
       <div id="settings-content"></div>`;
     await AdminViews.showSettingsTab('options');
   },
 
   async showSettingsTab(tab) {
+    const tabs = ['options','articles','customers','email','lieferschein','prompt'];
     document.querySelectorAll('#settings-tabs .btn').forEach(b => b.classList.remove('btn-primary'));
-    document.querySelectorAll('#settings-tabs .btn')[['options','articles','customers','email','lieferschein'].indexOf(tab)]?.classList.add('btn-primary');
+    document.querySelectorAll('#settings-tabs .btn')[tabs.indexOf(tab)]?.classList.add('btn-primary');
     if (tab === 'options')      await AdminViews.renderOptions();
     if (tab === 'articles')     await AdminViews.renderArticles();
     if (tab === 'customers')    await AdminViews.renderCustomers();
     if (tab === 'email')        await AdminViews.renderEmailSettings();
     if (tab === 'lieferschein') await AdminViews.renderLieferscheinImport();
+    if (tab === 'prompt')       await AdminViews.renderPromptAssistant();
   },
 
   async renderOptions() {
@@ -519,5 +522,161 @@ const AdminViews = {
     if (!await UI.confirm('Import-Eintrag löschen?')) return;
     try { await API.deleteLsImport(id); await AdminViews.showSettingsTab('lieferschein'); }
     catch(e) { UI.toast(e.message, 'error'); }
+  },
+
+  // ── KI-Prompt-Assistent ─────────────────────────────────────────────────
+  _promptChatHistory: [],
+
+  async renderPromptAssistant() {
+    const el = document.getElementById('settings-content');
+    const { prompt } = await API.getExtractionPrompt();
+    AdminViews._currentPrompt = prompt;
+    AdminViews._promptChatHistory = [];
+
+    el.innerHTML = `
+      <div class="card" style="max-width:860px">
+        <div class="card-title">🤖 KI-Extraktions-Prompt</div>
+        <p class="text-muted text-sm mb-2">
+          Dieser Prompt wird an Claude gesendet, wenn ein Lieferschein-PDF verarbeitet wird.
+          Chatte mit dem Assistenten, um den Prompt anzupassen – oder bearbeite ihn direkt.
+        </p>
+
+        <details style="margin-bottom:1rem">
+          <summary style="cursor:pointer;font-weight:600;font-size:0.9rem;color:#374151">
+            Aktueller Prompt anzeigen / bearbeiten
+          </summary>
+          <div style="margin-top:0.5rem">
+            <textarea id="prompt-raw" rows="14"
+              style="width:100%;font-family:monospace;font-size:0.8rem;padding:0.5rem;border:1px solid #d1d5db;border-radius:6px;resize:vertical"
+            >${UI.esc(prompt)}</textarea>
+            <div class="flex gap-2 mt-1">
+              <button class="btn btn-primary btn-sm" onclick="AdminViews.saveRawPrompt()">💾 Speichern</button>
+              <button class="btn btn-ghost btn-sm" onclick="AdminViews.resetPrompt()">↺ Standard wiederherstellen</button>
+            </div>
+          </div>
+        </details>
+
+        <div id="prompt-chat-messages"
+          style="min-height:120px;max-height:420px;overflow-y:auto;border:1px solid #e5e7eb;border-radius:8px;padding:0.75rem;background:#f9fafb;margin-bottom:0.75rem;display:flex;flex-direction:column;gap:0.6rem">
+          <p class="text-muted text-sm" style="margin:0;text-align:center">
+            Beschreibe, was du am Prompt ändern möchtest…
+          </p>
+        </div>
+
+        <div class="flex gap-2" style="align-items:flex-end">
+          <textarea id="prompt-chat-input" rows="2"
+            placeholder="z.B. «Extrahiere auch das Gewicht der Artikel» oder «Füge ein Feld für die Lieferanten-ID hinzu»"
+            style="flex:1;padding:0.5rem 0.75rem;border:1px solid #d1d5db;border-radius:6px;resize:none;font-size:0.9rem"
+            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();AdminViews.sendPromptMessage()}"
+          ></textarea>
+          <button class="btn btn-primary" onclick="AdminViews.sendPromptMessage()" id="prompt-send-btn">
+            Senden
+          </button>
+        </div>
+        <p class="text-muted" style="font-size:0.75rem;margin-top:0.3rem">Enter zum Senden · Shift+Enter für neue Zeile</p>
+      </div>`;
+  },
+
+  async sendPromptMessage() {
+    const input = document.getElementById('prompt-chat-input');
+    const msg = input.value.trim();
+    if (!msg) return;
+
+    const chatEl = document.getElementById('prompt-chat-messages');
+    const sendBtn = document.getElementById('prompt-send-btn');
+
+    // User-Nachricht anhängen
+    AdminViews._promptChatHistory.push({ role: 'user', text: msg });
+    chatEl.innerHTML = AdminViews._renderChatHistory();
+    chatEl.scrollTop = chatEl.scrollHeight;
+    input.value = '';
+    sendBtn.disabled = true;
+    sendBtn.textContent = '…';
+
+    // Typing-Indikator
+    const typingId = 'typing-indicator';
+    chatEl.insertAdjacentHTML('beforeend',
+      `<div id="${typingId}" style="color:#6b7280;font-size:0.85rem;font-style:italic">Claude denkt…</div>`);
+    chatEl.scrollTop = chatEl.scrollHeight;
+
+    try {
+      const res = await API.promptChat({ message: msg, currentPrompt: AdminViews._currentPrompt });
+      document.getElementById(typingId)?.remove();
+
+      AdminViews._currentPrompt = res.newPrompt;
+      AdminViews._promptChatHistory.push({ role: 'assistant', explanation: res.explanation, newPrompt: res.newPrompt });
+      chatEl.innerHTML = AdminViews._renderChatHistory();
+      chatEl.scrollTop = chatEl.scrollHeight;
+
+      // Textarea aktualisieren
+      const rawEl = document.getElementById('prompt-raw');
+      if (rawEl) rawEl.value = res.newPrompt;
+    } catch(e) {
+      document.getElementById(typingId)?.remove();
+      AdminViews._promptChatHistory.push({ role: 'error', text: e.message });
+      chatEl.innerHTML = AdminViews._renderChatHistory();
+      chatEl.scrollTop = chatEl.scrollHeight;
+    } finally {
+      sendBtn.disabled = false;
+      sendBtn.textContent = 'Senden';
+      input.focus();
+    }
+  },
+
+  _renderChatHistory() {
+    if (!AdminViews._promptChatHistory.length) {
+      return `<p class="text-muted text-sm" style="margin:0;text-align:center">Beschreibe, was du am Prompt ändern möchtest…</p>`;
+    }
+    return AdminViews._promptChatHistory.map((m, i) => {
+      if (m.role === 'user') {
+        return `<div style="align-self:flex-end;background:#3b82f6;color:#fff;border-radius:12px 12px 2px 12px;padding:0.5rem 0.75rem;max-width:80%;font-size:0.9rem">
+          ${UI.esc(m.text)}
+        </div>`;
+      }
+      if (m.role === 'assistant') {
+        return `<div style="align-self:flex-start;background:#fff;border:1px solid #e5e7eb;border-radius:2px 12px 12px 12px;padding:0.6rem 0.75rem;max-width:90%;font-size:0.9rem">
+          <p style="margin:0 0 0.4rem 0;color:#374151">${UI.esc(m.explanation)}</p>
+          <button class="btn btn-primary btn-sm" onclick="AdminViews.applyPromptSuggestion(${i})">✅ Übernehmen & Speichern</button>
+        </div>`;
+      }
+      if (m.role === 'error') {
+        return `<div style="align-self:flex-start;background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:0.5rem 0.75rem;max-width:90%;font-size:0.85rem;color:#991b1b">
+          ❌ ${UI.esc(m.text)}
+        </div>`;
+      }
+      return '';
+    }).join('');
+  },
+
+  async applyPromptSuggestion(historyIndex) {
+    const entry = AdminViews._promptChatHistory[historyIndex];
+    if (!entry || entry.role !== 'assistant') return;
+    try {
+      await API.saveExtractionPrompt({ prompt: entry.newPrompt });
+      AdminViews._currentPrompt = entry.newPrompt;
+      const rawEl = document.getElementById('prompt-raw');
+      if (rawEl) rawEl.value = entry.newPrompt;
+      UI.toast('Prompt gespeichert ✓', 'success');
+    } catch(e) { UI.toast(e.message, 'error'); }
+  },
+
+  async saveRawPrompt() {
+    const val = document.getElementById('prompt-raw')?.value?.trim();
+    if (!val) { UI.toast('Prompt darf nicht leer sein', 'error'); return; }
+    try {
+      await API.saveExtractionPrompt({ prompt: val });
+      AdminViews._currentPrompt = val;
+      UI.toast('Prompt gespeichert ✓', 'success');
+    } catch(e) { UI.toast(e.message, 'error'); }
+  },
+
+  async resetPrompt() {
+    if (!await UI.confirm('Standard-Prompt wiederherstellen? Der aktuelle Prompt wird überschrieben.')) return;
+    try {
+      const { prompt } = await API.get('/api/settings/extraction-prompt-default');
+      await API.saveExtractionPrompt({ prompt });
+      await AdminViews.renderPromptAssistant();
+      UI.toast('Standard-Prompt wiederhergestellt', 'success');
+    } catch(e) { UI.toast(e.message, 'error'); }
   },
 };
