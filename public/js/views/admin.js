@@ -104,6 +104,7 @@ const AdminViews = {
         <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('customers')">Kunden</button>
         <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('email')">✉️ E-Mail</button>
         <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('lieferschein')">📥 LS-Import</button>
+        <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('drive')">☁️ Drive</button>
         <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('prompt')">🤖 KI-Prompt</button>
       </div>
       <div id="settings-content"></div>`;
@@ -111,7 +112,7 @@ const AdminViews = {
   },
 
   async showSettingsTab(tab) {
-    const tabs = ['options','articles','customers','email','lieferschein','prompt'];
+    const tabs = ['options','articles','customers','email','lieferschein','drive','prompt'];
     document.querySelectorAll('#settings-tabs .btn').forEach(b => b.classList.remove('btn-primary'));
     document.querySelectorAll('#settings-tabs .btn')[tabs.indexOf(tab)]?.classList.add('btn-primary');
     if (tab === 'options')      await AdminViews.renderOptions();
@@ -119,6 +120,7 @@ const AdminViews = {
     if (tab === 'customers')    await AdminViews.renderCustomers();
     if (tab === 'email')        await AdminViews.renderEmailSettings();
     if (tab === 'lieferschein') await AdminViews.renderLieferscheinImport();
+    if (tab === 'drive')        await AdminViews.renderDriveStatus();
     if (tab === 'prompt')       await AdminViews.renderPromptAssistant();
   },
 
@@ -553,6 +555,81 @@ const AdminViews = {
   },
 
   // ── KI-Prompt-Assistent ─────────────────────────────────────────────────
+  // ── Drive Status & Diagnostics ──────────────────────────────────────────
+  async renderDriveStatus() {
+    const el = document.getElementById('settings-content');
+    el.innerHTML = `<div class="card"><p class="text-muted">Lade Drive-Status…</p></div>`;
+    let status;
+    try { status = await API.get('/api/settings/drive-status'); }
+    catch(e) { el.innerHTML = `<div class="card" style="color:red">${UI.esc(e.message)}</div>`; return; }
+
+    const pendingTotal = (status.pending_uploads?.attachments || 0) + (status.pending_uploads?.photos || 0);
+    el.innerHTML = `
+      <div class="card">
+        <h3 style="margin-bottom:16px">☁️ Google Drive – Anhänge & Fotos</h3>
+        <div class="form-grid">
+          <div>
+            <p class="text-sm text-muted mb-1">Status</p>
+            <p style="font-weight:600;color:${status.enabled ? '#2d7a2d' : '#c00'}">
+              ${status.enabled ? '✅ Konfiguriert' : '❌ Nicht konfiguriert'}
+            </p>
+          </div>
+          <div>
+            <p class="text-sm text-muted mb-1">Root-Ordner</p>
+            <p style="font-family:monospace;font-size:12px">${UI.esc(status.rootFolderId || '–')}</p>
+          </div>
+          <div>
+            <p class="text-sm text-muted mb-1">Meldung</p>
+            <p>${UI.esc(status.message || '')}</p>
+          </div>
+          ${status.pending_uploads ? `
+          <div>
+            <p class="text-sm text-muted mb-1">Ausstehende Uploads</p>
+            <p style="font-weight:600;color:${pendingTotal > 0 ? '#c67a00' : '#2d7a2d'}">
+              ${status.pending_uploads.attachments} Anhänge, ${status.pending_uploads.photos} Fotos
+              ${pendingTotal > 0 ? '(nicht hochgeladen)' : '(alle hochgeladen ✅)'}
+            </p>
+          </div>` : ''}
+        </div>
+        ${pendingTotal > 0 ? `
+        <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+          <p class="text-sm text-muted mb-2">
+            ${pendingTotal} Datei(en) wurden noch nicht zu Google Drive hochgeladen.
+            Dies kann passieren, wenn der Upload im Hintergrund fehlgeschlagen ist.
+            Klicke unten, um fehlgeschlagene Uploads erneut zu versuchen.
+          </p>
+          <button class="btn btn-primary" id="drive-retry-btn" onclick="AdminViews.retryDriveUploads()">
+            🔄 Fehlgeschlagene Uploads wiederholen (${pendingTotal})
+          </button>
+          <div id="drive-retry-result" style="margin-top:8px"></div>
+        </div>` : ''}
+        <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+          <p class="text-sm text-muted">
+            <strong>Wie funktioniert der Drive-Upload?</strong><br>
+            Wenn Anhänge oder Fotos hochgeladen werden, werden sie zuerst lokal gespeichert und
+            dann asynchron zu Google Drive hochgeladen. Der Ordner wird automatisch erstellt.
+            Wenn Fehler auftreten, sind die Dateien weiterhin lokal verfügbar.
+          </p>
+        </div>
+      </div>`;
+  },
+
+  async retryDriveUploads() {
+    const btn = document.getElementById('drive-retry-btn');
+    const result = document.getElementById('drive-retry-result');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Wird versucht…'; }
+    try {
+      const res = await API.post('/api/settings/drive-retry', {});
+      if (result) result.innerHTML = `<span style="color:${res.fail ? '#c67a00' : '#2d7a2d'}">
+        ✓ ${res.ok} erfolgreich hochgeladen, ${res.fail} fehlgeschlagen (von ${res.total} gesamt)
+      </span>`;
+      if (res.ok > 0) setTimeout(() => AdminViews.renderDriveStatus(), 1500);
+    } catch(e) {
+      if (result) result.innerHTML = `<span style="color:red">${UI.esc(e.message)}</span>`;
+    }
+    if (btn) { btn.disabled = false; btn.textContent = '🔄 Fehlgeschlagene Uploads wiederholen'; }
+  },
+
   _promptChatHistory: [],
 
   async renderPromptAssistant() {

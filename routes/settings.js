@@ -6,6 +6,7 @@ const multer = require('multer');
 const uploadMem = multer({ storage: multer.memoryStorage() });
 const Anthropic = require('@anthropic-ai/sdk');
 const { DEFAULT_EXTRACTION_PROMPT } = require('../lib/lieferschein-watcher');
+const drive = require('../lib/drive');
 
 // GET /api/settings/options  – all active options grouped by field_name
 router.get('/options', requireLogin, (req, res) => {
@@ -266,6 +267,74 @@ router.put('/customers/:id', requireRole('admin', 'planer'), (req, res) => {
     if (v !== undefined) db.prepare(`UPDATE customers SET ${k} = ? WHERE id = ?`).run(v, req.params.id);
   });
   res.json(db.prepare('SELECT * FROM customers WHERE id = ?').get(req.params.id));
+});
+
+// GET /api/settings/drive-status  – Drive connection test (admin only)
+router.get('/drive-status', requireRole('admin'), async (req, res) => {
+  const enabled = drive.isDriveEnabled();
+  const rootFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+  if (!enabled) {
+    return res.json({ enabled: false, message: 'Google Drive nicht konfiguriert (GOOGLE_SERVICE_ACCOUNT_JSON/FILE fehlt)' });
+  }
+  if (!rootFolderId) {
+    return res.json({ enabled: true, folderConfigured: false, message: 'GOOGLE_DRIVE_FOLDER_ID nicht gesetzt' });
+  }
+  try {
+    // Try listing files in the root folder to verify permissions
+    const files = await drive.listPdfFiles(rootFolderId);
+    // Also check recent failed uploads (no google_drive_file_id)
+    const db = getDb();
+    const failedAtts  = db.prepare('SELECT COUNT(*) as n FROM order_attachments WHERE google_drive_file_id IS NULL').get();
+    const failedPhotos = db.prepare('SELECT COUNT(*) as n FROM order_photos WHERE google_drive_file_id IS NULL').get();
+    res.json({
+      enabled: true,
+      folderConfigured: true,
+      rootFolderId,
+      message: 'Verbindung OK',
+      pending_uploads: {
+        attachments: failedAtts.n,
+        photos: failedPhotos.n,
+      },
+    });
+  } catch (e) {
+    res.json({ enabled: true, folderConfigured: true, rootFolderId, message: 'Fehler: ' + e.message });
+  }
+});
+
+// POST /api/settings/drive-retry  – retry failed Drive uploads (admin only)
+router.post('/drive-retry', requireRole('admin'), async (req, res) => {
+  const db = getDb();
+  const path = require('path');
+  const fs   = require('fs');
+  const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(__dirname, '..', 'uploads');
+
+  if (!drive.isDriveEnabled()) {
+    return res.status(400).json({ error: 'Drive nicht konfiguriert' });
+  }
+
+  const atts   = db.prepare('SELECT * FROM order_attachments WHERE google_drive_file_id IS NULL').all();
+  const photos = db.prepare('SELECT * FROM order_photos       WHERE google_drive_file_id IS NULL').all();
+  let ok = 0, fail = 0;
+
+  for (const rec of [...atts, ...photos]) {
+    const table = atts.includes(rec) ? 'order_attachments' : 'order_photos';
+    const candidates = [];
+    if (rec.dir_name) candidates.push(path.join(UPLOADS_DIR, rec.dir_name, rec.filename));
+    candidates.push(path.join(UPLOADS_DIR, String(rec.order_id), rec.filename));
+    const fp = candidates.find(p => fs.existsSync(p));
+    if (!fp) { fail++; continue; }
+
+    try {
+      const driveFile = await drive.uploadFile(fp, rec.original_name, null, rec.dir_name);
+      if (driveFile) {
+        db.prepare(`UPDATE ${table} SET google_drive_file_id=?, google_drive_web_url=? WHERE id=?`)
+          .run(driveFile.id, driveFile.webViewLink, rec.id);
+        ok++;
+      } else { fail++; }
+    } catch { fail++; }
+  }
+
+  res.json({ ok, fail, total: atts.length + photos.length });
 });
 
 module.exports = router;

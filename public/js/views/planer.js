@@ -47,8 +47,8 @@ const PlanerViews = {
 
   _getVisibleCols() {
     if (!this._visibleCols) {
-      try { this._visibleCols = new Set(JSON.parse(localStorage.getItem('planer_cols') || '[]')); }
-      catch { this._visibleCols = new Set(); }
+      try { this._visibleCols = new Set(JSON.parse(localStorage.getItem('planer_cols') || '["sort_order"]')); }
+      catch { this._visibleCols = new Set(['sort_order']); }
     }
     return this._visibleCols;
   },
@@ -115,7 +115,7 @@ const PlanerViews = {
         ${sortTh('Datum','planned_date')}
         ${cols.has('latest_date') ? sortTh('Spätestens','latest_date') : ''}
         ${sortTh('Techniker','assigned_name')}
-        ${cols.has('sort_order') ? `<th>Reihenf.</th>` : ''}
+        ${cols.has('sort_order') ? `<th title="Reihenfolge – klicken zum Bearbeiten">Reihenf.</th>` : ''}
         ${cols.has('notes_planer') ? `<th>Bemerkungen</th>` : ''}
         ${sortTh('Status','status')}
         <th></th>
@@ -134,7 +134,7 @@ const PlanerViews = {
           <td class="inline-edit-cell" onclick="PlanerViews.inlineEdit(event,${o.id},'planned_date','${UI.esc(o.planned_date||'')}','date')">${UI.fmtDate(o.planned_date)}</td>
           ${cols.has('latest_date') ? `<td>${UI.fmtDate(o.latest_date)}</td>` : ''}
           <td>${UI.esc(o.assigned_name || '–')}</td>
-          ${cols.has('sort_order') ? `<td style="text-align:center;color:var(--text2)">${o.sort_order||0}</td>` : ''}
+          ${cols.has('sort_order') ? `<td class="inline-edit-cell" style="text-align:center" onclick="PlanerViews.inlineEdit(event,${o.id},'sort_order','${o.sort_order||0}','number')" title="Klicken zum Bearbeiten">${o.sort_order||0}</td>` : ''}
           ${cols.has('notes_planer') ? `<td style="font-size:12px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${UI.esc(o.notes_planer||'')}">${UI.esc((o.notes_planer||'').substring(0,60))}${(o.notes_planer||'').length>60?'…':''}</td>` : ''}
           <td class="inline-edit-cell" onclick="PlanerViews.inlineEditStatus(event,${o.id},'${o.status}')">${UI.statusBadge(o.status)}</td>
           <td class="text-right" style="white-space:nowrap">

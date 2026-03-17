@@ -91,20 +91,35 @@ const TagesuebersichtView = {
           <table style="width:100%;border-collapse:collapse;font-size:13px">
             <thead>
               <tr style="background:#f0f4ff;border-bottom:2px solid #ddd">
+                <th style="padding:8px;text-align:center;white-space:nowrap;width:32px">#</th>
                 <th style="padding:8px;text-align:left;white-space:nowrap">Auftrag</th>
                 <th style="padding:8px;text-align:left">Kunde / Adresse</th>
                 <th style="padding:8px;text-align:left;white-space:nowrap">Von</th>
                 <th style="padding:8px;text-align:left;white-space:nowrap">Bis</th>
-                <th style="padding:8px;text-align:left;white-space:nowrap">Dauer</th>
                 <th style="padding:8px;text-align:left;white-space:nowrap">Fahrzeit</th>
+                <th style="padding:8px;text-align:left;white-space:nowrap">Dauer</th>
                 <th style="padding:8px;text-align:left;white-space:nowrap">km</th>
                 <th style="padding:8px;text-align:left">Ausgeführte Arbeiten</th>
                 <th style="padding:8px;text-align:left">Status</th>
               </tr>
             </thead>
             <tbody>
-              ${orders.map((o, i) => `
+              ${orders.map((o, i) => {
+                // Calculate travel time = gap between end of previous order and start of this order
+                const prevOrder = i > 0 ? orders[i-1] : null;
+                let transferMin = null;
+                if (prevOrder && prevOrder.work_time_to && o.work_time_from) {
+                  const [ph, pm] = prevOrder.work_time_to.split(':').map(Number);
+                  const [ch, cm] = o.work_time_from.split(':').map(Number);
+                  transferMin = (ch * 60 + cm) - (ph * 60 + pm);
+                  if (transferMin < 0) transferMin = null; // overnight / negative gap
+                }
+                const fmtTransfer = transferMin != null
+                  ? `<span title="Fahrzeit von letztem Auftrag">${Math.floor(transferMin/60)}h${String(transferMin%60).padStart(2,'0')}min</span>`
+                  : (o.travel_time != null ? o.travel_time+' h' : '–');
+                return `
                 <tr style="${i % 2 === 1 ? 'background:#fafafa' : ''}">
+                  <td style="padding:8px;text-align:center;font-weight:700;color:#1a3a6b;font-size:14px">${i+1}</td>
                   <td style="padding:8px;white-space:nowrap">
                     <a href="#" onclick="MonteurViews.renderWorkForm(${o.id});App.navigate('monteur-orders');return false"
                        style="font-weight:600;color:#1a3a6b;text-decoration:none">${esc(o.order_number||String(o.id))}</a>
@@ -115,8 +130,8 @@ const TagesuebersichtView = {
                   </td>
                   <td style="padding:8px">${esc(o.work_time_from||'–')}</td>
                   <td style="padding:8px">${esc(o.work_time_to||'–')}</td>
+                  <td style="padding:8px;white-space:nowrap">${fmtTransfer}</td>
                   <td style="padding:8px">${fmtDur(o.duration_h)}</td>
-                  <td style="padding:8px">${o.travel_time != null ? o.travel_time+' h' : '–'}</td>
                   <td style="padding:8px">${o.travel_km != null ? o.travel_km : '–'}</td>
                   <td style="padding:8px">${esc(fmtArr(o.executed_work))}</td>
                   <td style="padding:8px">
@@ -132,17 +147,18 @@ const TagesuebersichtView = {
                 ${o.notes_monteur ? `
                 <tr style="${i % 2 === 1 ? 'background:#fafafa' : ''}">
                   <td></td>
+                  <td></td>
                   <td colspan="8" style="padding:4px 8px 8px;font-size:12px;color:#555;font-style:italic">
                     💬 ${esc(o.notes_monteur)}
                   </td>
                 </tr>` : ''}
-              `).join('')}
+              `}).join('')}
             </tbody>
             <tfoot>
               <tr style="border-top:2px solid #ddd;font-weight:700;background:#f0f4ff">
-                <td colspan="4" style="padding:8px">Total</td>
-                <td style="padding:8px">${totalWork ? Math.round(totalWork*100)/100+' h' : '–'}</td>
+                <td colspan="5" style="padding:8px">Total</td>
                 <td style="padding:8px">${totalTravel ? totalTravel+' h' : '–'}</td>
+                <td style="padding:8px">${totalWork ? Math.round(totalWork*100)/100+' h' : '–'}</td>
                 <td style="padding:8px">${totalKm || '–'}</td>
                 <td colspan="2"></td>
               </tr>
