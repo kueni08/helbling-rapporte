@@ -12,6 +12,9 @@ echo.
 
 cd /d "%~dp0"
 
+:: Kurzpfad ermitteln (vermeidet Probleme mit & in OneDrive-Pfaden)
+for %%d in ("%~dp0.") do set "SDIR=%%~sd"
+
 :: Prüfe cloudflared
 if not exist "%~dp0cloudflared.exe" (
     where cloudflared >nul 2>&1
@@ -27,12 +30,12 @@ if not exist "%~dp0cloudflared.exe" (
     )
     set CLOUDFLARED=cloudflared
 ) else (
-    set CLOUDFLARED="%~dp0cloudflared.exe"
+    set CLOUDFLARED="%SDIR%cloudflared.exe"
 )
 
 :: Flask in neuem Fenster starten
 echo  Starte Flask-Server...
-start "Helbling Flask" cmd /k "cd /d %~dp0 && python -m src.main dashboard"
+start "Helbling Flask" cmd /k "cd /d "%SDIR%" && python -m src.main dashboard"
 
 :: Kurz warten
 timeout /t 4 /nobreak >nul
