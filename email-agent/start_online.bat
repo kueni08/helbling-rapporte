@@ -1,51 +1,33 @@
 @echo off
-:: Helbling Dashboard — Online starten (einfache Version)
-:: Startet Flask + Cloudflare Tunnel in zwei Fenstern
-
 title Helbling Dashboard Online
 
 echo.
-echo  ╔══════════════════════════════════════════════╗
-echo  ║   Helbling E-Mail Agent — Online Dashboard   ║
-echo  ╚══════════════════════════════════════════════╝
+echo  Helbling E-Mail Agent - Online Dashboard
 echo.
 
+:: Ins Skript-Verzeichnis wechseln
 cd /d "%~dp0"
 
-:: Prüfe cloudflared (relative Pfade, kein & Problem)
-if not exist "cloudflared.exe" (
-    where cloudflared >nul 2>&1
-    if errorlevel 1 (
-        echo  FEHLER: cloudflared.exe nicht gefunden!
-        echo.
-        echo  Bitte herunterladen:
-        echo  https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe
-        echo  Umbenennen zu cloudflared.exe und in diesen Ordner legen.
-        echo.
-        pause
-        exit /b 1
-    )
-    set CLOUDFLARED=cloudflared
-) else (
-    set CLOUDFLARED=cloudflared.exe
+:: cloudflared prüfen (absoluter Pfad via %~dp0, & in quotes ist sicher)
+if not exist "%~dp0cloudflared.exe" (
+    echo  FEHLER: cloudflared.exe nicht gefunden!
+    echo  Erwartet in: %~dp0cloudflared.exe
+    pause
+    exit /b 1
 )
 
-:: Flask in neuem Fenster starten
-:: Kein Pfad nötig – neues Fenster erbt Arbeitsverzeichnis vom Parent
+:: Flask in neuem PowerShell-Fenster starten
+:: (PowerShell versteht den & im Pfad korrekt)
 echo  Starte Flask-Server...
-start "Helbling Flask" cmd /k python -m src.main dashboard
+start "Helbling Flask" powershell -NoExit -ExecutionPolicy Bypass -Command "Set-Location '%~dp0'; python -m src.main dashboard"
 
-:: Kurz warten
 timeout /t 4 /nobreak >nul
 
-:: Cloudflare Tunnel in neuem Fenster starten
+:: Cloudflare Tunnel starten
 echo  Starte Cloudflare Tunnel...
-echo  (Offentliche URL erscheint im neuen Fenster)
-echo.
-start "Cloudflare Tunnel" cmd /k %CLOUDFLARED% tunnel --url http://127.0.0.1:5000 --no-autoupdate
+start "Cloudflare Tunnel" powershell -NoExit -ExecutionPolicy Bypass -Command "Set-Location '%~dp0'; .\cloudflared.exe tunnel --url http://127.0.0.1:5000 --no-autoupdate"
 
-echo  ✓ Beide Dienste gestartet.
-echo  → Schau in das Cloudflare-Fenster fur die offentliche URL
-echo  → Beide Fenster schliessen zum Beenden
+echo  Beide Dienste gestartet.
+echo  Beide Fenster schliessen zum Beenden.
 echo.
 pause
