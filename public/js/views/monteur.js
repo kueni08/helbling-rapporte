@@ -490,6 +490,27 @@ const MonteurViews = {
     // Resume timer if it was already running (page reload / navigation)
     if (MonteurViews._timerRunning(orderId)) {
       MonteurViews._startTimerInterval(orderId);
+
+      // Auto-fill start time & date when form opens with already-running timer
+      // (timer may have been started from the order list, before the form loaded)
+      const _startIso = localStorage.getItem(MonteurViews._timerKey(orderId));
+      if (_startIso) {
+        const _fromEl = document.getElementById('f-work-from');
+        if (_fromEl && !_fromEl.value) _fromEl.value = MonteurViews._fmtTime(new Date(_startIso));
+        const _dateEl = document.getElementById('f-work-date');
+        if (_dateEl && !_dateEl.value) _dateEl.value = new Date(_startIso).toISOString().split('T')[0];
+
+        // Auto-calculate transfer time from previous order end (Fahrzeit)
+        const _lastEnd = localStorage.getItem('last_order_end_time');
+        const _lastId  = localStorage.getItem('last_order_id');
+        if (_lastEnd && _lastId && String(_lastId) !== String(orderId)) {
+          const _mins = (new Date(_startIso) - new Date(_lastEnd)) / 60000;
+          if (_mins > 0 && _mins < 480) {
+            const _travelEl = document.getElementById('f-travel-time');
+            if (_travelEl && !_travelEl.value) _travelEl.value = Math.round(_mins / 15) * 0.25;
+          }
+        }
+      }
     }
   },
 
