@@ -12,11 +12,8 @@ echo.
 
 cd /d "%~dp0"
 
-:: Kurzpfad ermitteln (vermeidet Probleme mit & in OneDrive-Pfaden)
-for %%d in ("%~dp0.") do set "SDIR=%%~sd"
-
-:: Prüfe cloudflared
-if not exist "%~dp0cloudflared.exe" (
+:: Prüfe cloudflared (relative Pfade, kein & Problem)
+if not exist "cloudflared.exe" (
     where cloudflared >nul 2>&1
     if errorlevel 1 (
         echo  FEHLER: cloudflared.exe nicht gefunden!
@@ -30,12 +27,13 @@ if not exist "%~dp0cloudflared.exe" (
     )
     set CLOUDFLARED=cloudflared
 ) else (
-    set CLOUDFLARED="%SDIR%cloudflared.exe"
+    set CLOUDFLARED=cloudflared.exe
 )
 
 :: Flask in neuem Fenster starten
+:: Kein Pfad nötig – neues Fenster erbt Arbeitsverzeichnis vom Parent
 echo  Starte Flask-Server...
-start "Helbling Flask" cmd /k "cd /d "%SDIR%" && python -m src.main dashboard"
+start "Helbling Flask" cmd /k python -m src.main dashboard
 
 :: Kurz warten
 timeout /t 4 /nobreak >nul
@@ -44,7 +42,7 @@ timeout /t 4 /nobreak >nul
 echo  Starte Cloudflare Tunnel...
 echo  (Offentliche URL erscheint im neuen Fenster)
 echo.
-start "Cloudflare Tunnel" cmd /k "%CLOUDFLARED% tunnel --url http://127.0.0.1:5000 --no-autoupdate"
+start "Cloudflare Tunnel" cmd /k %CLOUDFLARED% tunnel --url http://127.0.0.1:5000 --no-autoupdate
 
 echo  ✓ Beide Dienste gestartet.
 echo  → Schau in das Cloudflare-Fenster fur die offentliche URL
