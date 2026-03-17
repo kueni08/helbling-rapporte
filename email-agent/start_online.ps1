@@ -6,8 +6,8 @@
 
 $ErrorActionPreference = "Stop"
 
-# Pfad zu diesem Skript
-$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+# Pfad zu diesem Skript ($PSScriptRoot handles & in path correctly)
+$ScriptDir = $PSScriptRoot
 Set-Location $ScriptDir
 
 Write-Host ""
