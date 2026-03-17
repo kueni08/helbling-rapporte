@@ -45,7 +45,7 @@ def create_app(config: dict = None) -> Flask:
         if not results_file.exists():
             return []
         try:
-            with open(results_file) as f:
+            with open(results_file, encoding="utf-8") as f:
                 data = json.load(f)
             return [r for r in data if r.get("email_id")]
         except Exception:
@@ -59,7 +59,7 @@ def create_app(config: dict = None) -> Flask:
             return drafts
         for f in sorted(drafts_dir.glob("*_draft.json"), key=lambda x: x.stat().st_mtime, reverse=True):
             try:
-                with open(f) as fp:
+                with open(f, encoding="utf-8") as fp:
                     draft = json.load(fp)
                     draft["file_id"] = f.stem.replace("_draft", "")
                     drafts.append(draft)
@@ -75,7 +75,7 @@ def create_app(config: dict = None) -> Flask:
             return tasks
         for f in sorted(tasks_dir.glob("*.json"), key=lambda x: x.stat().st_mtime, reverse=True):
             try:
-                with open(f) as fp:
+                with open(f, encoding="utf-8") as fp:
                     task = json.load(fp)
                     tasks.append(task)
             except Exception:
@@ -181,10 +181,14 @@ def create_app(config: dict = None) -> Flask:
     def api_email_detail(email_id):
         """Detail einer verarbeiteten E-Mail."""
         result_path = output_path / "logs" / f"{email_id}.json"
-        if not result_path.exists():
-            return jsonify({"error": "Nicht gefunden"}), 404
-        with open(result_path) as f:
-            return jsonify(json.load(f))
+        if result_path.exists():
+            with open(result_path, encoding="utf-8") as f:
+                return jsonify(json.load(f))
+        # Fallback: Eintrag direkt aus all_results.json laden
+        for r in get_all_results():
+            if r.get("email_id") == email_id:
+                return jsonify(r)
+        return jsonify({"error": "Nicht gefunden"}), 404
 
     @app.route("/api/emails/<email_id>/delete", methods=["POST"])
     def api_email_delete(email_id):
@@ -192,24 +196,24 @@ def create_app(config: dict = None) -> Flask:
         # 1. Individuelle Ergebnis-JSON als gelöscht markieren
         result_path = output_path / "logs" / f"{email_id}.json"
         if result_path.exists():
-            with open(result_path) as f:
+            with open(result_path, encoding="utf-8") as f:
                 result = json.load(f)
             result["deleted"] = True
             result["deleted_at"] = datetime.now().isoformat()
-            with open(result_path, "w") as f:
+            with open(result_path, "w", encoding="utf-8") as f:
                 json.dump(result, f, ensure_ascii=False, indent=2)
 
         # 2. all_results.json aktualisieren
         results_file = output_path / "logs" / "all_results.json"
         if results_file.exists():
             try:
-                with open(results_file) as f:
+                with open(results_file, encoding="utf-8") as f:
                     all_results = json.load(f)
                 for r in all_results:
                     if r.get("email_id") == email_id:
                         r["deleted"] = True
                         r["deleted_at"] = datetime.now().isoformat()
-                with open(results_file, "w") as f:
+                with open(results_file, "w", encoding="utf-8") as f:
                     json.dump(all_results, f, ensure_ascii=False, indent=2)
             except Exception:
                 pass
@@ -219,7 +223,7 @@ def create_app(config: dict = None) -> Flask:
         eml_moved = False
         if processed_log.exists():
             try:
-                with open(processed_log) as f:
+                with open(processed_log, encoding="utf-8") as f:
                     log = json.load(f)
                 entry = log.get(email_id, {})
                 eml_path = Path(entry.get("file", ""))
@@ -262,7 +266,7 @@ def create_app(config: dict = None) -> Flask:
         draft_path = output_path / "drafts" / f"{file_id}_draft.json"
         if not draft_path.exists():
             return jsonify({"error": "Nicht gefunden"}), 404
-        with open(draft_path) as f:
+        with open(draft_path, encoding="utf-8") as f:
             return jsonify(json.load(f))
 
     @app.route("/api/drafts/<file_id>/text")
@@ -271,7 +275,7 @@ def create_app(config: dict = None) -> Flask:
         md_path = output_path / "drafts" / f"{file_id}_draft.md"
         if not md_path.exists():
             return jsonify({"error": "Nicht gefunden"}), 404
-        with open(md_path) as f:
+        with open(md_path, encoding="utf-8") as f:
             return jsonify({"text": f.read()})
 
     @app.route("/api/drafts/<file_id>/feedback", methods=["POST"])
@@ -285,7 +289,7 @@ def create_app(config: dict = None) -> Flask:
         comment = data.get("comment", "")
         edited_text = data.get("edited_text", "")
 
-        with open(draft_path) as f:
+        with open(draft_path, encoding="utf-8") as f:
             draft = json.load(f)
 
         draft["feedback_rating"] = rating
@@ -294,7 +298,7 @@ def create_app(config: dict = None) -> Flask:
         if edited_text:
             draft["draft_text_edited"] = edited_text
 
-        with open(draft_path, "w") as f:
+        with open(draft_path, "w", encoding="utf-8") as f:
             json.dump(draft, f, ensure_ascii=False, indent=2)
 
         # Feedback-Log aktualisieren
@@ -302,7 +306,7 @@ def create_app(config: dict = None) -> Flask:
         log_entries = []
         if feedback_log.exists():
             try:
-                with open(feedback_log) as f:
+                with open(feedback_log, encoding="utf-8") as f:
                     log_entries = json.load(f)
             except Exception:
                 pass
@@ -314,7 +318,7 @@ def create_app(config: dict = None) -> Flask:
             "bereich": draft.get("classification_bereich"),
             "aktionstyp": draft.get("classification_aktionstyp"),
         })
-        with open(feedback_log, "w") as f:
+        with open(feedback_log, "w", encoding="utf-8") as f:
             json.dump(log_entries, f, ensure_ascii=False, indent=2)
 
         return jsonify({"ok": True})
@@ -330,23 +334,23 @@ def create_app(config: dict = None) -> Flask:
         if not new_text:
             return jsonify({"error": "Kein Text"}), 400
 
-        with open(draft_path) as f:
+        with open(draft_path, encoding="utf-8") as f:
             draft = json.load(f)
         draft["draft_text_edited"] = new_text
         draft["edited_at"] = datetime.now().isoformat()
-        with open(draft_path, "w") as f:
+        with open(draft_path, "w", encoding="utf-8") as f:
             json.dump(draft, f, ensure_ascii=False, indent=2)
 
         # Auch .md aktualisieren
         md_path = output_path / "drafts" / f"{file_id}_draft.md"
         if md_path.exists():
-            with open(md_path) as f:
+            with open(md_path, encoding="utf-8") as f:
                 existing = f.read()
             # Alten Entwurfstext ersetzen
             separator = "\n\n---\n\n"
             if separator in existing:
                 header = existing.split(separator)[0]
-                with open(md_path, "w") as f:
+                with open(md_path, "w", encoding="utf-8") as f:
                     f.write(header + separator + new_text)
 
         return jsonify({"ok": True})
@@ -369,7 +373,7 @@ def create_app(config: dict = None) -> Flask:
         task_path = output_path / "tasks" / f"{task_id}.json"
         if not task_path.exists():
             return jsonify({"error": "Nicht gefunden"}), 404
-        with open(task_path) as f:
+        with open(task_path, encoding="utf-8") as f:
             return jsonify(json.load(f))
 
     @app.route("/api/tasks/<task_id>/status", methods=["POST"])
@@ -380,10 +384,10 @@ def create_app(config: dict = None) -> Flask:
             return jsonify({"error": "Nicht gefunden"}), 404
         data = request.get_json()
         new_status = data.get("status", "offen")
-        with open(task_path) as f:
+        with open(task_path, encoding="utf-8") as f:
             task = json.load(f)
         task["status"] = new_status
-        with open(task_path, "w") as f:
+        with open(task_path, "w", encoding="utf-8") as f:
             json.dump(task, f, ensure_ascii=False, indent=2)
         return jsonify({"ok": True, "status": new_status})
 
