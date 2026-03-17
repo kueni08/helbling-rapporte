@@ -2,6 +2,7 @@
 __pycache__/
 *.pyc
 *.pyo
+*.pyd
 output/attachments/
 output/logs/
 output/drafts/
@@ -10,3 +11,12 @@ knowledge_base/web_cache/*/
 !knowledge_base/web_cache/.gitkeep
 *.xlsx
 *.pdf
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+.DS_Store
+*.log
+*.sqlite
+*.db

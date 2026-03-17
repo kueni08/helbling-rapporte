@@ -14,6 +14,7 @@
     </div>
     <div class="header-right">
       <span id="notification-badge" class="badge hidden">0</span>
+      <button class="btn btn-sm btn-secondary" id="theme-toggle" onclick="toggleTheme()" title="Hell/Dunkel wechseln">☀</button>
       <button class="btn btn-sm btn-primary" onclick="processAll()">▶ Inbox verarbeiten</button>
       <span id="auto-refresh-indicator" class="dim">⟳ Auto-Refresh</span>
     </div>
@@ -42,6 +43,15 @@
           </select>
         </div>
       </div>
+
+      <!-- Drag & Drop Zone -->
+      <div id="drop-zone" class="drop-zone" onclick="document.getElementById('eml-file-input').click()">
+        <div class="drop-zone-icon">📧</div>
+        <div class="drop-zone-text">.eml-Dateien hier hineinziehen oder klicken zum Auswählen</div>
+        <div class="drop-zone-hint">Mehrere Dateien gleichzeitig möglich</div>
+        <input type="file" id="eml-file-input" accept=".eml" multiple style="display:none" onchange="uploadEmlFiles(this.files)" />
+      </div>
+
       <div id="emails-table-container">
         <p class="loading">Lade E-Mails...</p>
       </div>
@@ -132,5 +142,20 @@
   <div id="toast" class="toast hidden"></div>
 
   <script src="/static/js/app.js"></script>
+  <script>
+    (function() {
+      const saved = localStorage.getItem('theme') || 'dark';
+      document.documentElement.setAttribute('data-theme', saved);
+      const btn = document.getElementById('theme-toggle');
+      if (btn) btn.textContent = saved === 'light' ? '☾' : '☀';
+    })();
+    function toggleTheme() {
+      const current = document.documentElement.getAttribute('data-theme') || 'dark';
+      const next = current === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      localStorage.setItem('theme', next);
+      document.getElementById('theme-toggle').textContent = next === 'light' ? '☾' : '☀';
+    }
+  </script>
 </body>
 </html>
