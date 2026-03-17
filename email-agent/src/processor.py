@@ -5,6 +5,7 @@ Pipeline: parse → analyze → classify → retrieve → draft/task → log
 
 import json
 import logging
+import shutil
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -110,11 +111,8 @@ class Processor:
         email_id = get_email_id(str(file_path))
 
         if not force and email_id in self._processed_ids:
-            logger.info(f"E-Mail bereits verarbeitet: {email_id}")
-            # Lade gespeichertes Ergebnis
-            result_path = self.output_path / "logs" / f"{email_id}.json"
-            if result_path.exists():
-                logger.info(f"Lade gespeichertes Ergebnis: {result_path}")
+            logger.info(f"E-Mail bereits verarbeitet, überspringe: {email_id}")
+            return None
 
         # Schritt 1: Parsen
         try:
@@ -199,6 +197,7 @@ class Processor:
 
         self._save_result(result_dict, email_id)
         self._mark_processed(email_id, str(file_path))
+        self._move_to_erfasst(file_path, email_id)
 
         logger.info(
             f"Verarbeitung abgeschlossen: {parsed.subject} "
@@ -221,7 +220,8 @@ class Processor:
         for eml_file in sorted(eml_files):
             try:
                 result = self.process_file(str(eml_file), force=force)
-                results.append(result)
+                if result is not None:
+                    results.append(result)
             except Exception as e:
                 logger.error(f"Fehler bei {eml_file.name}: {e}")
 
@@ -328,3 +328,18 @@ class Processor:
             "processed_at": datetime.now().isoformat(),
         }
         save_json(log, str(self.processed_log_path))
+
+    def _move_to_erfasst(self, file_path: Path, email_id: str):
+        """Verschiebt eine verarbeitete .eml-Datei in den 'erfasst'-Unterordner."""
+        if not file_path.exists():
+            return
+        erfasst_dir = self.inbox_path / "erfasst"
+        erfasst_dir.mkdir(exist_ok=True)
+        dest = erfasst_dir / file_path.name
+        if dest.exists():
+            dest = erfasst_dir / f"{file_path.stem}_{email_id[:8]}{file_path.suffix}"
+        try:
+            shutil.move(str(file_path), str(dest))
+            logger.info(f"E-Mail verschoben nach: {dest}")
+        except Exception as e:
+            logger.warning(f"Konnte E-Mail nicht verschieben: {e}")

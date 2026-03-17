@@ -516,6 +516,24 @@ select:focus, input[type="text"]:focus {
 }
 .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
 
+/* Gelöschte E-Mails */
+.deleted-row { opacity: 0.45; }
+.deleted-row td { text-decoration: line-through; }
+.badge-deleted {
+  background: rgba(124,132,155,0.2);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+}
+
+/* Auto-Refresh Indikator */
+#auto-refresh-indicator {
+  transition: color 0.4s ease, opacity 0.4s ease;
+}
+#auto-refresh-indicator.refreshing {
+  color: var(--green) !important;
+  opacity: 1 !important;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .kanban-board { grid-template-columns: 1fr; }

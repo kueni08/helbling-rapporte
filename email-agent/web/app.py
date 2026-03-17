@@ -5,6 +5,7 @@ Läuft lokal auf http://localhost:5000
 
 import json
 import os
+import shutil
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -39,13 +40,14 @@ def create_app(config: dict = None) -> Flask:
     # ---- Hilfsfunktionen ----
 
     def get_all_results() -> list:
-        """Lädt alle verarbeiteten E-Mail-Ergebnisse."""
+        """Lädt alle verarbeiteten E-Mail-Ergebnisse (nur gültige Einträge)."""
         results_file = output_path / "logs" / "all_results.json"
         if not results_file.exists():
             return []
         try:
             with open(results_file) as f:
-                return json.load(f)
+                data = json.load(f)
+            return [r for r in data if r.get("email_id")]
         except Exception:
             return []
 
@@ -183,6 +185,71 @@ def create_app(config: dict = None) -> Flask:
             return jsonify({"error": "Nicht gefunden"}), 404
         with open(result_path) as f:
             return jsonify(json.load(f))
+
+    @app.route("/api/emails/<email_id>/delete", methods=["POST"])
+    def api_email_delete(email_id):
+        """Löscht eine verarbeitete E-Mail (Soft-Delete + .eml in gelöscht-Ordner)."""
+        # 1. Individuelle Ergebnis-JSON als gelöscht markieren
+        result_path = output_path / "logs" / f"{email_id}.json"
+        if result_path.exists():
+            with open(result_path) as f:
+                result = json.load(f)
+            result["deleted"] = True
+            result["deleted_at"] = datetime.now().isoformat()
+            with open(result_path, "w") as f:
+                json.dump(result, f, ensure_ascii=False, indent=2)
+
+        # 2. all_results.json aktualisieren
+        results_file = output_path / "logs" / "all_results.json"
+        if results_file.exists():
+            try:
+                with open(results_file) as f:
+                    all_results = json.load(f)
+                for r in all_results:
+                    if r.get("email_id") == email_id:
+                        r["deleted"] = True
+                        r["deleted_at"] = datetime.now().isoformat()
+                with open(results_file, "w") as f:
+                    json.dump(all_results, f, ensure_ascii=False, indent=2)
+            except Exception:
+                pass
+
+        # 3. .eml-Datei in inbox/gelöscht/ verschieben
+        processed_log = output_path / "logs" / "processed_emails.json"
+        eml_moved = False
+        if processed_log.exists():
+            try:
+                with open(processed_log) as f:
+                    log = json.load(f)
+                entry = log.get(email_id, {})
+                eml_path = Path(entry.get("file", ""))
+                if eml_path.exists():
+                    geloescht_dir = inbox_path / "gelöscht"
+                    geloescht_dir.mkdir(exist_ok=True)
+                    dest = geloescht_dir / eml_path.name
+                    if dest.exists():
+                        dest = geloescht_dir / f"{eml_path.stem}_{email_id[:8]}{eml_path.suffix}"
+                    shutil.move(str(eml_path), str(dest))
+                    eml_moved = True
+            except Exception:
+                pass
+
+        # Auch in erfasst/ suchen falls noch nicht verschoben
+        if not eml_moved:
+            erfasst_dir = inbox_path / "erfasst"
+            if erfasst_dir.exists():
+                for eml_file in erfasst_dir.glob("*.eml"):
+                    from src.utils import get_email_id
+                    if get_email_id(str(eml_file)) == email_id:
+                        geloescht_dir = inbox_path / "gelöscht"
+                        geloescht_dir.mkdir(exist_ok=True)
+                        dest = geloescht_dir / eml_file.name
+                        if dest.exists():
+                            dest = geloescht_dir / f"{eml_file.stem}_{email_id[:8]}{eml_file.suffix}"
+                        shutil.move(str(eml_file), str(dest))
+                        break
+
+        return jsonify({"ok": True, "email_id": email_id})
 
     @app.route("/api/drafts")
     def api_drafts():

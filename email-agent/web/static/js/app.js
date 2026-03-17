@@ -84,19 +84,23 @@ async function loadEmails() {
     }
 
     const rows = filtered.map(e => {
+      if (!e.email_id) return '';
       const clf = e.classification || {};
       const hasEntwurf = e.draft_generated ? '<span class="badge badge-draft">✉ Entwurf</span>' : '';
       const hasTask = e.task_generated ? '<span class="badge badge-task">📋 Aufgabe</span>' : '';
       const prio = clf.dringlichkeit || 'mittel';
+      const isDeleted = e.deleted;
+      const deletedBadge = isDeleted ? '<span class="badge badge-deleted">🗑 Gelöscht</span>' : '';
+      const rowClass = isDeleted ? 'clickable deleted-row' : 'clickable';
       return `
-        <tr class="clickable" onclick="showEmailDetail('${e.email_id}')">
+        <tr class="${rowClass}" onclick="showEmailDetail('${e.email_id}')">
           <td>${e.date || '—'}</td>
           <td>${e.from_addr || '—'}</td>
           <td style="max-width:260px">${e.subject || '—'}</td>
           <td>${bereichBadge(clf.bereich)}</td>
           <td><span class="badge badge-info">${clf.aktionstyp || '—'}</span></td>
           <td>${prioBadge(prio)}</td>
-          <td>${hasEntwurf} ${hasTask}</td>
+          <td>${hasEntwurf} ${hasTask} ${deletedBadge}</td>
         </tr>`;
     }).join('');
 
@@ -157,9 +161,24 @@ async function showEmailDetail(emailId) {
           <h3>Aufgabe</h3>
           <button class="btn btn-secondary btn-sm" onclick="showTaskById('${data.task_id}')">📋 ${data.task_id}</button>
         </div>` : ''}
+      <div style="display:flex;gap:8px;margin-top:16px;border-top:1px solid var(--border);padding-top:16px">
+        ${!data.deleted ? `<button class="btn btn-danger btn-sm" onclick="deleteEmail('${data.email_id}')">🗑 Löschen</button>` : '<span style="color:var(--text-dim);font-size:12px">🗑 Bereits gelöscht</span>'}
+      </div>
     `;
   } catch (e) {
     content.innerHTML = `<p style="color:var(--red)">Fehler: ${e.message}</p>`;
+  }
+}
+
+async function deleteEmail(emailId) {
+  if (!confirm('E-Mail wirklich löschen? Die .eml-Datei wird in den Ordner "gelöscht" verschoben.')) return;
+  try {
+    await API.post(`/api/emails/${emailId}/delete`, {});
+    closePanel('email-detail-panel');
+    loadEmails();
+    showToast('E-Mail gelöscht', 'success');
+  } catch (e) {
+    showToast('Fehler beim Löschen: ' + e.message, 'error');
   }
 }
 
@@ -598,13 +617,32 @@ async function processAll() {
   }
 }
 
+async function silentProcessAll() {
+  try {
+    const r = await API.post('/api/process', {});
+    if (r.count > 0) {
+      showToast(`✓ ${r.count} neue E-Mail(s) aus Inbox verarbeitet`, 'success');
+      loadEmails();
+    }
+  } catch (e) { /* Ignorieren */ }
+}
+
 // --- AUTO-REFRESH ---
 let autoRefreshTimer = null;
 
 function startAutoRefresh() {
   autoRefreshTimer = setInterval(() => {
     const activeTab = document.querySelector('.tab-btn.active')?.dataset?.tab;
-    if (activeTab) loadTabData(activeTab);
+    if (activeTab) {
+      loadTabData(activeTab);
+      const indicator = document.getElementById('auto-refresh-indicator');
+      if (indicator) {
+        indicator.classList.add('refreshing');
+        const now = new Date();
+        indicator.title = `Zuletzt: ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+        setTimeout(() => indicator.classList.remove('refreshing'), 1500);
+      }
+    }
   }, 30000);
 }
 
@@ -679,4 +717,5 @@ window.addEventListener('load', () => {
   loadEmails();
   startAutoRefresh();
   initDropZone();
+  silentProcessAll();
 });
