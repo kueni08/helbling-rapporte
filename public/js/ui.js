@@ -41,21 +41,6 @@ const UI = {
     });
   },
 
-  // Render multiselect checkboxes
-  multiCheck(name, options, selected = []) {
-    return `<div class="multi-check" id="mc-${name}">
-      ${options.map(o => `
-        <label>
-          <input type="checkbox" name="${name}" value="${o.key}" ${selected.includes(o.key) ? 'checked' : ''}>
-          ${o.label}
-        </label>`).join('')}
-    </div>`;
-  },
-
-  getMultiCheck(name) {
-    return [...document.querySelectorAll(`#mc-${name} input:checked`)].map(i => i.value);
-  },
-
   // Format date DE
   fmtDate(d) {
     if (!d) return '–';
@@ -67,66 +52,8 @@ const UI = {
     try { return new Date(d).toLocaleString('de-CH'); } catch { return d; }
   },
 
-  // Status badge
-  statusBadge(s) {
-    const map = {
-      geplant:       ['badge-blue',   'Geplant'],
-      in_bearbeitung:['badge-orange', 'In Bearbeitung'],
-      abgeschlossen: ['badge-green',  'Abgeschlossen'],
-      archiviert:    ['badge-gray',   'Archiviert'],
-    };
-    const [cls, label] = map[s] || ['badge-gray', s];
-    return `<span class="badge ${cls}">${label}</span>`;
-  },
-
   roleName(r) {
-    return { admin: 'Administrator', planer: 'Planer', monteur: 'Monteur' }[r] || r;
-  },
-
-  // Simple signature pad
-  initSignaturePad(canvasEl) {
-    const ctx = canvasEl.getContext('2d');
-    canvasEl.width = canvasEl.offsetWidth * window.devicePixelRatio;
-    canvasEl.height = 150 * window.devicePixelRatio;
-    ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-    ctx.strokeStyle = '#000'; ctx.lineWidth = 2; ctx.lineCap = 'round';
-
-    let drawing = false, lastX = 0, lastY = 0;
-
-    function getPos(e) {
-      const rect = canvasEl.getBoundingClientRect();
-      const t = e.touches ? e.touches[0] : e;
-      return [(t.clientX - rect.left), (t.clientY - rect.top)];
-    }
-
-    canvasEl.addEventListener('pointerdown', e => {
-      drawing = true; [lastX, lastY] = getPos(e);
-      canvasEl.setPointerCapture(e.pointerId);
-    });
-    canvasEl.addEventListener('pointermove', e => {
-      if (!drawing) return;
-      const [x, y] = getPos(e);
-      ctx.beginPath(); ctx.moveTo(lastX, lastY); ctx.lineTo(x, y); ctx.stroke();
-      [lastX, lastY] = [x, y];
-    });
-    canvasEl.addEventListener('pointerup',   () => drawing = false);
-    canvasEl.addEventListener('pointerout',  () => drawing = false);
-
-    return {
-      clear: () => ctx.clearRect(0, 0, canvasEl.offsetWidth, 150),
-      getData: () => {
-        // Check if empty
-        const d = ctx.getImageData(0, 0, canvasEl.width, canvasEl.height).data;
-        const hasContent = d.some((v, i) => i % 4 === 3 && v > 0);
-        return hasContent ? canvasEl.toDataURL('image/png') : null;
-      },
-      setData: (dataUrl) => {
-        if (!dataUrl) return;
-        const img = new Image();
-        img.onload = () => ctx.drawImage(img, 0, 0, canvasEl.offsetWidth, 150);
-        img.src = dataUrl;
-      }
-    };
+    return { admin: 'Administrator', planer: 'Planer' }[r] || r;
   },
 
   // Escape HTML

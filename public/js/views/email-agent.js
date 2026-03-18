@@ -28,8 +28,6 @@ const EmailAgentView = {
           <select id="ea-filter-kat" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border)">
             <option value="">Alle Kategorien</option>
             <option value="kundenanfrage">Kundenanfrage</option>
-            <option value="lieferschein">Lieferschein</option>
-            <option value="auftrag_info">Auftrag-Info</option>
             <option value="intern">Intern</option>
             <option value="spam">Spam</option>
             <option value="sonstiges">Sonstiges</option>
@@ -111,8 +109,8 @@ const EmailAgentView = {
   },
 
   _emailRow(e) {
-    const kBadge = { kundenanfrage:'badge-blue', lieferschein:'badge-purple', auftrag_info:'badge-teal', intern:'badge-gray', spam:'badge-red', sonstiges:'badge-gray' };
-    const kLabel = { kundenanfrage:'Kundenanfrage', lieferschein:'Lieferschein', auftrag_info:'Auftrag-Info', intern:'Intern', spam:'Spam', sonstiges:'Sonstiges' };
+    const kBadge = { kundenanfrage:'badge-blue', intern:'badge-gray', spam:'badge-red', sonstiges:'badge-gray' };
+    const kLabel = { kundenanfrage:'Kundenanfrage', intern:'Intern', spam:'Spam', sonstiges:'Sonstiges' };
     const sBadge = { neu:'<span class="badge badge-blue">Neu</span>', verarbeitet:'<span class="badge badge-green">OK</span>', ignoriert:'<span class="badge badge-gray">Ignoriert</span>', fehler:'<span class="badge badge-red">Fehler</span>' };
     const pIcon  = { hoch:'🔴', normal:'🟡', niedrig:'⚪' };
     const date   = e.received_at ? new Date(e.received_at).toLocaleString('de-CH',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
@@ -122,8 +120,6 @@ const EmailAgentView = {
         <span>${pIcon[e.ai_prioritaet]||'⚪'}</span>
         ${sBadge[e.status]||''}
         ${e.ai_kategorie ? `<span class="badge ${kBadge[e.ai_kategorie]||'badge-gray'}">${kLabel[e.ai_kategorie]||e.ai_kategorie}</span>` : ''}
-        ${e.linked_inquiry_id ? `<span class="badge badge-teal">📋 Anfrage #${e.linked_inquiry_id}</span>` : ''}
-        ${e.linked_order_id ? `<span class="badge badge-blue">🔧 ${e.order_number||'Auftrag #'+e.linked_order_id}</span>` : ''}
         ${e.has_attachments ? '<span style="font-size:12px" title="Anhänge">📎</span>' : ''}
         ${e.ai_draft ? '<span class="badge badge-green" style="font-size:11px">📝 Entwurf</span>' : ''}
         <span style="margin-left:auto;font-size:12px;color:var(--text-muted)">${date}</span>
@@ -211,12 +207,11 @@ const EmailAgentView = {
 
   _renderDetailContent(email) {
     const main = document.getElementById('main-content');
-    const kColors = { kundenanfrage:'#1a3a6b', lieferschein:'#6b1a6b', auftrag_info:'#0a5c5c', intern:'#555', spam:'#8b0000', sonstiges:'#444' };
-    const kLabel  = { kundenanfrage:'👤 Kundenanfrage', lieferschein:'📦 Lieferschein', auftrag_info:'📋 Auftrag-Info', intern:'🏢 Intern', spam:'🚫 Spam', sonstiges:'📬 Sonstiges' };
+    const kColors = { kundenanfrage:'#1a3a6b', intern:'#555', spam:'#8b0000', sonstiges:'#444' };
+    const kLabel  = { kundenanfrage:'👤 Kundenanfrage', intern:'🏢 Intern', spam:'🚫 Spam', sonstiges:'📬 Sonstiges' };
     const pLabel  = { hoch:'🔴 Hoch', normal:'🟡 Normal', niedrig:'⚪ Niedrig' };
     const aiDaten = email.ai_daten || {};
     const hasData = Object.values(aiDaten).some(v => v !== null && v !== undefined && v !== '');
-    const canConvert = email.ai_kategorie === 'kundenanfrage' && !email.linked_inquiry_id;
     const thread = email.thread || [];
     const attTexts = email.attachment_texts_parsed || {};
 
@@ -225,8 +220,6 @@ const EmailAgentView = {
       <button class="btn btn-secondary" onclick="EmailAgentView.renderInbox()">← Zurück</button>
       <h2>📧 E-Mail Detail</h2>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        ${canConvert ? `<button class="btn btn-success" onclick="EmailAgentView._openConvert(${email.id})">📋 Als Anfrage anlegen</button>` : ''}
-        ${!email.linked_order_id ? `<button class="btn btn-secondary" onclick="EmailAgentView._openLinkOrder(${email.id})">🔧 Auftrag verknüpfen</button>` : `<button class="btn btn-ghost btn-sm" onclick="EmailAgentView._unlinkOrder(${email.id})" title="Verknüpfung aufheben">🔧 ${email.order_number||'Auftrag'} ✕</button>`}
         <button class="btn btn-primary" onclick="EmailAgentView._reclassify(${email.id})">🔄 KI neu analysieren</button>
         ${email.status !== 'ignoriert' ? `<button class="btn btn-ghost btn-sm" onclick="EmailAgentView._setStatus(${email.id},'ignoriert')">Ignorieren</button>` : ''}
         <button class="btn btn-danger btn-sm" onclick="EmailAgentView._delete(${email.id})">🗑</button>
@@ -312,7 +305,6 @@ const EmailAgentView = {
             <div style="display:flex;gap:6px">
               <button class="btn btn-ghost btn-sm" onclick="EmailAgentView._regenerateDraft(${email.id})" id="ea-regen-btn" title="Neu generieren">↻ Neu</button>
               <button class="btn btn-secondary btn-sm" onclick="EmailAgentView._saveDraft(${email.id})">Speichern</button>
-              <button class="btn btn-primary btn-sm" onclick="EmailAgentView._openSendDraft(${email.id}, '${UI.esc(email.from_addr||'')}')" id="ea-send-btn">📤 Versenden</button>
             </div>
           </div>
           ${email.ai_draft
@@ -335,29 +327,19 @@ const EmailAgentView = {
                 <td style="padding:3px 8px">${UI.esc(String(v))}</td>
               </tr>`).join('')}
           </table>
-          ${canConvert ? `<button class="btn btn-success btn-sm mt-2" onclick="EmailAgentView._openConvert(${email.id})">📋 Als Kundenanfrage anlegen</button>` : ''}
         </div>` : ''}
 
-        ${email.linked_inquiry_id ? `
-        <div class="card mb-3" style="border-left:3px solid var(--accent)">
-          <strong style="font-size:13px">📋 Verknüpfte Anfrage #${email.linked_inquiry_id}</strong>
-          ${email.inquiry_name ? `<p style="margin:4px 0 0;font-size:13px">${UI.esc(email.inquiry_name)}</p>` : ''}
-        </div>` : ''}
-
-        ${email.linked_order_id ? `
-        <div class="card mb-3" style="border-left:3px solid #3b82f6">
-          <strong style="font-size:13px">🔧 Verknüpfter Auftrag: ${UI.esc(email.order_number||'#'+email.linked_order_id)}</strong>
-        </div>` : ''}
       </div>
     </div>`;
   },
 
   _fieldLabel(k) {
-    return { vorname:'Vorname', nachname:'Nachname', firma:'Firma', email:'E-Mail', telefon:'Telefon',
+    return {
+      vorname:'Vorname', nachname:'Nachname', firma:'Firma', email:'E-Mail', telefon:'Telefon',
       strasse:'Strasse', plz:'PLZ', ort:'Ort', art_der_arbeit:'Art der Arbeit',
       anzahl_zylinder:'Zylinder', anzahl_schluessel:'Schlüssel', anzahl_tueren:'Türen',
       bestehendes_system:'Best. System', wunschtermin:'Wunschtermin', bemerkungen:'Bemerkungen',
-      lieferschein_nr:'LS-Nr.', auftrag_nr:'Auftrag-Nr.', empfohlene_aktion:'Empfehlung',
+      empfohlene_aktion:'Empfehlung',
     }[k] || k;
   },
 
@@ -376,7 +358,6 @@ const EmailAgentView = {
     try {
       UI.toast('Generiere Entwurf...', 'info', 5000);
       const r = await API.post(`/api/email-agent/inbox/${id}/regenerate-draft`, {});
-      // Textarea aktualisieren ohne Seite neu zu laden
       const ta = document.getElementById('ea-draft-text');
       const emptyDiv = document.getElementById('ea-draft-empty');
       if (ta) {
@@ -412,59 +393,6 @@ const EmailAgentView = {
       await API.delete(`/api/email-agent/inbox/${id}`);
       UI.toast('Gelöscht', 'success');
       EmailAgentView.renderInbox();
-    } catch(e) { UI.toast('Fehler: '+e.message, 'error'); }
-  },
-
-  _openConvert(id) {
-    API.get(`/api/email-agent/inbox/${id}`).then(email => {
-      const d = email.ai_daten || {};
-      UI.modal('📋 Als Kundenanfrage anlegen',
-        `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-          <div class="field"><label>Vorname</label><input id="ci-vorname" value="${UI.esc(d.vorname||'')}"></div>
-          <div class="field"><label>Nachname</label><input id="ci-nachname" value="${UI.esc(d.nachname||'')}"></div>
-          <div class="field"><label>Firma</label><input id="ci-firma" value="${UI.esc(d.firma||'')}"></div>
-          <div class="field"><label>E-Mail</label><input id="ci-email" value="${UI.esc(d.email||email.from_addr||'')}"></div>
-          <div class="field"><label>Telefon</label><input id="ci-telefon" value="${UI.esc(d.telefon||'')}"></div>
-          <div class="field"><label>Art der Arbeit</label>
-            <select id="ci-arbeit"><option value="">–</option>
-              ${['Neuinstallation','Erweiterung','Reparatur','Service/Wartung','Offerte'].map(a=>`<option ${d.art_der_arbeit===a?'selected':''}>${a}</option>`).join('')}
-            </select>
-          </div>
-          <div class="field"><label>Strasse</label><input id="ci-strasse" value="${UI.esc(d.strasse||'')}"></div>
-          <div class="field"><label>PLZ / Ort</label><div style="display:flex;gap:6px">
-            <input id="ci-plz" value="${UI.esc(d.plz||'')}" style="width:80px">
-            <input id="ci-ort" value="${UI.esc(d.ort||'')}">
-          </div></div>
-          <div class="field"><label>Wunschtermin</label><input type="date" id="ci-termin" value="${UI.esc(d.wunschtermin||'')}"></div>
-          <div class="field"><label>Zylinder (ca.)</label><input type="number" id="ci-zyl" value="${d.anzahl_zylinder||''}"></div>
-        </div>
-        <div class="field mt-2"><label>Bemerkungen</label><textarea id="ci-bem" rows="3">${UI.esc(d.bemerkungen||email.ai_zusammenfassung||'')}</textarea></div>`,
-        `<button class="btn btn-secondary" onclick="UI.closeModal()">Abbrechen</button>
-         <button class="btn btn-primary" onclick="EmailAgentView._doConvert(${id})">Anlegen</button>`
-      );
-    }).catch(e => UI.toast('Fehler: '+e.message, 'error'));
-  },
-
-  async _doConvert(id) {
-    const body = {
-      vorname:        document.getElementById('ci-vorname')?.value.trim(),
-      nachname:       document.getElementById('ci-nachname')?.value.trim(),
-      firma:          document.getElementById('ci-firma')?.value.trim() || null,
-      email:          document.getElementById('ci-email')?.value.trim(),
-      telefon:        document.getElementById('ci-telefon')?.value.trim(),
-      strasse:        document.getElementById('ci-strasse')?.value.trim(),
-      plz:            document.getElementById('ci-plz')?.value.trim(),
-      ort:            document.getElementById('ci-ort')?.value.trim(),
-      art_der_arbeit: document.getElementById('ci-arbeit')?.value || null,
-      anzahl_zylinder:document.getElementById('ci-zyl')?.value || null,
-      wunschtermin:   document.getElementById('ci-termin')?.value || null,
-      bemerkungen:    document.getElementById('ci-bem')?.value.trim() || null,
-    };
-    try {
-      await API.post(`/api/email-agent/inbox/${id}/convert-inquiry`, body);
-      UI.toast('Kundenanfrage angelegt', 'success');
-      UI.closeModal();
-      EmailAgentView.renderDetail(id);
     } catch(e) { UI.toast('Fehler: '+e.message, 'error'); }
   },
 
@@ -577,103 +505,6 @@ const EmailAgentView = {
     EmailAgentView._promptTab = tab;
     document.getElementById('ea-prompt-classify').style.display = tab === 'classify' ? '' : 'none';
     document.getElementById('ea-prompt-draft').style.display    = tab === 'draft' ? '' : 'none';
-  },
-
-  // ── Auftrag verknüpfen ────────────────────────────────────────────────────
-
-  async _openLinkOrder(emailId) {
-    UI.modal('🔧 Auftrag verknüpfen',
-      `<div class="field">
-        <label>Auftragsnummer suchen</label>
-        <input id="lo-search" placeholder="H-1001 oder Kundenname..." oninput="EmailAgentView._searchOrders(this.value)">
-      </div>
-      <div id="lo-results" style="margin-top:10px;max-height:300px;overflow-y:auto"></div>
-      <input type="hidden" id="lo-selected-id">`,
-      `<button class="btn btn-secondary" onclick="UI.closeModal()">Abbrechen</button>
-       <button class="btn btn-primary" id="lo-do-btn" disabled onclick="EmailAgentView._doLinkOrder(${emailId})">Verknüpfen</button>`
-    );
-    EmailAgentView._searchOrders('');
-  },
-
-  async _searchOrders(q) {
-    const el = document.getElementById('lo-results');
-    if (!el) return;
-    try {
-      const data = await API.get('/api/orders');
-      const orders = (data.orders || data).filter(o => {
-        const s = (q || '').toLowerCase();
-        return !s || (o.order_number||'').toLowerCase().includes(s) || (o.customer_name||'').toLowerCase().includes(s);
-      }).slice(0, 20);
-      if (!orders.length) { el.innerHTML = '<p style="color:var(--text-muted);font-size:13px;padding:8px">Keine Aufträge gefunden</p>'; return; }
-      el.innerHTML = orders.map(o => `
-        <div onclick="EmailAgentView._selectOrder(${o.id},'${UI.esc(o.order_number||'')}',this)"
-          style="padding:8px 12px;border-radius:6px;cursor:pointer;border:1px solid var(--border);margin-bottom:4px;font-size:13px"
-          data-order-id="${o.id}">
-          <strong>${UI.esc(o.order_number||'–')}</strong>
-          <span style="color:var(--text-muted);margin-left:8px">${UI.esc(o.customer_name||'')}</span>
-          <span style="float:right;font-size:11px;color:var(--text-muted)">${o.status}</span>
-        </div>`).join('');
-    } catch(e) { el.innerHTML = `<div class="alert alert-danger">${e.message}</div>`; }
-  },
-
-  _selectOrder(orderId, orderNumber, el) {
-    document.querySelectorAll('#lo-results [data-order-id]').forEach(d => d.style.background = '');
-    el.style.background = 'var(--accent-glow)';
-    document.getElementById('lo-selected-id').value = orderId;
-    const btn = document.getElementById('lo-do-btn');
-    if (btn) { btn.disabled = false; btn.textContent = `Verknüpfen: ${orderNumber}`; }
-  },
-
-  async _doLinkOrder(emailId) {
-    const orderId = document.getElementById('lo-selected-id')?.value;
-    if (!orderId) return;
-    try {
-      await API.post(`/api/email-agent/inbox/${emailId}/link-order`, { order_id: orderId });
-      UI.toast('Auftrag verknüpft', 'success');
-      UI.closeModal();
-      EmailAgentView.renderDetail(emailId);
-    } catch(e) { UI.toast('Fehler: '+e.message, 'error'); }
-  },
-
-  async _unlinkOrder(emailId) {
-    try {
-      await API.post(`/api/email-agent/inbox/${emailId}/link-order`, { order_id: null });
-      UI.toast('Verknüpfung aufgehoben', 'success');
-      EmailAgentView.renderDetail(emailId);
-    } catch(e) { UI.toast('Fehler: '+e.message, 'error'); }
-  },
-
-  // ── Entwurf per E-Mail versenden ─────────────────────────────────────────
-
-  _openSendDraft(emailId, defaultTo) {
-    const ta = document.getElementById('ea-draft-text');
-    if (!ta?.value?.trim()) { UI.toast('Kein Entwurf vorhanden – bitte zuerst speichern', 'warning'); return; }
-    UI.modal('📤 Entwurf versenden',
-      `<div class="field">
-        <label>Empfänger (An)</label>
-        <input id="sd-to" value="${UI.esc(defaultTo)}" placeholder="empfaenger@beispiel.ch">
-      </div>
-      <div class="field mt-2">
-        <label>Vorschau</label>
-        <div style="max-height:200px;overflow-y:auto;background:var(--bg-secondary);padding:10px;border-radius:6px;font-size:12px;white-space:pre-wrap;line-height:1.5">${UI.esc(ta.value.substring(0,1000))}${ta.value.length>1000?'\n...':''}</div>
-      </div>`,
-      `<button class="btn btn-secondary" onclick="UI.closeModal()">Abbrechen</button>
-       <button class="btn btn-primary" onclick="EmailAgentView._sendDraft(${emailId})">📤 Jetzt senden</button>`
-    );
-  },
-
-  async _sendDraft(emailId) {
-    const to = document.getElementById('sd-to')?.value?.trim();
-    if (!to) { UI.toast('Bitte Empfänger eingeben', 'error'); return; }
-    const ta = document.getElementById('ea-draft-text');
-    // Save current draft text first
-    try { await API.put(`/api/email-agent/inbox/${emailId}/draft`, { draft: ta?.value }); } catch {}
-    try {
-      await API.post(`/api/email-agent/inbox/${emailId}/send-draft`, { to });
-      UI.toast('E-Mail gesendet', 'success');
-      UI.closeModal();
-      EmailAgentView.renderDetail(emailId);
-    } catch(e) { UI.toast('Fehler: '+e.message, 'error'); }
   },
 
   async _saveSettings() {
