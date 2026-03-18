@@ -361,6 +361,43 @@ router.post('/settings', requireRole('admin'), (req, res) => {
   res.json({ ok: true, inbox_dir: agent.EMAIL_INBOX_DIR });
 });
 
+// ── POST /api/email-agent/inbox/:id/send-draft ───────────────────────────────
+// Entwurf per SMTP versenden
+router.post('/inbox/:id/send-draft', requireRole('admin', 'planer'), async (req, res) => {
+  const db = getDb();
+  const email = db.prepare('SELECT * FROM email_inbox WHERE id = ?').get(req.params.id);
+  if (!email) return res.status(404).json({ error: 'Nicht gefunden' });
+  if (!email.ai_draft) return res.status(400).json({ error: 'Kein Entwurf vorhanden' });
+
+  try {
+    const { getTransporter, getSmtpConfig } = require('../lib/mailer');
+    const smtpCfg = getSmtpConfig();
+    if (!smtpCfg.user || !smtpCfg.pass) {
+      return res.status(503).json({ error: 'SMTP nicht konfiguriert (SMTP_USER / SMTP_PASS fehlen)' });
+    }
+
+    const to = (req.body.to || email.from_addr || '').trim();
+    if (!to) return res.status(400).json({ error: 'Kein Empfänger' });
+
+    const transporter = getTransporter();
+    await transporter.sendMail({
+      from:       `"Helbling & Co. AG" <${smtpCfg.from || smtpCfg.user}>`,
+      to,
+      subject:    `Re: ${email.subject || ''}`,
+      text:       email.ai_draft,
+      inReplyTo:  email.message_id || undefined,
+      references: email.message_id || undefined,
+    });
+
+    db.prepare("UPDATE email_inbox SET status = 'verarbeitet' WHERE id = ?").run(email.id);
+    console.log(`[Email-Agent] Entwurf gesendet: #${email.id} → ${to}`);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[Email-Agent] send-draft Fehler:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── DELETE /api/email-agent/inbox/:id ───────────────────────────────────────
 router.delete('/inbox/:id', requireRole('admin'), (req, res) => {
   const db = getDb();
