@@ -39,28 +39,55 @@ const MonteurViews = {
     MonteurViews.applyFilter();
   },
 
+  // Shared card renderer for both active and completed orders
+  _orderCard(o, { accent, badge, rightSlot, dateVal, borderLeft = '', opacity = '' }) {
+    const projectLabel = o.project_number || o.order_number;
+    return `
+    <div class="card" style="cursor:pointer${borderLeft ? ';border-left:3px solid '+borderLeft : ''}${opacity ? ';opacity:'+opacity : ''}"
+         onclick="MonteurViews.renderWorkForm(${o.id})">
+      <div class="flex gap-3 align-items-start">
+        <div style="background:${accent};color:#fff;border-radius:50%;width:32px;height:32px;
+          display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;font-size:13px">
+          ${badge}
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;color:${accent};font-size:15px;margin-bottom:2px">
+            ${UI.esc(projectLabel)}
+          </div>
+          <div class="flex gap-2 align-items-center mb-1">
+            <strong>${UI.esc(o.customer_name || o.cust_name || 'Unbekannt')}</strong>
+            ${UI.statusBadge(o.status)}
+          </div>
+          <div class="text-sm text-muted">${UI.esc(o.installation_address || '\u2013')}</div>
+          <div class="flex gap-3 mt-2 text-sm">
+            <span>\ud83d\udcc5 ${UI.fmtDate(dateVal)}</span>
+            ${o.arrival_time ? `<span>\ud83d\udd50 ${UI.esc(o.arrival_time)}</span>` : ''}
+          </div>
+        </div>
+        <div style="flex-shrink:0">${rightSlot}</div>
+      </div>
+    </div>`;
+  },
+
   applyFilter() {
     const date = document.getElementById('m-filter-date')?.value || '';
     const showCompleted = MonteurViews._showCompleted;
 
     // Base: exclude archived
-    let orders = MonteurViews._myOrders.filter(o => o.status !== 'archiviert');
+    const orders = MonteurViews._myOrders.filter(o => o.status !== 'archiviert');
 
     // Split active vs completed
     let active    = orders.filter(o => o.status !== 'abgeschlossen');
     let completed = orders.filter(o => o.status === 'abgeschlossen');
+    // Save total before any date-filtering (for the toggle button label)
+    const totalCompleted = completed.length;
 
-    // Apply date filter to active orders: match planned_date OR work_date
+    // Apply date filter: match planned_date OR work_date
     if (date) {
-      active = active.filter(o =>
-        (o.planned_date||'').startsWith(date) || (o.work_date||'').startsWith(date)
-      );
-      // Also filter completed by date if "show completed" is active
-      if (showCompleted) {
-        completed = completed.filter(o =>
-          (o.planned_date||'').startsWith(date) || (o.work_date||'').startsWith(date)
-        );
-      }
+      const matchDate = o =>
+        (o.planned_date||'').startsWith(date) || (o.work_date||'').startsWith(date);
+      active = active.filter(matchDate);
+      if (showCompleted) completed = completed.filter(matchDate);
     }
 
     const el = document.getElementById('monteur-orders-list');
@@ -74,43 +101,20 @@ const MonteurViews = {
     } else {
       html += active.map((o, idx) => {
         const isRunning = MonteurViews._timerRunning(o.id);
-        const projectLabel = o.project_number || o.order_number;
-        return `
-        <div class="card" style="cursor:pointer" onclick="MonteurViews.renderWorkForm(${o.id})">
-          <div class="flex gap-3 align-items-start">
-            <div style="background:var(--accent);color:#fff;border-radius:50%;width:32px;height:32px;
-              display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;font-size:13px">
-              ${idx + 1}
-            </div>
-            <div style="flex:1;min-width:0">
-              <div style="font-weight:700;color:var(--accent);font-size:15px;margin-bottom:2px">
-                ${UI.esc(projectLabel)}
-              </div>
-              <div class="flex gap-2 align-items-center mb-1">
-                <strong>${UI.esc(o.customer_name || o.cust_name || 'Unbekannt')}</strong>
-                ${UI.statusBadge(o.status)}
-              </div>
-              <div class="text-sm text-muted">${UI.esc(o.installation_address || '\u2013')}</div>
-              <div class="flex gap-3 mt-2 text-sm">
-                <span>\ud83d\udcc5 ${UI.fmtDate(o.planned_date)}</span>
-                ${o.arrival_time ? `<span>\ud83d\udd50 ${UI.esc(o.arrival_time)}</span>` : ''}
-              </div>
-            </div>
-            <div class="flex gap-2" style="flex-shrink:0">
-              <button class="btn ${isRunning ? 'btn-danger' : 'btn-success'} btn-sm"
-                onclick="event.stopPropagation(); MonteurViews.quickToggleTimer(${o.id})"
-                title="${isRunning ? 'Timer l\u00e4uft' : 'Timer starten'}"
-                style="min-width:44px;min-height:44px;font-size:18px;padding:0;display:flex;align-items:center;justify-content:center">
-                ${isRunning ? '\u23f9' : '\u25b6'}
-              </button>
-            </div>
-          </div>
-        </div>`;
+        const timerBtn = `<button class="btn ${isRunning ? 'btn-danger' : 'btn-success'} btn-sm"
+          onclick="event.stopPropagation(); MonteurViews.quickToggleTimer(${o.id})"
+          title="${isRunning ? 'Timer l\u00e4uft' : 'Timer starten'}"
+          style="min-width:44px;min-height:44px;font-size:18px;padding:0;display:flex;align-items:center;justify-content:center">
+          ${isRunning ? '\u23f9' : '\u25b6'}
+        </button>`;
+        return MonteurViews._orderCard(o, {
+          accent: 'var(--accent)', badge: idx + 1,
+          rightSlot: timerBtn, dateVal: o.planned_date,
+        });
       }).join('');
     }
 
     // Toggle button for completed orders
-    const totalCompleted = MonteurViews._myOrders.filter(o => o.status === 'abgeschlossen').length;
     if (totalCompleted > 0) {
       html += `
         <div style="margin-top:16px;margin-bottom:8px">
@@ -124,32 +128,14 @@ const MonteurViews = {
         if (!completed.length) {
           html += `<div class="card"><p class="text-muted text-sm">Keine abgeschlossenen Auftr\u00e4ge${date ? ' f\u00fcr dieses Datum' : ''}.</p></div>`;
         } else {
-          html += completed.map(o => {
-            const projectLabel = o.project_number || o.order_number;
-            return `
-            <div class="card" style="cursor:pointer;opacity:0.8;border-left:3px solid #2d7a2d" onclick="MonteurViews.renderWorkForm(${o.id})">
-              <div class="flex gap-3 align-items-start">
-                <div style="background:#2d7a2d;color:#fff;border-radius:50%;width:32px;height:32px;
-                  display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;font-size:16px">
-                  \u2713
-                </div>
-                <div style="flex:1;min-width:0">
-                  <div style="font-weight:700;color:#2d7a2d;font-size:15px;margin-bottom:2px">
-                    ${UI.esc(projectLabel)}
-                  </div>
-                  <div class="flex gap-2 align-items-center mb-1">
-                    <strong>${UI.esc(o.customer_name || o.cust_name || 'Unbekannt')}</strong>
-                    ${UI.statusBadge(o.status)}
-                  </div>
-                  <div class="text-sm text-muted">${UI.esc(o.installation_address || '\u2013')}</div>
-                  <div class="flex gap-3 mt-2 text-sm">
-                    <span>\ud83d\udcc5 ${UI.fmtDate(o.work_date || o.planned_date)}</span>
-                  </div>
-                </div>
-                <div style="flex-shrink:0;padding:8px;color:#2d7a2d;font-size:12px;font-weight:600">Nachtrag</div>
-              </div>
-            </div>`;
-          }).join('');
+          html += completed.map(o =>
+            MonteurViews._orderCard(o, {
+              accent: '#2d7a2d', badge: '\u2713',
+              rightSlot: `<span style="padding:8px;color:#2d7a2d;font-size:12px;font-weight:600">Nachtrag</span>`,
+              dateVal: o.work_date || o.planned_date,
+              borderLeft: '#2d7a2d', opacity: '0.8',
+            })
+          ).join('');
         }
       }
     }

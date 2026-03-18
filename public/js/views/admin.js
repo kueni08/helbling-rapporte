@@ -623,7 +623,7 @@ const AdminViews = {
       if (result) result.innerHTML = `<span style="color:${res.fail ? '#c67a00' : '#2d7a2d'}">
         ✓ ${res.ok} erfolgreich hochgeladen, ${res.fail} fehlgeschlagen (von ${res.total} gesamt)
       </span>`;
-      if (res.ok > 0) setTimeout(() => AdminViews.renderDriveStatus(), 1500);
+      if (res.ok > 0) AdminViews.renderDriveStatus();
     } catch(e) {
       if (result) result.innerHTML = `<span style="color:red">${UI.esc(e.message)}</span>`;
     }

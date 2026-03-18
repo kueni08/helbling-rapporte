@@ -1,4 +1,6 @@
 const router = require('express').Router();
+const path   = require('path');
+const fs     = require('fs');
 const { getDb } = require('../lib/database');
 const { requireLogin, requireRole } = require('../middleware/auth');
 const XLSX = require('xlsx');
@@ -7,6 +9,7 @@ const uploadMem = multer({ storage: multer.memoryStorage() });
 const Anthropic = require('@anthropic-ai/sdk');
 const { DEFAULT_EXTRACTION_PROMPT } = require('../lib/lieferschein-watcher');
 const drive = require('../lib/drive');
+const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(__dirname, '..', 'uploads');
 
 // GET /api/settings/options  – all active options grouped by field_name
 router.get('/options', requireLogin, (req, res) => {
@@ -280,8 +283,8 @@ router.get('/drive-status', requireRole('admin'), async (req, res) => {
     return res.json({ enabled: true, folderConfigured: false, message: 'GOOGLE_DRIVE_FOLDER_ID nicht gesetzt' });
   }
   try {
-    // Try listing files in the root folder to verify permissions
-    const files = await drive.listPdfFiles(rootFolderId);
+    // Verify permissions by listing files in the root folder (result intentionally discarded)
+    await drive.listPdfFiles(rootFolderId);
     // Also check recent failed uploads (no google_drive_file_id)
     const db = getDb();
     const failedAtts  = db.prepare('SELECT COUNT(*) as n FROM order_attachments WHERE google_drive_file_id IS NULL').get();
@@ -303,21 +306,20 @@ router.get('/drive-status', requireRole('admin'), async (req, res) => {
 
 // POST /api/settings/drive-retry  – retry failed Drive uploads (admin only)
 router.post('/drive-retry', requireRole('admin'), async (req, res) => {
-  const db = getDb();
-  const path = require('path');
-  const fs   = require('fs');
-  const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(__dirname, '..', 'uploads');
-
   if (!drive.isDriveEnabled()) {
     return res.status(400).json({ error: 'Drive nicht konfiguriert' });
   }
 
+  const db = getDb();
   const atts   = db.prepare('SELECT * FROM order_attachments WHERE google_drive_file_id IS NULL').all();
   const photos = db.prepare('SELECT * FROM order_photos       WHERE google_drive_file_id IS NULL').all();
+
+  // Use a Set of attachment IDs for O(1) table-name lookup instead of O(n) .includes()
+  const attIds = new Set(atts.map(r => r.id));
   let ok = 0, fail = 0;
 
   for (const rec of [...atts, ...photos]) {
-    const table = atts.includes(rec) ? 'order_attachments' : 'order_photos';
+    const table = attIds.has(rec.id) ? 'order_attachments' : 'order_photos';
     const candidates = [];
     if (rec.dir_name) candidates.push(path.join(UPLOADS_DIR, rec.dir_name, rec.filename));
     candidates.push(path.join(UPLOADS_DIR, String(rec.order_id), rec.filename));
