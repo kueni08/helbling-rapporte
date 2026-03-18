@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const session = require('express-session');
-const SQLiteStore = require('connect-sqlite3')(session);
+const FileStore = require('session-file-store')(session);
 const path = require('path');
 const fs = require('fs');
 
@@ -17,7 +17,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Sessions
 app.use(session({
-  store: new SQLiteStore({ db: 'sessions.db', dir: path.join(__dirname, 'db') }),
+  store: new FileStore({ path: path.join(__dirname, 'db', 'sessions'), ttl: 86400 * 7, retries: 0 }),
   secret: process.env.SESSION_SECRET || 'email-agent-secret-change-me',
   resave: false,
   saveUninitialized: false,
