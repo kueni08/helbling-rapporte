@@ -55,45 +55,39 @@ if count2 > 0:
     src = new_src
 
 # ── Fix 3: 404-Fallback in api_email_detail ────────────────────────────────
-OLD_BLOCK = (
-    '        if not result_path.exists():\n'
-    '            return jsonify({"error": "Nicht gefunden"}), 404\n'
-    '        with open(result_path'
-)
-NEW_BLOCK = (
-    '        if result_path.exists():\n'
-    '            with open(result_path'
-)
-FALLBACK = (
-    '\n'
-    '        # Fallback: Eintrag direkt aus all_results.json laden\n'
-    '        for r in get_all_results():\n'
-    '            if r.get("email_id") == email_id:\n'
-    '                return jsonify(r)\n'
-    '        return jsonify({"error": "Nicht gefunden"}), 404'
-)
+# Ersetzt den gesamten alten if-not-exists-Block in einem einzigen Regex-Schritt,
+# damit die Einrückung der return-Zeile korrekt angepasst wird.
 
 if "# Fallback: Eintrag direkt aus all_results.json laden" in src:
     changes.append("404-Fallback bereits vorhanden (uebersprungen)")
-elif OLD_BLOCK in src:
-    # Schritt 1: alten if-Block auf if-exists umstellen
-    src = src.replace(OLD_BLOCK, NEW_BLOCK)
-    # Schritt 2: Fallback nach dem with-open-Block im api_email_detail einfügen
-    # Sucht: with open(result_path...) as f:\n            return jsonify(json.load(f))
-    pattern = (
-        r'(        if result_path\.exists\(\):\n'
-        r'            with open\(result_path[^\n]*\) as f:\n'
-        r'                return jsonify\(json\.load\(f\)\))'
+else:
+    pattern_404 = (
+        r'([ ]*)if not result_path\.exists\(\):\n'
+        r'\1    return jsonify\(\{"error": "Nicht gefunden"\}\), 404\n'
+        r'\1with (open\(result_path[^\n]*\)) as f:\n'
+        r'\1    return jsonify\(json\.load\(f\)\)'
     )
-    replacement = r'\1' + FALLBACK
-    new_src, n = re.subn(pattern, replacement, src, count=1)
+
+    def _replace_404_block(m):
+        ind = m.group(1)
+        open_call = m.group(2)
+        return (
+            f'{ind}if result_path.exists():\n'
+            f'{ind}    with {open_call} as f:\n'
+            f'{ind}        return jsonify(json.load(f))\n'
+            f'{ind}# Fallback: Eintrag direkt aus all_results.json laden\n'
+            f'{ind}for r in get_all_results():\n'
+            f'{ind}    if r.get("email_id") == email_id:\n'
+            f'{ind}        return jsonify(r)\n'
+            f'{ind}return jsonify({{"error": "Nicht gefunden"}}), 404'
+        )
+
+    new_src, n = re.subn(pattern_404, _replace_404_block, src, count=1)
     if n:
         src = new_src
         changes.append("404-Fallback in api_email_detail eingefuegt")
     else:
-        changes.append("WARNUNG: 404-Fallback konnte nicht automatisch eingefuegt werden – bitte manuell pruefen")
-else:
-    changes.append("INFO: 404-Block nicht im erwarteten Format – bitte web/app.py manuell pruefen")
+        changes.append("INFO: 404-Block nicht im erwarteten Format – bitte web/app.py manuell pruefen")
 
 # ── Ergebnis ───────────────────────────────────────────────────────────────
 if src == original:
