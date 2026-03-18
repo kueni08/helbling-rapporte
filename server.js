@@ -5,24 +5,10 @@ const SQLiteStore = require('connect-sqlite3')(session);
 const path = require('path');
 const fs = require('fs');
 
-// Fly.io: Service Account JSON aus Env-Var in Datei schreiben
-if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
-  const credDir = path.join(__dirname, 'credentials');
-  fs.mkdirSync(credDir, { recursive: true });
-  fs.writeFileSync(
-    path.join(credDir, 'service-account.json'),
-    Buffer.from(process.env.GOOGLE_SERVICE_ACCOUNT_JSON, 'base64').toString('utf8')
-  );
-}
-
 const { initDatabase } = require('./lib/database');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-
-// Ensure uploads directory exists
-const uploadsDir = process.env.UPLOADS_DIR || path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 
 // Middleware
 app.use(express.json({ limit: '50mb' }));
@@ -32,7 +18,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Sessions
 app.use(session({
   store: new SQLiteStore({ db: 'sessions.db', dir: path.join(__dirname, 'db') }),
-  secret: process.env.SESSION_SECRET || 'helbling-secret-change-me',
+  secret: process.env.SESSION_SECRET || 'email-agent-secret-change-me',
   resave: false,
   saveUninitialized: false,
   cookie: {
@@ -43,26 +29,11 @@ app.use(session({
 }));
 
 // Routes
-app.use('/api/auth',     require('./routes/auth'));
-app.use('/api/users',    require('./routes/users'));
-app.use('/api/orders',   require('./routes/orders'));
-app.use('/api/settings', require('./routes/settings'));
-app.use('/api/files',    require('./routes/files'));
-app.use('/api/email',    require('./routes/email'));
-app.use('/api/anfrage',       require('./routes/anfrage'));      // public customer form submit
-app.use('/api/anfragen',      require('./routes/anfrage'));      // admin list/manage
-app.use('/api/lieferschein',  require('./routes/lieferschein')); // PDF auto-import
-app.use('/api/email-agent',  require('./routes/email-agent'));  // KI Email-Agent
+app.use('/api/auth',        require('./routes/auth'));
+app.use('/api/users',       require('./routes/users'));
+app.use('/api/email-agent', require('./routes/email-agent'));
 
-// Public customer inquiry form (new submission + token-based edit)
-app.get('/anfrage', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'anfrage.html'));
-});
-app.get('/anfrage/f/:token', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'anfrage.html'));
-});
-
-// Serve the SPA for any non-API route
+// Serve the SPA
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
@@ -70,16 +41,8 @@ app.get('*', (req, res) => {
 // Initialize DB then start server
 initDatabase();
 app.listen(PORT, () => {
-  console.log(`\n✅ Helbling Rapporte läuft auf http://localhost:${PORT}`);
+  console.log(`\n✅ Helbling Email-Agent läuft auf http://localhost:${PORT}`);
   console.log(`   Standard-Login: admin / admin123`);
-
-  // Lieferschein-Watcher starten (lokaler Ordner)
-  const { startWatcher } = require('./lib/lieferschein-watcher');
-  startWatcher();
-
-  // Google Drive Poller starten
-  const { startPoller } = require('./lib/drive-poller');
-  startPoller().catch(e => console.error('[Drive-Poller] Start fehlgeschlagen:', e.message));
 
   // Email-Agent starten (EML-Watcher + optional Microsoft Graph API)
   const emailAgent = require('./lib/email-agent');
@@ -89,21 +52,6 @@ app.listen(PORT, () => {
   if (graphOk) {
     const cfg = emailAgent.getGraphConfig();
     console.log(`   → Postfach: ${cfg.mailbox}`);
-  }
-
-  // Drive-Status beim Start loggen
-  const { isDriveEnabled } = require('./lib/drive');
-  const driveOk = isDriveEnabled();
-  console.log(`\n📁 Google Drive: ${driveOk ? '✅ aktiv' : '❌ nicht aktiv'}`);
-  if (!driveOk) {
-    if (!process.env.GOOGLE_SERVICE_ACCOUNT_JSON && !process.env.GOOGLE_SERVICE_ACCOUNT_FILE) {
-      console.log('   → GOOGLE_SERVICE_ACCOUNT_JSON fehlt');
-    }
-    if (!process.env.GOOGLE_DRIVE_FOLDER_ID) {
-      console.log('   → GOOGLE_DRIVE_FOLDER_ID fehlt');
-    }
-  } else {
-    console.log(`   → Folder: ${process.env.GOOGLE_DRIVE_FOLDER_ID}`);
   }
   console.log('');
 });

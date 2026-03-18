@@ -6,7 +6,7 @@ const API = {
       opts.headers['Content-Type'] = 'application/json';
       opts.body = JSON.stringify(body);
     } else if (isFormData) {
-      opts.body = body; // FormData – let browser set Content-Type
+      opts.body = body;
     }
     const res = await fetch(url, opts);
     const data = await res.json().catch(() => ({}));
@@ -17,7 +17,6 @@ const API = {
   get:    (url)         => API._req('GET',    url),
   post:   (url, body)   => API._req('POST',   url, body),
   put:    (url, body)   => API._req('PUT',    url, body),
-  patch:  (url, body)   => API._req('PATCH',  url, body),
   delete: (url)         => API._req('DELETE', url),
   upload: (url, form)   => API._req('POST',   url, form, true),
 
@@ -28,77 +27,23 @@ const API = {
   changePassword: (cur, n)=> API.post('/api/auth/change-password', { currentPassword: cur, newPassword: n }),
 
   // Users (admin)
-  getUsers:             ()      => API.get('/api/users'),
-  getMonteure:          ()      => API.get('/api/users/monteure'),
-  createUser:           (d)     => API.post('/api/users', d),
-  updateUser:           (id, d) => API.put(`/api/users/${id}`, d),
-  deleteUser:           (id)    => API.delete(`/api/users/${id}`),
-  deleteInactiveUsers:  ()      => API.delete('/api/users/inactive'),
+  getUsers:    () => API.get('/api/users'),
+  createUser:  (d) => API.post('/api/users', d),
+  updateUser:  (id, d) => API.put(`/api/users/${id}`, d),
+  deleteUser:  (id) => API.delete(`/api/users/${id}`),
 
-  // Orders
-  getOrders:      ()      => API.get('/api/orders'),
-  getOrder:       (id)    => API.get(`/api/orders/${id}`),
-  createOrder:    (d)     => API.post('/api/orders', d),
-  updateOrder:    (id, d) => API.put(`/api/orders/${id}`, d),
-  deleteOrder:    (id)    => API.delete(`/api/orders/${id}`),
-  reorderOrders:  (items) => API.patch('/api/orders/reorder', { items }),
-  importOrders:        (form) => API.upload('/api/orders/import', form),
-  orderCustomerForm:   (id)   => API.post(`/api/orders/${id}/customer-form`),
-
-  // Settings
-  getOptions:         ()           => API.get('/api/settings/options'),
-  getOptionsByField:  (f)          => API.get(`/api/settings/options/${f}`),
-  createOption:       (d)          => API.post('/api/settings/options', d),
-  updateOption:       (id, d)      => API.put(`/api/settings/options/${id}`, d),
-  deleteOption:       (id)         => API.delete(`/api/settings/options/${id}`),
-  getArticles:        ()           => API.get('/api/settings/articles'),
-  createArticle:      (d)          => API.post('/api/settings/articles', d),
-  updateArticle:      (id, d)      => API.put(`/api/settings/articles/${id}`, d),
-  deleteArticle:      (id)         => API.delete(`/api/settings/articles/${id}`),
-  getCustomers:       ()           => API.get('/api/settings/customers'),
-  createCustomer:     (d)          => API.post('/api/settings/customers', d),
-  updateCustomer:     (id, d)      => API.put(`/api/settings/customers/${id}`, d),
-
-  // Files
-  uploadAttachments: (orderId, form) => API.upload(`/api/files/${orderId}/attachments`, form),
-  uploadPhotos:      (orderId, form) => API.upload(`/api/files/${orderId}/photos`, form),
-  deleteAttachment:  (orderId, id)   => API.delete(`/api/files/${orderId}/attachments/${id}`),
-  deletePhoto:       (orderId, id)   => API.delete(`/api/files/${orderId}/photos/${id}`),
-  fileUrl:           (orderId, fn)   => `/api/files/${orderId}/${fn}`,
-
-  // Email
-  sendEmail:      (d)     => API.post('/api/email/send', d),
-  emailStatus:    ()      => API.get('/api/email/config-status'),
-
-  // Settings – Article Import & SMTP
-  importArticles: (form) => API.upload('/api/settings/articles/import', form),
-  getSmtp:        ()     => API.get('/api/settings/smtp'),
-  saveSmtp:       (d)    => API.put('/api/settings/smtp', d),
-
-  // Settings – Import-Einstellungen
-  getImportDefaults:    ()  => API.get('/api/settings/import-defaults'),
-  saveImportDefaults:   (d) => API.put('/api/settings/import-defaults', d),
-
-  // Settings – KI-Extraktions-Prompt
-  getExtractionPrompt:  ()     => API.get('/api/settings/extraction-prompt'),
-  saveExtractionPrompt: (d)    => API.put('/api/settings/extraction-prompt', d),
-  promptChat:           (d)    => API.post('/api/settings/prompt-chat', d),
-
-  // Kundenanfragen
-  getAnfragen:         ()         => API.get('/api/anfragen'),
-  getAnfrage:          (id)       => API.get(`/api/anfragen/${id}`),
-  updateAnfrage:       (id, d)    => API.put(`/api/anfragen/${id}`, d),
-  setAnfrageStatus:    (id, s)    => API.put(`/api/anfragen/${id}/status`, { status: s }),
-  generateAnfrageToken:(id)       => API.post(`/api/anfragen/${id}/generate-token`),
-  linkAnfrageOrder:    (id, oid)  => API.post(`/api/anfragen/${id}/link-order`, { order_id: oid }),
-  convertAnfrage:      (id)       => API.post(`/api/anfragen/${id}/convert`),
-  deleteAnfrage:       (id)       => API.delete(`/api/anfragen/${id}`),
-
-  // Lieferschein Auto-Import
-  getLsStatus:         ()         => API.get('/api/lieferschein/status'),
-  getLsImports:        ()         => API.get('/api/lieferschein/imports'),
-  getLsDriveStatus:    ()         => API.get('/api/lieferschein/drive-status'),
-  uploadLieferschein:  (form)     => API.upload('/api/lieferschein/upload', form),
-  retryLsImport:       (id)       => API.post(`/api/lieferschein/retry/${id}`),
-  deleteLsImport:      (id)       => API.delete(`/api/lieferschein/imports/${id}`),
+  // Email-Agent
+  emailAgentStatus:    ()      => API.get('/api/email-agent/status'),
+  getInbox:            (p)     => API.get(`/api/email-agent/inbox${p ? '?' + new URLSearchParams(p) : ''}`),
+  getEmail:            (id)    => API.get(`/api/email-agent/inbox/${id}`),
+  uploadEmls:          (form)  => API.upload('/api/email-agent/upload', form),
+  pollGraph:           ()      => API.post('/api/email-agent/poll'),
+  setEmailStatus:      (id, s) => API.put(`/api/email-agent/inbox/${id}/status`, { status: s }),
+  reclassifyEmail:     (id)    => API.post(`/api/email-agent/inbox/${id}/reclassify`),
+  saveDraft:           (id, d) => API.put(`/api/email-agent/inbox/${id}/draft`, { draft: d }),
+  regenerateDraft:     (id)    => API.post(`/api/email-agent/inbox/${id}/regenerate-draft`),
+  getEmailAgentSettings: ()    => API.get('/api/email-agent/settings'),
+  saveEmailAgentSettings:(d)   => API.post('/api/email-agent/settings', d),
+  deleteEmail:         (id)    => API.delete(`/api/email-agent/inbox/${id}`),
+  attachmentUrl:       (fn)    => `/api/email-agent/attachment/${fn}`,
 };

@@ -12,20 +12,13 @@ router.get('/', requireRole('admin'), (req, res) => {
   res.json(users);
 });
 
-// GET /api/users/monteure  (planer + admin – for order assignment)
-router.get('/monteure', requireRole('admin', 'planer'), (req, res) => {
-  const db = getDb();
-  const monteure = db.prepare(`SELECT id, full_name, username FROM users WHERE role = 'monteur' AND active = 1 ORDER BY full_name`).all();
-  res.json(monteure);
-});
-
 // POST /api/users  (admin only)
 router.post('/', requireRole('admin'), (req, res) => {
   const { username, password, full_name, email, role } = req.body;
   if (!username || !password || !full_name || !role) {
     return res.status(400).json({ error: 'Pflichtfelder: username, password, full_name, role' });
   }
-  if (!['admin','planer','monteur'].includes(role)) {
+  if (!['admin','planer'].includes(role)) {
     return res.status(400).json({ error: 'Ungültige Rolle' });
   }
   if (password.length < 6) {
@@ -52,7 +45,7 @@ router.put('/:id', requireRole('admin'), (req, res) => {
 
   if (full_name) db.prepare('UPDATE users SET full_name = ? WHERE id = ?').run(full_name, req.params.id);
   if (email !== undefined) db.prepare('UPDATE users SET email = ? WHERE id = ?').run(email, req.params.id);
-  if (role && ['admin','planer','monteur'].includes(role)) db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, req.params.id);
+  if (role && ['admin','planer'].includes(role)) db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, req.params.id);
   if (active !== undefined) db.prepare('UPDATE users SET active = ? WHERE id = ?').run(active ? 1 : 0, req.params.id);
   if (password && password.length >= 6) {
     const hash = bcrypt.hashSync(password, 10);

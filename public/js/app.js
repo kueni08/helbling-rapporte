@@ -3,7 +3,6 @@ const App = {
   state: null, // { id, username, fullName, role, email }
 
   async init() {
-    // Try to restore session
     try {
       App.state = await API.me();
       App.showApp();
@@ -39,7 +38,6 @@ const App = {
     document.getElementById('nav-role').textContent = UI.roleName(App.state.role);
     document.getElementById('nav-logout').onclick = App.logout;
 
-    // Mobile header user initial + avatar button
     const initial = (App.state.fullName || '?').charAt(0).toUpperCase();
     const mobileInitial = document.getElementById('mobile-user-initial');
     if (mobileInitial) mobileInitial.textContent = initial;
@@ -47,7 +45,7 @@ const App = {
     if (mobileBtn) mobileBtn.onclick = () => App.navigate('change-password');
 
     App.buildNav();
-    App.navigate(App.defaultView());
+    App.navigate('email-agent');
   },
 
   async logout() {
@@ -56,39 +54,14 @@ const App = {
     App.showLogin();
   },
 
-  defaultView() {
-    switch(App.state.role) {
-      case 'admin':   return 'admin-orders';
-      case 'planer':  return 'planer-orders';
-      case 'monteur': return 'monteur-orders';
-    }
-  },
-
   buildNav() {
     const { role } = App.state;
     const navItems = [];
 
-    if (role === 'monteur') {
-      navItems.push({ id: 'monteur-orders',      icon: '📅', label: 'Meine Aufträge' });
-      navItems.push({ id: 'tagesuebersicht',     icon: '📊', label: 'Tagesübersicht' });
-    }
-
-    if (role === 'planer' || role === 'admin') {
-      navItems.push({ id: 'planer-orders',       icon: '📋', label: 'Aufträge' });
-      navItems.push({ id: 'planer-anfragen',     icon: '📩', label: 'Kundenanfragen' });
-      navItems.push({ id: 'email-agent',         icon: '🤖', label: 'Email-Agent' });
-      navItems.push({ id: 'tagesuebersicht',     icon: '📊', label: 'Tagesübersicht' });
-      if (role === 'planer') {
-        navItems.push({ id: 'planer-lieferschein', icon: '📥', label: 'LS-Import' });
-      }
-    }
+    navItems.push({ id: 'email-agent', icon: '📧', label: 'Posteingang' });
 
     if (role === 'admin') {
-      navItems.push(
-        { id: 'admin-orders',  icon: '📋', label: 'Alle Aufträge' },
-        { id: 'admin-users',   icon: '👥', label: 'Benutzer' },
-        { id: 'admin-settings',icon: '⚙️',  label: 'Einstellungen' },
-      );
+      navItems.push({ id: 'admin-users', icon: '👥', label: 'Benutzer' });
     }
 
     navItems.push({ id: 'change-password', icon: '🔒', label: 'Passwort ändern' });
@@ -101,39 +74,51 @@ const App = {
   },
 
   navigate(viewId) {
-    // Update active nav link
     document.querySelectorAll('#nav-menu a').forEach(a => {
       a.classList.toggle('active', a.dataset.view === viewId);
     });
 
-    // Update mobile header title
     const titles = {
-      'monteur-orders':   'Meine Aufträge',
-      'planer-orders':    'Aufträge',
-      'planer-anfragen':  'Kundenanfragen',
-      'planer-lieferschein': 'LS-Import',
-      'email-agent':      'Email-Agent',
-      'admin-orders':     'Alle Aufträge',
-      'admin-users':      'Benutzer',
-      'admin-settings':   'Einstellungen',
-      'change-password':  'Passwort ändern',
-      'tagesuebersicht':  'Tagesübersicht',
+      'email-agent':     'Posteingang',
+      'admin-users':     'Benutzer',
+      'change-password': 'Passwort ändern',
     };
     const titleEl = document.getElementById('mobile-title');
-    if (titleEl) titleEl.textContent = titles[viewId] || 'Rapporte';
+    if (titleEl) titleEl.textContent = titles[viewId] || 'Email-Agent';
 
     switch(viewId) {
-      case 'monteur-orders':   MonteurViews.renderMyOrders(); break;
-      case 'planer-orders':    PlanerViews.renderOrders(); break;
-      case 'planer-anfragen':     PlanerViews.renderAnfragen(); break;
-      case 'planer-lieferschein': PlanerViews.renderLieferschein(); break;
-      case 'admin-orders':     PlanerViews.renderOrders(); break;
-      case 'admin-users':      AdminViews.renderUsers(); break;
-      case 'admin-settings':   AdminViews.renderSettings(); break;
-      case 'change-password':  App.renderChangePassword(); break;
-      case 'tagesuebersicht':  TagesuebersichtView.render(); break;
-      case 'email-agent':      EmailAgentView.renderInbox(); break;
+      case 'email-agent':     EmailAgentView.renderInbox(); break;
+      case 'admin-users':     App.renderUsers(); break;
+      case 'change-password': App.renderChangePassword(); break;
     }
+  },
+
+  renderUsers() {
+    const main = document.getElementById('main-content');
+    main.innerHTML = `<div class="page-header"><h2>👥 Benutzer</h2></div><div id="users-content"><p>Wird geladen...</p></div>`;
+    API.getUsers().then(users => {
+      document.getElementById('users-content').innerHTML = `
+        <div class="card">
+          <table style="width:100%;border-collapse:collapse">
+            <thead><tr style="background:#f5f7ff">
+              <th style="padding:8px;text-align:left">Benutzername</th>
+              <th style="padding:8px;text-align:left">Name</th>
+              <th style="padding:8px;text-align:left">Rolle</th>
+              <th style="padding:8px;text-align:left">Status</th>
+            </tr></thead>
+            <tbody>
+              ${users.map(u => `<tr style="border-top:1px solid #eee">
+                <td style="padding:8px">${u.username}</td>
+                <td style="padding:8px">${u.full_name}</td>
+                <td style="padding:8px">${u.role}</td>
+                <td style="padding:8px">${u.active ? '✅ Aktiv' : '❌ Inaktiv'}</td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>`;
+    }).catch(e => {
+      document.getElementById('users-content').innerHTML = `<p class="text-danger">${e.message}</p>`;
+    });
   },
 
   renderChangePassword() {
