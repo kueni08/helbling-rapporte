@@ -10,7 +10,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
     "bcryptjs": "^2.4.3",
-    "better-sqlite3": "^11.0.0",
+    "node-sqlite3-wasm": "^0.8.4",
     "chokidar": "^5.0.0",
     "connect-sqlite3": "^0.9.13",
     "dotenv": "^16.4.5",
