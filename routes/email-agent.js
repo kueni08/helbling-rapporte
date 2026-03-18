@@ -99,7 +99,11 @@ router.get('/inbox/:id', requireRole('admin', 'planer'), (req, res) => {
   const attachments = db.prepare('SELECT * FROM email_attachments WHERE email_id = ?').all(req.params.id);
   let aiDaten = null;
   try { aiDaten = JSON.parse(row.ai_daten || '{}'); } catch {}
-  res.json({ ...row, ai_daten: aiDaten, attachments });
+  let threadJson = null;
+  try { threadJson = JSON.parse(row.thread_json || 'null'); } catch {}
+  let attachmentTexts = null;
+  try { attachmentTexts = JSON.parse(row.attachment_texts || 'null'); } catch {}
+  res.json({ ...row, ai_daten: aiDaten, thread: threadJson, attachment_texts_parsed: attachmentTexts, attachments });
 });
 
 // ── POST /api/email-agent/upload ─────────────────────────────────────────────
@@ -168,10 +172,24 @@ router.post('/inbox/:id/reclassify', requireRole('admin', 'planer'), async (req,
       body
     );
 
+    // Antwortentwurf neu generieren
+    const fromDisplay = email.from_name ? `${email.from_name} <${email.from_addr}>` : email.from_addr;
+    const draft = await agent.generateDraft({
+      subject:           email.subject,
+      from:              fromDisplay,
+      date:              email.received_at,
+      bodyText:          email.body_text || '',
+      threadJson:        email.thread_json,
+      attachmentTexts:   email.attachment_texts,
+      aiKategorie:       aiResult.kategorie,
+      aiPrioritaet:      aiResult.prioritaet,
+      aiZusammenfassung: aiResult.zusammenfassung,
+    });
+
     db.prepare(`
       UPDATE email_inbox SET
         ai_kategorie = ?, ai_zusammenfassung = ?, ai_daten = ?,
-        ai_aktion = ?, ai_prioritaet = ?,
+        ai_aktion = ?, ai_prioritaet = ?, ai_draft = ?,
         status = 'verarbeitet', processed_at = datetime('now')
       WHERE id = ?
     `).run(
@@ -180,10 +198,11 @@ router.post('/inbox/:id/reclassify', requireRole('admin', 'planer'), async (req,
       JSON.stringify(aiResult.daten || {}),
       aiResult.empfohlene_aktion || null,
       aiResult.prioritaet || 'normal',
+      draft || null,
       email.id
     );
 
-    res.json({ ok: true, kategorie: aiResult.kategorie, prioritaet: aiResult.prioritaet });
+    res.json({ ok: true, kategorie: aiResult.kategorie, prioritaet: aiResult.prioritaet, hasDraft: !!draft });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -252,11 +271,47 @@ router.get('/attachment/:filename', requireRole('admin', 'planer'), (req, res) =
   res.download(filePath, att.original_name);
 });
 
+// ── PUT /api/email-agent/inbox/:id/draft ─────────────────────────────────────
+// Entwurf manuell bearbeiten + speichern
+router.put('/inbox/:id/draft', requireRole('admin', 'planer'), (req, res) => {
+  const { draft } = req.body;
+  getDb().prepare("UPDATE email_inbox SET ai_draft = ? WHERE id = ?").run(draft || null, req.params.id);
+  res.json({ ok: true });
+});
+
+// ── POST /api/email-agent/inbox/:id/regenerate-draft ─────────────────────────
+// Entwurf neu generieren
+router.post('/inbox/:id/regenerate-draft', requireRole('admin', 'planer'), async (req, res) => {
+  const db = getDb();
+  const email = db.prepare('SELECT * FROM email_inbox WHERE id = ?').get(req.params.id);
+  if (!email) return res.status(404).json({ error: 'Nicht gefunden' });
+
+  try {
+    const fromDisplay = email.from_name ? `${email.from_name} <${email.from_addr}>` : email.from_addr;
+    const draft = await agent.generateDraft({
+      subject:          email.subject,
+      from:             fromDisplay,
+      date:             email.received_at,
+      bodyText:         email.body_text || '',
+      threadJson:       email.thread_json,
+      attachmentTexts:  email.attachment_texts,
+      aiKategorie:      email.ai_kategorie,
+      aiPrioritaet:     email.ai_prioritaet,
+      aiZusammenfassung:email.ai_zusammenfassung,
+    });
+    db.prepare("UPDATE email_inbox SET ai_draft = ? WHERE id = ?").run(draft || null, email.id);
+    res.json({ ok: true, draft });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── GET /api/email-agent/settings ───────────────────────────────────────────
 router.get('/settings', requireRole('admin'), (req, res) => {
   const db = getDb();
   const get = k => db.prepare('SELECT value FROM settings WHERE key = ?').get(k)?.value ?? null;
   res.json({
+    email_inbox_path:    get('email_inbox_path') || '',
     graph_tenant_id:     get('graph_tenant_id'),
     graph_client_id:     get('graph_client_id'),
     graph_client_secret: get('graph_client_secret') ? '••••••••' : null,
@@ -265,6 +320,7 @@ router.get('/settings', requireRole('admin'), (req, res) => {
     graph_poll_interval: get('graph_poll_interval') || '300',
     graph_enabled:       get('graph_enabled') || 'false',
     email_agent_prompt:  get('email_agent_prompt') || agent.DEFAULT_CLASSIFICATION_PROMPT,
+    email_agent_draft_prompt: get('email_agent_draft_prompt') || agent.DEFAULT_DRAFT_PROMPT,
     inbox_dir:           agent.EMAIL_INBOX_DIR,
   });
 });
@@ -277,9 +333,15 @@ router.post('/settings', requireRole('admin'), (req, res) => {
       db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(k, String(v));
   };
 
-  const { graph_tenant_id, graph_client_id, graph_client_secret,
-          graph_mailbox, graph_folder, graph_poll_interval,
-          graph_enabled, email_agent_prompt } = req.body;
+  const {
+    email_inbox_path,
+    graph_tenant_id, graph_client_id, graph_client_secret,
+    graph_mailbox, graph_folder, graph_poll_interval,
+    graph_enabled, email_agent_prompt, email_agent_draft_prompt,
+  } = req.body;
+
+  // Inbox-Pfad speichern (leer = Standard-Uploads-Ordner)
+  db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('email_inbox_path', email_inbox_path || '');
 
   set('graph_tenant_id',     graph_tenant_id);
   set('graph_client_id',     graph_client_id);
@@ -289,13 +351,14 @@ router.post('/settings', requireRole('admin'), (req, res) => {
   set('graph_folder',        graph_folder || 'Inbox');
   set('graph_poll_interval', graph_poll_interval || '300');
   set('graph_enabled',       graph_enabled ? 'true' : 'false');
-  if (email_agent_prompt) set('email_agent_prompt', email_agent_prompt);
+  if (email_agent_prompt)       set('email_agent_prompt',       email_agent_prompt);
+  if (email_agent_draft_prompt) set('email_agent_draft_prompt', email_agent_draft_prompt);
 
-  // Poller mit neuen Einstellungen neu starten
+  // Agent mit neuen Einstellungen neu starten
   agent.stopAgent();
   agent.startAgent().catch(e => console.error('[Email-Agent] Neustart Fehler:', e.message));
 
-  res.json({ ok: true });
+  res.json({ ok: true, inbox_dir: agent.EMAIL_INBOX_DIR });
 });
 
 // ── DELETE /api/email-agent/inbox/:id ───────────────────────────────────────
