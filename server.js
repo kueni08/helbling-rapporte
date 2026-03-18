@@ -52,6 +52,7 @@ app.use('/api/email',    require('./routes/email'));
 app.use('/api/anfrage',       require('./routes/anfrage'));      // public customer form submit
 app.use('/api/anfragen',      require('./routes/anfrage'));      // admin list/manage
 app.use('/api/lieferschein',  require('./routes/lieferschein')); // PDF auto-import
+app.use('/api/email-agent',  require('./routes/email-agent'));  // KI Email-Agent
 
 // Public customer inquiry form (new submission + token-based edit)
 app.get('/anfrage', (req, res) => {
@@ -79,6 +80,16 @@ app.listen(PORT, () => {
   // Google Drive Poller starten
   const { startPoller } = require('./lib/drive-poller');
   startPoller().catch(e => console.error('[Drive-Poller] Start fehlgeschlagen:', e.message));
+
+  // Email-Agent starten
+  const emailAgent = require('./lib/email-agent');
+  emailAgent.startPoller().catch(e => console.error('[Email-Agent] Start fehlgeschlagen:', e.message));
+  const emailOk = emailAgent.isConfigured();
+  console.log(`\n📧 Email-Agent: ${emailOk ? '✅ aktiv' : '❌ nicht aktiv (IMAP nicht konfiguriert)'}`);
+  if (emailOk) {
+    const cfg = emailAgent.getImapConfig();
+    console.log(`   → ${cfg.user}@${cfg.host}:${cfg.port} (Ordner: ${cfg.folder})`);
+  }
 
   // Drive-Status beim Start loggen
   const { isDriveEnabled } = require('./lib/drive');

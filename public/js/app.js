@@ -76,6 +76,7 @@ const App = {
     if (role === 'planer' || role === 'admin') {
       navItems.push({ id: 'planer-orders',       icon: '📋', label: 'Aufträge' });
       navItems.push({ id: 'planer-anfragen',     icon: '📩', label: 'Kundenanfragen' });
+      navItems.push({ id: 'email-agent',         icon: '🤖', label: 'Email-Agent' });
       navItems.push({ id: 'tagesuebersicht',     icon: '📊', label: 'Tagesübersicht' });
       if (role === 'planer') {
         navItems.push({ id: 'planer-lieferschein', icon: '📥', label: 'LS-Import' });
@@ -111,6 +112,7 @@ const App = {
       'planer-orders':    'Aufträge',
       'planer-anfragen':  'Kundenanfragen',
       'planer-lieferschein': 'LS-Import',
+      'email-agent':      'Email-Agent',
       'admin-orders':     'Alle Aufträge',
       'admin-users':      'Benutzer',
       'admin-settings':   'Einstellungen',
@@ -130,6 +132,7 @@ const App = {
       case 'admin-settings':   AdminViews.renderSettings(); break;
       case 'change-password':  App.renderChangePassword(); break;
       case 'tagesuebersicht':  TagesuebersichtView.render(); break;
+      case 'email-agent':      EmailAgentView.renderInbox(); break;
     }
   },
 

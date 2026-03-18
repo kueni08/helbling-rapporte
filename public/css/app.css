@@ -707,3 +707,45 @@ thead th.sort-desc::after { content: ' ↓'; color: var(--accent); }
   from { transform: translateY(-12px); opacity: 0; }
   to   { transform: translateY(0);     opacity: 1; }
 }
+
+/* ── Email-Agent ─────────────────────────────────────────────────────────── */
+.email-list { display: flex; flex-direction: column; gap: 6px; }
+
+.email-row {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: box-shadow .15s, border-color .15s;
+}
+.email-row:hover { box-shadow: var(--shadow); border-color: var(--accent); }
+.email-row-unread { border-left: 3px solid var(--accent); }
+
+.email-row-meta { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 6px; }
+.email-prio { font-size: 14px; }
+
+.email-row-main { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+.email-from    { font-weight: 600; font-size: 13px; white-space: nowrap; }
+.email-subject { flex: 1; font-size: 13px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.email-date    { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+
+.email-summary    { font-size: 12px; color: var(--text-muted); margin-top: 5px; }
+.email-action-hint { font-size: 12px; color: #7a4800; margin-top: 3px; }
+
+.stat-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 12px; border-radius: 20px;
+  background: var(--card); border: 1px solid var(--border);
+  font-size: 13px;
+}
+.stat-chip.stat-danger { background: rgba(220,38,38,.08); border-color: rgba(220,38,38,.3); color: #b91c1c; }
+.stat-chip.stat-warn   { background: rgba(212,138,0,.08); border-color: rgba(212,138,0,.3); color: #7a4800; }
+.stat-chip.stat-ok     { background: rgba(24,160,88,.08); border-color: rgba(24,160,88,.3); color: #0d5c30; }
+
+.badge-blue   { background: #e8f0fe; color: #1a3a6b; }
+.badge-purple { background: #f3e8fe; color: #5b21b6; }
+.badge-teal   { background: #e8f5f0; color: #0a5c5c; }
+.badge-gray   { background: #f0f0f0; color: #555; }
+.badge-red    { background: #fee2e2; color: #991b1b; }
+.badge-green  { background: #dcfce7; color: #166534; }
