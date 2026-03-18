@@ -81,14 +81,14 @@ app.listen(PORT, () => {
   const { startPoller } = require('./lib/drive-poller');
   startPoller().catch(e => console.error('[Drive-Poller] Start fehlgeschlagen:', e.message));
 
-  // Email-Agent starten
+  // Email-Agent starten (EML-Watcher + optional Microsoft Graph API)
   const emailAgent = require('./lib/email-agent');
-  emailAgent.startPoller().catch(e => console.error('[Email-Agent] Start fehlgeschlagen:', e.message));
-  const emailOk = emailAgent.isConfigured();
-  console.log(`\n📧 Email-Agent: ${emailOk ? '✅ aktiv' : '❌ nicht aktiv (IMAP nicht konfiguriert)'}`);
-  if (emailOk) {
-    const cfg = emailAgent.getImapConfig();
-    console.log(`   → ${cfg.user}@${cfg.host}:${cfg.port} (Ordner: ${cfg.folder})`);
+  emailAgent.startAgent().catch(e => console.error('[Email-Agent] Start fehlgeschlagen:', e.message));
+  const graphOk = emailAgent.isGraphConfigured();
+  console.log(`\n📧 Email-Agent: ✅ EML-Watcher aktiv | Graph API: ${graphOk ? '✅ aktiv' : '⚠️  nicht konfiguriert'}`);
+  if (graphOk) {
+    const cfg = emailAgent.getGraphConfig();
+    console.log(`   → Postfach: ${cfg.mailbox}`);
   }
 
   // Drive-Status beim Start loggen

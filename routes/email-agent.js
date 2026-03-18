@@ -1,33 +1,51 @@
 /**
  * Email-Agent API Routes
- * GET/POST /api/email-agent/...
  */
 
 const router = require('express').Router();
 const path = require('path');
 const fs = require('fs');
+const multer = require('multer');
+const { v4: uuidv4 } = require('uuid');
 const { getDb } = require('../lib/database');
 const { requireLogin, requireRole } = require('../middleware/auth');
-const {
-  pollOnce, isConfigured, getImapConfig, startPoller, stopPoller, EMAIL_ATT_DIR, CLASSIFICATION_PROMPT
-} = require('../lib/email-agent');
+const agent = require('../lib/email-agent');
+
+// Multer für EML-Upload
+const emlStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    if (!fs.existsSync(agent.EMAIL_INBOX_DIR)) fs.mkdirSync(agent.EMAIL_INBOX_DIR, { recursive: true });
+    cb(null, agent.EMAIL_INBOX_DIR);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase() || '.eml';
+    cb(null, `${uuidv4()}${ext}`);
+  },
+});
+const emlUpload = multer({
+  storage: emlStorage,
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, ['.eml', '.msg'].includes(ext));
+  },
+});
 
 // ── GET /api/email-agent/status ──────────────────────────────────────────────
 router.get('/status', requireLogin, (req, res) => {
-  const cfg = getImapConfig();
   const db = getDb();
-  const total  = db.prepare("SELECT COUNT(*) AS n FROM email_inbox").get()?.n || 0;
-  const unread = db.prepare("SELECT COUNT(*) AS n FROM email_inbox WHERE status = 'neu'").get()?.n || 0;
-  const errors = db.prepare("SELECT COUNT(*) AS n FROM email_inbox WHERE status = 'fehler'").get()?.n || 0;
-  const high   = db.prepare("SELECT COUNT(*) AS n FROM email_inbox WHERE ai_prioritaet = 'hoch' AND status != 'ignoriert'").get()?.n || 0;
+  const total    = db.prepare("SELECT COUNT(*) AS n FROM email_inbox").get()?.n || 0;
+  const unread   = db.prepare("SELECT COUNT(*) AS n FROM email_inbox WHERE status = 'neu'").get()?.n || 0;
+  const errors   = db.prepare("SELECT COUNT(*) AS n FROM email_inbox WHERE status = 'fehler'").get()?.n || 0;
+  const high     = db.prepare("SELECT COUNT(*) AS n FROM email_inbox WHERE ai_prioritaet = 'hoch' AND status != 'ignoriert'").get()?.n || 0;
+  const today    = db.prepare("SELECT COUNT(*) AS n FROM email_inbox WHERE DATE(created_at) = DATE('now')").get()?.n || 0;
 
+  const graphCfg = agent.getGraphConfig();
   res.json({
-    configured: isConfigured(),
-    host: cfg.host || null,
-    user: cfg.user || null,
-    folder: cfg.folder,
-    interval: cfg.interval,
-    stats: { total, unread, errors, high }
+    graph_configured: agent.isGraphConfigured(),
+    graph_mailbox: graphCfg.mailbox || null,
+    graph_enabled: graphCfg.enabled,
+    stats: { total, unread, errors, high, today }
   });
 });
 
@@ -38,15 +56,8 @@ router.get('/inbox', requireRole('admin', 'planer'), (req, res) => {
 
   let where = '1=1';
   const params = [];
-
-  if (status) {
-    where += ' AND e.status = ?';
-    params.push(status);
-  }
-  if (kategorie) {
-    where += ' AND e.ai_kategorie = ?';
-    params.push(kategorie);
-  }
+  if (status)    { where += ' AND e.status = ?';       params.push(status); }
+  if (kategorie) { where += ' AND e.ai_kategorie = ?'; params.push(kategorie); }
 
   const rows = db.prepare(`
     SELECT
@@ -55,7 +66,7 @@ router.get('/inbox', requireRole('admin', 'planer'), (req, res) => {
       e.ai_prioritaet, e.has_attachments,
       e.linked_inquiry_id, e.linked_order_id,
       ci.vorname || ' ' || ci.nachname AS inquiry_name,
-      o.order_number
+      o.order_number, e.created_at
     FROM email_inbox e
     LEFT JOIN customer_inquiries ci ON ci.id = e.linked_inquiry_id
     LEFT JOIN orders o ON o.id = e.linked_order_id
@@ -67,7 +78,6 @@ router.get('/inbox', requireRole('admin', 'planer'), (req, res) => {
   `).all(...params, parseInt(limit), parseInt(offset));
 
   const total = db.prepare(`SELECT COUNT(*) AS n FROM email_inbox e WHERE ${where}`).get(...params)?.n || 0;
-
   res.json({ emails: rows, total });
 });
 
@@ -89,19 +99,94 @@ router.get('/inbox/:id', requireRole('admin', 'planer'), (req, res) => {
   const attachments = db.prepare('SELECT * FROM email_attachments WHERE email_id = ?').all(req.params.id);
   let aiDaten = null;
   try { aiDaten = JSON.parse(row.ai_daten || '{}'); } catch {}
-
   res.json({ ...row, ai_daten: aiDaten, attachments });
+});
+
+// ── POST /api/email-agent/upload ─────────────────────────────────────────────
+// EML-Datei(en) hochladen und sofort verarbeiten
+router.post('/upload', requireRole('admin', 'planer'), emlUpload.array('files', 20), async (req, res) => {
+  if (!req.files?.length) return res.status(400).json({ error: 'Keine .eml oder .msg Datei angegeben' });
+
+  const results = [];
+  for (const file of req.files) {
+    const filePath = path.join(agent.EMAIL_INBOX_DIR, file.filename);
+    try {
+      const result = await agent.processEmlFile(filePath, file.originalname);
+      // Verarbeitete Datei verschieben
+      const doneDir = path.join(require('path').dirname(agent.EMAIL_INBOX_DIR), 'email-processed');
+      if (!fs.existsSync(doneDir)) fs.mkdirSync(doneDir, { recursive: true });
+      fs.renameSync(filePath, path.join(doneDir, file.filename));
+      results.push({ file: file.originalname, ...result });
+    } catch (e) {
+      console.error('[Email-Agent] Upload-Fehler:', e.message);
+      results.push({ file: file.originalname, error: e.message });
+    }
+  }
+
+  const ok = results.filter(r => !r.error && !r.skipped).length;
+  const skipped = results.filter(r => r.skipped).length;
+  res.json({ ok: true, processed: ok, skipped, results });
+});
+
+// ── POST /api/email-agent/poll ───────────────────────────────────────────────
+// Manuell Graph API prüfen
+router.post('/poll', requireRole('admin', 'planer'), async (req, res) => {
+  if (!agent.isGraphConfigured()) {
+    return res.status(503).json({ error: 'Microsoft Graph API nicht konfiguriert oder nicht aktiviert' });
+  }
+  try {
+    await agent.graphPollOnce();
+    const db = getDb();
+    const stats = db.prepare("SELECT COUNT(*) AS n FROM email_inbox WHERE DATE(created_at) = DATE('now')").get();
+    res.json({ ok: true, today: stats?.n || 0 });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ── PUT /api/email-agent/inbox/:id/status ────────────────────────────────────
 router.put('/inbox/:id/status', requireRole('admin', 'planer'), (req, res) => {
   const { status } = req.body;
-  const valid = ['neu', 'verarbeitet', 'ignoriert'];
-  if (!valid.includes(status)) return res.status(400).json({ error: 'Ungültiger Status' });
-
-  const db = getDb();
-  db.prepare("UPDATE email_inbox SET status = ? WHERE id = ?").run(status, req.params.id);
+  if (!['neu', 'verarbeitet', 'ignoriert'].includes(status))
+    return res.status(400).json({ error: 'Ungültiger Status' });
+  getDb().prepare("UPDATE email_inbox SET status = ? WHERE id = ?").run(status, req.params.id);
   res.json({ ok: true });
+});
+
+// ── POST /api/email-agent/inbox/:id/reclassify ──────────────────────────────
+router.post('/inbox/:id/reclassify', requireRole('admin', 'planer'), async (req, res) => {
+  const db = getDb();
+  const email = db.prepare('SELECT * FROM email_inbox WHERE id = ?').get(req.params.id);
+  if (!email) return res.status(404).json({ error: 'Nicht gefunden' });
+
+  try {
+    const body = email.body_text || (email.body_html || '').replace(/<[^>]+>/g, ' ');
+    const aiResult = await agent.classifyEmail(
+      email.subject,
+      email.from_name ? `${email.from_name} <${email.from_addr}>` : email.from_addr,
+      email.received_at,
+      body
+    );
+
+    db.prepare(`
+      UPDATE email_inbox SET
+        ai_kategorie = ?, ai_zusammenfassung = ?, ai_daten = ?,
+        ai_aktion = ?, ai_prioritaet = ?,
+        status = 'verarbeitet', processed_at = datetime('now')
+      WHERE id = ?
+    `).run(
+      aiResult.kategorie || 'sonstiges',
+      aiResult.zusammenfassung || null,
+      JSON.stringify(aiResult.daten || {}),
+      aiResult.empfohlene_aktion || null,
+      aiResult.prioritaet || 'normal',
+      email.id
+    );
+
+    res.json({ ok: true, kategorie: aiResult.kategorie, prioritaet: aiResult.prioritaet });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ── POST /api/email-agent/inbox/:id/convert-inquiry ─────────────────────────
@@ -110,21 +195,17 @@ router.post('/inbox/:id/convert-inquiry', requireRole('admin', 'planer'), (req, 
   const email = db.prepare('SELECT * FROM email_inbox WHERE id = ?').get(req.params.id);
   if (!email) return res.status(404).json({ error: 'Nicht gefunden' });
 
-  // Manuell übergebene Felder haben Vorrang
   const b = req.body;
   let aiDaten = {};
   try { aiDaten = JSON.parse(email.ai_daten || '{}'); } catch {}
 
-  const token = require('uuid').v4().replace(/-/g, '');
-
+  const token = uuidv4().replace(/-/g, '');
   try {
     const result = db.prepare(`
       INSERT INTO customer_inquiries (
-        token, status,
-        firma, vorname, nachname, email, telefon,
-        strasse, plz, ort,
-        art_der_arbeit, anzahl_zylinder, anzahl_schluessel, anzahl_tueren,
-        bestehendes_system, wunschtermin, bemerkungen
+        token, status, firma, vorname, nachname, email, telefon,
+        strasse, plz, ort, art_der_arbeit, anzahl_zylinder, anzahl_schluessel,
+        anzahl_tueren, bestehendes_system, wunschtermin, bemerkungen
       ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `).run(
       token, 'neu',
@@ -157,8 +238,7 @@ router.post('/inbox/:id/convert-inquiry', requireRole('admin', 'planer'), (req, 
 // ── POST /api/email-agent/inbox/:id/link-order ──────────────────────────────
 router.post('/inbox/:id/link-order', requireRole('admin', 'planer'), (req, res) => {
   const { order_id } = req.body;
-  const db = getDb();
-  db.prepare("UPDATE email_inbox SET linked_order_id = ? WHERE id = ?").run(order_id || null, req.params.id);
+  getDb().prepare("UPDATE email_inbox SET linked_order_id = ? WHERE id = ?").run(order_id || null, req.params.id);
   res.json({ ok: true });
 });
 
@@ -167,128 +247,55 @@ router.get('/attachment/:filename', requireRole('admin', 'planer'), (req, res) =
   const db = getDb();
   const att = db.prepare('SELECT * FROM email_attachments WHERE filename = ?').get(req.params.filename);
   if (!att) return res.status(404).json({ error: 'Nicht gefunden' });
-
-  const filePath = path.join(EMAIL_ATT_DIR, att.filename);
+  const filePath = path.join(agent.EMAIL_ATT_DIR, att.filename);
   if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Datei nicht gefunden' });
-
   res.download(filePath, att.original_name);
 });
 
-// ── POST /api/email-agent/poll ───────────────────────────────────────────────
-router.post('/poll', requireRole('admin', 'planer'), async (req, res) => {
-  if (!isConfigured()) {
-    return res.status(503).json({ error: 'IMAP nicht konfiguriert' });
-  }
-  try {
-    await pollOnce();
-    const db = getDb();
-    const stats = db.prepare("SELECT COUNT(*) AS n FROM email_inbox WHERE DATE(created_at) = DATE('now')").get();
-    res.json({ ok: true, today: stats?.n || 0 });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// ── GET/POST /api/email-agent/settings ──────────────────────────────────────
+// ── GET /api/email-agent/settings ───────────────────────────────────────────
 router.get('/settings', requireRole('admin'), (req, res) => {
   const db = getDb();
   const get = k => db.prepare('SELECT value FROM settings WHERE key = ?').get(k)?.value ?? null;
   res.json({
-    imap_host:          get('imap_host'),
-    imap_port:          get('imap_port') || '993',
-    imap_secure:        get('imap_secure') ?? 'true',
-    imap_user:          get('imap_user'),
-    imap_pass:          get('imap_pass') ? '••••••••' : null,
-    imap_folder:        get('imap_folder') || 'INBOX',
-    imap_poll_interval: get('imap_poll_interval') || '300',
-    email_agent_prompt: get('email_agent_prompt') || CLASSIFICATION_PROMPT,
+    graph_tenant_id:     get('graph_tenant_id'),
+    graph_client_id:     get('graph_client_id'),
+    graph_client_secret: get('graph_client_secret') ? '••••••••' : null,
+    graph_mailbox:       get('graph_mailbox'),
+    graph_folder:        get('graph_folder') || 'Inbox',
+    graph_poll_interval: get('graph_poll_interval') || '300',
+    graph_enabled:       get('graph_enabled') || 'false',
+    email_agent_prompt:  get('email_agent_prompt') || agent.DEFAULT_CLASSIFICATION_PROMPT,
+    inbox_dir:           agent.EMAIL_INBOX_DIR,
   });
 });
 
+// ── POST /api/email-agent/settings ──────────────────────────────────────────
 router.post('/settings', requireRole('admin'), (req, res) => {
   const db = getDb();
   const set = (k, v) => {
-    if (v !== undefined) {
-      db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(k, v);
-    }
+    if (v !== undefined && v !== null)
+      db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(k, String(v));
   };
 
-  const { imap_host, imap_port, imap_secure, imap_user, imap_pass, imap_folder, imap_poll_interval, email_agent_prompt } = req.body;
+  const { graph_tenant_id, graph_client_id, graph_client_secret,
+          graph_mailbox, graph_folder, graph_poll_interval,
+          graph_enabled, email_agent_prompt } = req.body;
 
-  set('imap_host',          imap_host);
-  set('imap_port',          imap_port);
-  set('imap_secure',        imap_secure);
-  set('imap_user',          imap_user);
-  if (imap_pass && imap_pass !== '••••••••') set('imap_pass', imap_pass);
-  set('imap_folder',        imap_folder);
-  set('imap_poll_interval', imap_poll_interval);
-  if (email_agent_prompt)   set('email_agent_prompt', email_agent_prompt);
+  set('graph_tenant_id',     graph_tenant_id);
+  set('graph_client_id',     graph_client_id);
+  if (graph_client_secret && graph_client_secret !== '••••••••')
+    set('graph_client_secret', graph_client_secret);
+  set('graph_mailbox',       graph_mailbox);
+  set('graph_folder',        graph_folder || 'Inbox');
+  set('graph_poll_interval', graph_poll_interval || '300');
+  set('graph_enabled',       graph_enabled ? 'true' : 'false');
+  if (email_agent_prompt) set('email_agent_prompt', email_agent_prompt);
 
-  // Poller neu starten damit neue Einstellungen gelten
-  stopPoller();
-  startPoller().catch(e => console.error('[Email-Agent] Neustart Fehler:', e.message));
-
-  // Letzte UID zurücksetzen damit alte Mails neu eingelesen werden können
-  if (req.body.reset_uid) {
-    db.prepare("DELETE FROM settings WHERE key = 'imap_last_uid'").run();
-  }
+  // Poller mit neuen Einstellungen neu starten
+  agent.stopAgent();
+  agent.startAgent().catch(e => console.error('[Email-Agent] Neustart Fehler:', e.message));
 
   res.json({ ok: true });
-});
-
-// ── POST /api/email-agent/inbox/:id/reclassify ──────────────────────────────
-router.post('/inbox/:id/reclassify', requireRole('admin', 'planer'), async (req, res) => {
-  const db = getDb();
-  const email = db.prepare('SELECT * FROM email_inbox WHERE id = ?').get(req.params.id);
-  if (!email) return res.status(404).json({ error: 'Nicht gefunden' });
-
-  try {
-    const { classifyEmail: classify } = require('../lib/email-agent');
-    // Re-import the function inline since it's not exported
-    const Anthropic = require('@anthropic-ai/sdk');
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) return res.status(503).json({ error: 'ANTHROPIC_API_KEY fehlt' });
-
-    const { CLASSIFICATION_PROMPT: prompt } = require('../lib/email-agent');
-    const client = new Anthropic({ apiKey });
-    const customPrompt = db.prepare("SELECT value FROM settings WHERE key = 'email_agent_prompt'").get()?.value;
-    const promptTemplate = customPrompt || prompt;
-
-    const body = email.body_text || email.body_html?.replace(/<[^>]+>/g, ' ') || '';
-    const filled = promptTemplate
-      .replace('{SUBJECT}', email.subject || '')
-      .replace('{FROM}', `${email.from_name} <${email.from_addr}>`)
-      .replace('{DATE}', email.received_at || '')
-      .replace('{BODY}', body.substring(0, 6000));
-
-    const message = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1024,
-      messages: [{ role: 'user', content: filled }],
-    });
-
-    const raw = message.content[0].text.trim().replace(/^```json?\s*/i, '').replace(/\s*```$/, '').trim();
-    const aiResult = JSON.parse(raw);
-
-    db.prepare(`
-      UPDATE email_inbox SET
-        ai_kategorie = ?, ai_zusammenfassung = ?, ai_daten = ?,
-        ai_aktion = ?, ai_prioritaet = ?,
-        status = 'verarbeitet', processed_at = datetime('now')
-      WHERE id = ?
-    `).run(
-      aiResult.kategorie || 'sonstiges',
-      aiResult.zusammenfassung || null,
-      JSON.stringify(aiResult.daten || {}),
-      aiResult.empfohlene_aktion || null,
-      aiResult.prioritaet || 'normal',
-      email.id
-    );
-
-    res.json({ ok: true, kategorie: aiResult.kategorie, prioritaet: aiResult.prioritaet });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
 });
 
 // ── DELETE /api/email-agent/inbox/:id ───────────────────────────────────────
@@ -296,7 +303,7 @@ router.delete('/inbox/:id', requireRole('admin'), (req, res) => {
   const db = getDb();
   const atts = db.prepare('SELECT filename FROM email_attachments WHERE email_id = ?').all(req.params.id);
   atts.forEach(a => {
-    const fp = path.join(EMAIL_ATT_DIR, a.filename);
+    const fp = path.join(agent.EMAIL_ATT_DIR, a.filename);
     if (fs.existsSync(fp)) try { fs.unlinkSync(fp); } catch {}
   });
   db.prepare('DELETE FROM email_inbox WHERE id = ?').run(req.params.id);
