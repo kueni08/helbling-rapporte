@@ -418,11 +418,11 @@ const MonteurViews = {
             </div>
             <div class="field"></div>
             <div class="field">
-              <label>Arbeitszeit exkl. Anfahrt \u2013 von</label>
+              <label>Arbeitsbeginn</label>
               <input type="time" id="f-work-from" value="${UI.esc(order.work_time_from||'')}">
             </div>
             <div class="field">
-              <label>Arbeitszeit exkl. Anfahrt \u2013 bis</label>
+              <label>Arbeitsende</label>
               <input type="time" id="f-work-to" value="${UI.esc(order.work_time_to||'')}">
             </div>
             <div class="field">
@@ -432,22 +432,6 @@ const MonteurViews = {
             <div class="field"></div>
           </div>
 
-          <!-- Fahrzeit & Kilometer – intern, erscheint nicht auf Rapport -->
-          <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
-            <p class="text-sm text-muted mb-2" style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;font-weight:600">
-              Fahrzeit & Kilometer (intern \u2013 nicht auf Rapport)
-            </p>
-            <div class="form-grid">
-              <div class="field">
-                <label>Fahrzeit / Transferzeit (Std.)</label>
-                <input type="number" id="f-travel-time" value="${UI.esc(String(order.travel_time||''))}" min="0" step="0.25" placeholder="z.B. 0.5">
-              </div>
-              <div class="field">
-                <label>Kilometer</label>
-                <input type="number" id="f-travel-km" value="${UI.esc(String(order.travel_km||''))}" min="0" step="1" placeholder="z.B. 45">
-              </div>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -560,16 +544,6 @@ const MonteurViews = {
         const _dateEl = document.getElementById('f-work-date');
         if (_dateEl && !_dateEl.value) _dateEl.value = new Date(_startIso).toISOString().split('T')[0];
 
-        // Auto-calculate transfer time from previous order end (Fahrzeit)
-        const _lastEnd = localStorage.getItem('last_order_end_time');
-        const _lastId  = localStorage.getItem('last_order_id');
-        if (_lastEnd && _lastId && String(_lastId) !== String(orderId)) {
-          const _mins = (new Date(_startIso) - new Date(_lastEnd)) / 60000;
-          if (_mins > 0 && _mins < 480) {
-            const _travelEl = document.getElementById('f-travel-time');
-            if (_travelEl && !_travelEl.value) _travelEl.value = Math.round(_mins / 15) * 0.25;
-          }
-        }
       }
     }
   },
@@ -749,18 +723,6 @@ const MonteurViews = {
   startTimer(orderId) {
     const key = MonteurViews._timerKey(orderId);
     const now = new Date();
-
-    // Auto-calculate transfer time from last order's end
-    const lastEnd = localStorage.getItem('last_order_end_time');
-    const lastOrderId = localStorage.getItem('last_order_id');
-    if (lastEnd && lastOrderId && String(lastOrderId) !== String(orderId)) {
-      const transferMinutes = (now - new Date(lastEnd)) / 60000;
-      if (transferMinutes > 0 && transferMinutes < 480) { // max 8h reasonable
-        const transferHours = Math.round(transferMinutes / 15) * 0.25; // round to 15min
-        const travelEl = document.getElementById('f-travel-time');
-        if (travelEl && !travelEl.value) travelEl.value = transferHours;
-      }
-    }
 
     // Always update start time (overwrite if already running)
     clearInterval(MonteurViews._timerInterval);
@@ -942,8 +904,8 @@ const MonteurViews = {
       work_date:        document.getElementById('f-work-date')?.value || null,
       work_time_from:   document.getElementById('f-work-from')?.value || null,
       work_time_to:     document.getElementById('f-work-to')?.value || null,
-      travel_time:      parseFloat(document.getElementById('f-travel-time')?.value) || null,
-      travel_km:        parseInt(document.getElementById('f-travel-km')?.value) || null,
+      travel_time:      null,
+      travel_km:        null,
       technician_name:  document.getElementById('f-technician')?.value.trim() || null,
       technician_block: document.getElementById('f-block')?.value.trim() || null,
       signature_data:   signatureData,
@@ -961,13 +923,14 @@ const MonteurViews = {
   },
 
   async closeOrder(orderId) {
+    // Step 1: Checklist
     const answers = await new Promise(resolve => {
       window._clResolve = (val) => { window._clResolve = () => {}; resolve(val); };
       UI.modal('Auftrag abschliessen – Checkliste',
         `<div style="display:flex;flex-direction:column;gap:16px;padding:8px 0">
           <label style="display:flex;align-items:center;gap:12px;font-size:15px;cursor:pointer">
             <input type="checkbox" id="cl-material" style="width:20px;height:20px">
-            Zusätzliches Material (nicht auf LS) ausgeführt?
+            Zusätzliches Material aufgeführt? (nicht auf LS)
           </label>
           <label style="display:flex;align-items:center;gap:12px;font-size:15px;cursor:pointer">
             <input type="checkbox" id="cl-foto" style="width:20px;height:20px">
@@ -979,7 +942,7 @@ const MonteurViews = {
           </label>
         </div>`,
         `<button class="btn btn-ghost" onclick="window._clResolve(null);UI.closeModal()">Abbrechen</button>
-         <button class="btn btn-success" style="background:#2d7a2d" onclick="window._clResolve({material:document.getElementById('cl-material').checked,foto:document.getElementById('cl-foto').checked,done:document.getElementById('cl-done').checked});UI.closeModal()">Auftrag abschliessen</button>`
+         <button class="btn btn-success" style="background:#2d7a2d" onclick="window._clResolve({material:document.getElementById('cl-material').checked,foto:document.getElementById('cl-foto').checked,done:document.getElementById('cl-done').checked});UI.closeModal()">Weiter</button>`
       );
       const mc = document.getElementById('modal-container');
       const obs = new MutationObserver(() => { if (!mc.innerHTML.trim()) { obs.disconnect(); window._clResolve(null); } });
@@ -992,6 +955,34 @@ const MonteurViews = {
     }
     if (answers.material && !MonteurViews.getExtraRows().length) {
       UI.toast('Hinweis: Bitte zusätzliches Material unter "Zusätzliche Positionen" eintragen.', 'warning');
+    }
+
+    // Step 2: Fahrzeit & Kilometer
+    const travelData = await new Promise(resolve => {
+      window._tvResolve = (val) => { window._tvResolve = () => {}; resolve(val); };
+      UI.modal('Fahrzeit & Kilometer',
+        `<div style="display:flex;flex-direction:column;gap:16px;padding:8px 0">
+          <div class="field">
+            <label style="font-weight:600;display:block;margin-bottom:6px">Kilometer Anfahrt</label>
+            <input type="number" id="tv-km" min="0" step="1" placeholder="z.B. 45"
+              style="width:100%;padding:8px 12px;border:1px solid #ccc;border-radius:6px;font-size:15px">
+          </div>
+          <div class="field">
+            <label style="font-weight:600;display:block;margin-bottom:6px">Fahrzeit in h</label>
+            <input type="number" id="tv-time" min="0" step="0.25" placeholder="z.B. 0.5"
+              style="width:100%;padding:8px 12px;border:1px solid #ccc;border-radius:6px;font-size:15px">
+          </div>
+        </div>`,
+        `<button class="btn btn-ghost" onclick="window._tvResolve(null);UI.closeModal()">Abbrechen</button>
+         <button class="btn btn-success" style="background:#2d7a2d" onclick="window._tvResolve({km:document.getElementById('tv-km').value,time:document.getElementById('tv-time').value});UI.closeModal()">Auftrag abschliessen</button>`
+      );
+      const mc = document.getElementById('modal-container');
+      const obs = new MutationObserver(() => { if (!mc.innerHTML.trim()) { obs.disconnect(); window._tvResolve(null); } });
+      obs.observe(mc, { childList: true });
+    });
+
+    if (travelData === null) {
+      UI.toast('Abgeschlossen – Fahrzeit nicht eingetragen.', 'warning');
     }
 
     const now = new Date();
@@ -1036,8 +1027,8 @@ const MonteurViews = {
       work_date:        document.getElementById('f-work-date')?.value || null,
       work_time_from:   document.getElementById('f-work-from')?.value || null,
       work_time_to:     MonteurViews._fmtTime(now),
-      travel_time:      parseFloat(document.getElementById('f-travel-time')?.value) || null,
-      travel_km:        parseInt(document.getElementById('f-travel-km')?.value) || null,
+      travel_time:      travelData ? (parseFloat(travelData.time) || null) : null,
+      travel_km:        travelData ? (parseInt(travelData.km) || null) : null,
       technician_name:  document.getElementById('f-technician')?.value.trim() || null,
       technician_block: document.getElementById('f-block')?.value.trim() || null,
       signature_data:   signatureData,
