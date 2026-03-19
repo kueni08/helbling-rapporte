@@ -16,11 +16,12 @@ function genOrderNumber(db) {
   return `${year}-${String(seq).padStart(4, '0')}`;
 }
 
-// Strip HTML tags from address fields (e.g. <br> → ", ")
+// Strip HTML tags from address fields (e.g. <br> → ", ") and normalize newlines
 function stripHtml(s) {
   return String(s || '')
     .replace(/<br\s*\/?>/gi, ', ')
     .replace(/<[^>]+>/g, '')
+    .replace(/\r\n|\r|\n/g, ', ')
     .replace(/,\s*,/g, ', ')
     .replace(/,\s*$/, '')
     .replace(/^\s*,\s*/, '')
