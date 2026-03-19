@@ -392,7 +392,7 @@ router.put('/:id', requireLogin, (req, res) => {
         installation_address = ?, orderer = ?, on_site_contact = ?, on_site_contact_phone = ?,
         arrival_time = ?, planned_date = ?, latest_date = ?,
         work_types = ?, notes_planer = ?, assigned_to = ?, sort_order = ?,
-        project_number = ?,
+        project_number = ?, ls_number = ?,
         executed_work = ?, items_table = ?, additional_material = ?,
         extra_material = ?, extra_aufwand = ?, extra_argumentation = ?,
         notes_monteur = ?, rings_data = ?, keys_data = ?,
@@ -419,6 +419,7 @@ router.put('/:id', requireLogin, (req, res) => {
       b.assigned_to ?? order.assigned_to,
       b.sort_order ?? order.sort_order,
       b.project_number !== undefined ? b.project_number || null : order.project_number,
+      b.ls_number !== undefined ? b.ls_number || null : order.ls_number,
       JSON.stringify(b.executed_work ?? parseJSON(order.executed_work, [])),
       JSON.stringify(b.items_table ?? parseJSON(order.items_table, [])),
       JSON.stringify(b.additional_material ?? parseJSON(order.additional_material, [])),
@@ -608,17 +609,14 @@ router.post('/import', requireRole('admin', 'planer'), upload.single('file'), (r
 
         orders.forEach(orderData => {
           const orderNumber = genOrderNumber(db);
-          const notesParts = [];
-          if (orderData.source_id) notesParts.push(`Import-Ref: ${orderData.source_id}`);
-          if (orderData.abteilung) notesParts.push(`Abteilung: ${orderData.abteilung}`);
 
           const result = db.prepare(`
             INSERT INTO orders (
               order_number, status, customer_name, customer_address,
               installation_address, orderer, on_site_contact,
               planned_date, notes_planer, items_table, created_by, work_types,
-              project_number
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+              project_number, ls_number
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
           `).run(
             orderNumber, 'geplant',
             orderData.customer_name,
@@ -627,11 +625,12 @@ router.post('/import', requireRole('admin', 'planer'), upload.single('file'), (r
             orderData.orderer || null,
             orderData.on_site_contact || null,
             orderData.planned_date,
-            notesParts.join('\n') || null,
+            null,
             JSON.stringify(orderData.items),
             req.session.userId,
             '[]',
-            orderData.project_number
+            orderData.project_number,
+            orderData.source_id || null
           );
           inserted.push({ id: result.lastInsertRowid, order_number: orderNumber, project_number: orderData.project_number, customer_name: orderData.customer_name, items: orderData.items.length });
         });

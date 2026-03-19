@@ -255,7 +255,7 @@ const MonteurViews = {
         </div>
         <div class="section-body">
           <div class="field mb-3">
-            <label>Ausgef\u00fchrte Arbeiten</label>
+            <label>Ausgef\u00fchrte Arbeiten <span class="req">*</span></label>
             ${UI.multiCheck('ausgefuehrte_arbeiten', opts.ausgefuehrte_arbeiten || [], order.executed_work || [])}
           </div>
 
@@ -854,6 +854,9 @@ const MonteurViews = {
   },
 
   async saveWork(orderId) {
+    if (!UI.getMultiCheck('ausgefuehrte_arbeiten').length) {
+      UI.toast('Bitte mindestens eine ausgef\u00fchrte Arbeit ausw\u00e4hlen', 'error'); return;
+    }
     // Auto-set end time to now
     const now = new Date();
     const toEl = document.getElementById('f-work-to');
@@ -952,6 +955,9 @@ const MonteurViews = {
     if (!answers || !answers.done) {
       if (answers !== null) UI.toast('Auftrag nicht abgeschlossen – Status unverändert.', 'warning');
       return;
+    }
+    if (!UI.getMultiCheck('ausgefuehrte_arbeiten').length) {
+      UI.toast('Bitte mindestens eine ausgef\u00fchrte Arbeit ausw\u00e4hlen', 'error'); return;
     }
     if (answers.material && !MonteurViews.getExtraRows().length) {
       UI.toast('Hinweis: Bitte zusätzliches Material unter "Zusätzliche Positionen" eintragen.', 'warning');
