@@ -4,7 +4,7 @@ const fs = require('fs');
 const { getDb } = require('../lib/database');
 const { requireLogin } = require('../middleware/auth');
 const drive = require('../lib/drive');
-const { getSmtpConfig, getTransporter, buildHtmlReport } = require('../lib/mailer');
+const { getSmtpConfig, getTransporter, buildHtmlReport, generatePdf } = require('../lib/mailer');
 
 const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(__dirname, '..', 'uploads');
 
@@ -33,6 +33,7 @@ router.post('/send', requireLogin, async (req, res) => {
       executed_work:       JSON.parse(order.executed_work || '[]'),
       items_table:         JSON.parse(order.items_table || '[]'),
       additional_material: JSON.parse(order.additional_material || '[]'),
+      extra_material:      JSON.parse(order.extra_material || '[]'),
       rings_data:          JSON.parse(order.rings_data || '{}'),
       keys_data:           JSON.parse(order.keys_data || '{}'),
     };
@@ -55,13 +56,26 @@ router.post('/send', requireLogin, async (req, res) => {
 
     const htmlReport = buildHtmlReport(parsedOrder, attachments, photos);
 
+    // Generate PDF
+    let pdfAttachment = null;
+    try {
+      const pdfBuffer = await generatePdf(htmlReport);
+      pdfAttachment = {
+        filename: `Installationsrapport_${order.order_number || orderId}.pdf`,
+        content:  pdfBuffer,
+        contentType: 'application/pdf',
+      };
+    } catch (pdfErr) {
+      console.warn('[Email] PDF-Generierung fehlgeschlagen:', pdfErr.message);
+    }
+
     const transporter = getTransporter();
     await transporter.sendMail({
       from:    `"Helbling Rapporte" <${smtpCfg.from || smtpCfg.user}>`,
       to,
-      subject: subject || `Montagerapport ${order.order_number} – ${order.customer_name || ''}`,
+      subject: subject || `Installationsrapport ${order.order_number} – ${order.customer_name || ''}`,
       html:    htmlReport,
-      attachments: mailAttachments
+      attachments: [...mailAttachments, ...(pdfAttachment ? [pdfAttachment] : [])],
     });
 
     // Rapport als HTML in Drive speichern
@@ -83,6 +97,30 @@ router.post('/send', requireLogin, async (req, res) => {
     console.error('E-Mail Fehler:', e);
     res.status(500).json({ error: `E-Mail konnte nicht gesendet werden: ${e.message}` });
   }
+});
+
+// GET /api/email/rapport/:orderId – returns rapport HTML for print/preview
+router.get('/rapport/:orderId', requireLogin, (req, res) => {
+  const db = getDb();
+  const orderId = parseInt(req.params.orderId);
+  const order = db.prepare(`SELECT o.*, c.name AS cust_name FROM orders o LEFT JOIN customers c ON c.id = o.customer_id WHERE o.id = ?`).get(orderId);
+  if (!order) return res.status(404).send('Auftrag nicht gefunden');
+
+  const parsedOrder = {
+    ...order,
+    work_types:          JSON.parse(order.work_types || '[]'),
+    executed_work:       JSON.parse(order.executed_work || '[]'),
+    items_table:         JSON.parse(order.items_table || '[]'),
+    additional_material: JSON.parse(order.additional_material || '[]'),
+    extra_material:      JSON.parse(order.extra_material || '[]'),
+    rings_data:          JSON.parse(order.rings_data || '{}'),
+    keys_data:           JSON.parse(order.keys_data || '{}'),
+  };
+  const attachments = db.prepare('SELECT * FROM order_attachments WHERE order_id = ?').all(orderId);
+  const photos      = db.prepare('SELECT * FROM order_photos      WHERE order_id = ?').all(orderId);
+  const html = buildHtmlReport(parsedOrder, attachments, photos);
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(html);
 });
 
 // GET /api/email/config-status

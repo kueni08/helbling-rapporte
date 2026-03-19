@@ -254,6 +254,21 @@ const PlanerViews = {
     PlanerViews.applyFilter();
   },
 
+  // ── Print Rapport (single order) ─────────────────────────────────────────
+  async printRapport(orderId) {
+    try {
+      const response = await fetch(`/api/email/rapport/${orderId}`, { credentials: 'include' });
+      if (!response.ok) throw new Error('Fehler beim Laden des Rapports');
+      const html = await response.text();
+      const w = window.open('', '_blank');
+      w.document.write(html);
+      w.document.close();
+      setTimeout(() => w.print(), 500);
+    } catch(e) {
+      UI.toast('Drucken fehlgeschlagen: ' + e.message, 'error');
+    }
+  },
+
   // ── Print Orders ─────────────────────────────────────────────────────────
   printOrders() {
     const orders = PlanerViews._filteredOrders.length ? PlanerViews._filteredOrders : PlanerViews._allOrders;
@@ -624,7 +639,7 @@ const PlanerViews = {
             <span class="text-muted text-sm" style="white-space:nowrap">${idx + 1} / ${filteredOrders.length}</span>
             <button class="btn btn-ghost btn-sm" ${!nextOrder ? 'disabled' : ''} onclick="PlanerViews.renderOrderDetail(${nextOrder?.id})">Nächster →</button>
           </div>` : ''}
-          <button class="btn btn-ghost" onclick="window.print()">🖨 Drucken</button>
+          <button class="btn btn-ghost" onclick="PlanerViews.printRapport(${order.id})">🖨 Drucken</button>
           <button class="btn btn-ghost" onclick="PlanerViews.openEmailModal(${order.id})">✉️ Per E-Mail</button>
           <button class="btn btn-ghost" onclick="PlanerViews.sendOrderToCustomer(${order.id})">📧 An Kunden senden</button>
           <button class="btn btn-primary" onclick="PlanerViews.renderOrderForm(${order.id})">Bearbeiten</button>
