@@ -411,6 +411,10 @@ const PlanerViews = {
               <input type="text" id="f-project-number" value="${UI.esc(order?.project_number||'')}" placeholder="z.B. PR26-001">
             </div>
             <div class="field">
+              <label>Lieferschein-Nr.</label>
+              <input type="text" id="f-ls-number" value="${UI.esc(order?.ls_number||'')}" placeholder="z.B. LIEF-2026-0001">
+            </div>
+            <div class="field">
               <label>Kommunizierte Ankunftszeit (von – bis)</label>
               <input type="text" id="f-arrival-time" value="${UI.esc(order?.arrival_time||'')}" placeholder="z.B. 08:00 – 10:00">
             </div>
@@ -593,6 +597,7 @@ const PlanerViews = {
       status:                document.getElementById('f-status').value,
       items_table:           PlanerViews.getPlanerItemRows(),
       project_number:        document.getElementById('f-project-number')?.value.trim() || null,
+      ls_number:             document.getElementById('f-ls-number')?.value.trim() || null,
     };
 
     if (!data.customer_name) { UI.toast('Kundenname erforderlich','error'); return; }
@@ -652,6 +657,7 @@ const PlanerViews = {
           ${[
             ['Auftragsnummer', fv(order.order_number)],
             ...(order.project_number ? [['Projektnummer', fv(order.project_number)]] : []),
+            ...(order.ls_number ? [['Lieferschein-Nr.', fv(order.ls_number)]] : []),
             ['Kunde',          fv(order.customer_name || order.cust_name)],
             ['Kundenadresse',  fv(order.customer_address || order.cust_address)],
             ['Besteller',      fv(order.orderer)],
