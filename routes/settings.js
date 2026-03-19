@@ -314,12 +314,16 @@ router.post('/drive-retry', requireRole('admin'), async (req, res) => {
   const atts   = db.prepare('SELECT * FROM order_attachments WHERE google_drive_file_id IS NULL').all();
   const photos = db.prepare('SELECT * FROM order_photos       WHERE google_drive_file_id IS NULL').all();
 
-  // Use a Set of attachment IDs for O(1) table-name lookup instead of O(n) .includes()
-  const attIds = new Set(atts.map(r => r.id));
   let ok = 0, fail = 0;
 
-  for (const rec of [...atts, ...photos]) {
-    const table = attIds.has(rec.id) ? 'order_attachments' : 'order_photos';
+  // Tag each record with its table to avoid ID collisions between the two tables
+  const all = [
+    ...atts.map(r => ({ ...r, _table: 'order_attachments' })),
+    ...photos.map(r => ({ ...r, _table: 'order_photos' })),
+  ];
+
+  for (const rec of all) {
+    const table = rec._table;
     const candidates = [];
     if (rec.dir_name) candidates.push(path.join(UPLOADS_DIR, rec.dir_name, rec.filename));
     candidates.push(path.join(UPLOADS_DIR, String(rec.order_id), rec.filename));

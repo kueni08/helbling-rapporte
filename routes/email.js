@@ -85,7 +85,12 @@ router.post('/send', requireLogin, async (req, res) => {
       const dirName = (() => {
         const att = db.prepare('SELECT dir_name FROM order_attachments WHERE order_id = ? AND dir_name IS NOT NULL LIMIT 1').get(orderId);
         const ph  = db.prepare('SELECT dir_name FROM order_photos    WHERE order_id = ? AND dir_name IS NOT NULL LIMIT 1').get(orderId);
-        return (att || ph)?.dir_name || null;
+        if ((att || ph)?.dir_name) return (att || ph).dir_name;
+        // Fallback: dirName aus Auftragsdaten berechnen (gleiche Logik wie Multer-Destination)
+        const rawDate = order.work_date || order.planned_date || '';
+        const dateStr = rawDate.replace(/\//g, '-').split('T')[0] || 'kein-datum';
+        const safeNum = (order.order_number || String(orderId)).replace(/[^a-zA-Z0-9._-]/g, '-');
+        return `${safeNum}_${dateStr}`;
       })();
       drive.uploadFile(tmpFile, `Rapport_${order.order_number || orderId}.html`, 'text/html', dirName)
         .then(() => { try { fs.unlinkSync(tmpFile); } catch {} })
