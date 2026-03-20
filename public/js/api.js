@@ -70,7 +70,10 @@ const API = {
   // Email
   sendEmail:           (d)   => API.post('/api/email/send', d),
   emailStatus:         ()    => API.get('/api/email/config-status'),
-  uploadRapportToDrive:(id)  => API.post(`/api/email/rapport/${id}/drive`),
+
+  // Files
+  downloadZipUrl:      (id)  => `/api/files/${id}/zip`,
+  cleanupFiles:        (days) => API.delete(`/api/files/cleanup?days=${days||60}`),
 
   // Settings – Article Import & SMTP
   importArticles: (form) => API.upload('/api/settings/articles/import', form),

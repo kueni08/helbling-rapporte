@@ -106,13 +106,14 @@ const AdminViews = {
         <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('lieferschein')">📥 LS-Import</button>
         <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('drive')">☁️ Drive</button>
         <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('prompt')">🤖 KI-Prompt</button>
+        <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('cleanup')">🗑️ Dateien</button>
       </div>
       <div id="settings-content"></div>`;
     await AdminViews.showSettingsTab('options');
   },
 
   async showSettingsTab(tab) {
-    const tabs = ['options','articles','customers','email','lieferschein','drive','prompt'];
+    const tabs = ['options','articles','customers','email','lieferschein','drive','prompt','cleanup'];
     document.querySelectorAll('#settings-tabs .btn').forEach(b => b.classList.remove('btn-primary'));
     document.querySelectorAll('#settings-tabs .btn')[tabs.indexOf(tab)]?.classList.add('btn-primary');
     if (tab === 'options')      await AdminViews.renderOptions();
@@ -122,6 +123,7 @@ const AdminViews = {
     if (tab === 'lieferschein') await AdminViews.renderLieferscheinImport();
     if (tab === 'drive')        await AdminViews.renderDriveStatus();
     if (tab === 'prompt')       await AdminViews.renderPromptAssistant();
+    if (tab === 'cleanup')      await AdminViews.renderFileCleanup();
   },
 
   async renderOptions() {
@@ -782,6 +784,41 @@ const AdminViews = {
       await API.saveExtractionPrompt({ prompt });
       await AdminViews.renderPromptAssistant();
       UI.toast('Standard-Prompt wiederhergestellt', 'success');
+    } catch(e) { UI.toast(e.message, 'error'); }
+  },
+
+  async renderFileCleanup() {
+    const el = document.getElementById('settings-content');
+    el.innerHTML = `
+      <div class="card">
+        <div class="card-title">🗑️ Dateien bereinigen</div>
+        <p class="text-muted text-sm mb-3">
+          Löscht <strong>Fotos und Anhänge</strong> die älter als die gewählte Anzahl Tage sind.
+          Die <strong>Auftragsdaten bleiben vollständig erhalten</strong>.
+        </p>
+        <div class="flex gap-2 align-items-center mb-3">
+          <label>Dateien älter als</label>
+          <input type="number" id="cleanup-days" value="60" min="1" max="3650" style="width:80px">
+          <label>Tage löschen</label>
+        </div>
+        <button class="btn btn-danger" onclick="AdminViews.runFileCleanup()">🗑️ Jetzt bereinigen</button>
+      </div>`;
+  },
+
+  async runFileCleanup() {
+    const days = parseInt(document.getElementById('cleanup-days')?.value) || 60;
+    if (!await new Promise(resolve => {
+      UI.modal('Dateien löschen',
+        `<p>Alle Fotos und Anhänge, die älter als <strong>${days} Tage</strong> sind, werden dauerhaft gelöscht.</p>
+         <p class="text-muted text-sm mt-2">Auftragsdaten bleiben erhalten.</p>`,
+        `<button class="btn btn-ghost" onclick="UI.closeModal();window._confirmResolve(false)">Abbrechen</button>
+         <button class="btn btn-danger" onclick="UI.closeModal();window._confirmResolve(true)">Unwiderruflich löschen</button>`
+      );
+      window._confirmResolve = resolve;
+    })) return;
+    try {
+      const res = await API.cleanupFiles(days);
+      UI.toast(`${res.deleted} Datei(en) gelöscht (älter als ${days} Tage)`, 'success');
     } catch(e) { UI.toast(e.message, 'error'); }
   },
 };

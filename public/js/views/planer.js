@@ -734,7 +734,7 @@ const PlanerViews = {
           </div>` : ''}
           <button class="btn btn-ghost" onclick="PlanerViews.printRapport(${order.id})">🖨 Drucken</button>
           <button class="btn btn-ghost" onclick="PlanerViews.openEmailModal(${order.id})">✉️ Per E-Mail</button>
-          <button class="btn btn-ghost" onclick="PlanerViews.uploadRapportToDrive(${order.id})" title="Rapport als HTML in Google Drive speichern">📤 Zu Drive</button>
+          <a class="btn btn-ghost" href="/api/files/${order.id}/zip" download>⬇️ Download ZIP</a>
           <button class="btn btn-ghost" onclick="PlanerViews.sendOrderToCustomer(${order.id})">📧 An Kunden senden</button>
           <button class="btn btn-primary" onclick="PlanerViews.renderOrderForm(${order.id})">Bearbeiten</button>
         </div>
