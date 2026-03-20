@@ -859,6 +859,7 @@ const PlanerViews = {
           </div>` : ''}
           <button class="btn btn-ghost" onclick="PlanerViews.printRapport(${order.id})">🖨 Drucken</button>
           <button class="btn btn-ghost" onclick="PlanerViews.openEmailModal(${order.id})">✉️ Per E-Mail</button>
+          <a class="btn btn-ghost" href="/api/files/${order.id}/zip" download>⬇️ Download ZIP</a>
           <button class="btn btn-ghost" onclick="PlanerViews.sendOrderToCustomer(${order.id})">📧 An Kunden senden</button>
           <button class="btn btn-primary" onclick="PlanerViews.renderOrderForm(${order.id})">Bearbeiten</button>
         </div>
@@ -985,6 +986,14 @@ const PlanerViews = {
       UI.toast('Sende E-Mail…','info');
       await API.sendEmail({ orderId, to, subject });
       UI.toast('E-Mail erfolgreich gesendet','success');
+    } catch(e) { UI.toast(e.message,'error'); }
+  },
+
+  async uploadRapportToDrive(orderId) {
+    try {
+      UI.toast('Lade Rapport zu Drive hoch…','info');
+      await API.uploadRapportToDrive(orderId);
+      UI.toast('Rapport in Google Drive gespeichert','success');
     } catch(e) { UI.toast(e.message,'error'); }
   },
 

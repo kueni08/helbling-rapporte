@@ -104,6 +104,54 @@ router.post('/send', requireLogin, async (req, res) => {
   }
 });
 
+// POST /api/email/rapport/:orderId/drive – upload rapport HTML to Google Drive
+router.post('/rapport/:orderId/drive', requireLogin, async (req, res) => {
+  if (!drive.isDriveEnabled()) {
+    return res.status(503).json({ error: 'Google Drive nicht konfiguriert' });
+  }
+  const db = getDb();
+  const orderId = parseInt(req.params.orderId);
+  const order = db.prepare(`
+    SELECT o.*, c.name AS cust_name FROM orders o
+    LEFT JOIN customers c ON c.id = o.customer_id
+    WHERE o.id = ?
+  `).get(orderId);
+  if (!order) return res.status(404).json({ error: 'Auftrag nicht gefunden' });
+
+  const parsedOrder = {
+    ...order,
+    work_types:          JSON.parse(order.work_types || '[]'),
+    executed_work:       JSON.parse(order.executed_work || '[]'),
+    items_table:         JSON.parse(order.items_table || '[]'),
+    additional_material: JSON.parse(order.additional_material || '[]'),
+    extra_material:      JSON.parse(order.extra_material || '[]'),
+    rings_data:          JSON.parse(order.rings_data || '{}'),
+    keys_data:           JSON.parse(order.keys_data || '{}'),
+  };
+  const attachments = db.prepare('SELECT * FROM order_attachments WHERE order_id = ?').all(orderId);
+  const photos      = db.prepare('SELECT * FROM order_photos      WHERE order_id = ?').all(orderId);
+  const htmlReport  = buildHtmlReport(parsedOrder, attachments, photos);
+
+  try {
+    const tmpFile = require('os').tmpdir() + `/rapport_${order.order_number || orderId}_${Date.now()}.html`;
+    fs.writeFileSync(tmpFile, htmlReport, 'utf8');
+    const att = db.prepare('SELECT dir_name FROM order_attachments WHERE order_id = ? AND dir_name IS NOT NULL LIMIT 1').get(orderId);
+    const ph  = db.prepare('SELECT dir_name FROM order_photos    WHERE order_id = ? AND dir_name IS NOT NULL LIMIT 1').get(orderId);
+    const dirName = (att || ph)?.dir_name || (() => {
+      const rawDate = order.work_date || order.planned_date || '';
+      const dateStr = rawDate.replace(/\//g, '-').split('T')[0] || 'kein-datum';
+      const safeNum = (order.order_number || String(orderId)).replace(/[^a-zA-Z0-9._-]/g, '-');
+      return `${safeNum}_${dateStr}`;
+    })();
+    await drive.uploadFile(tmpFile, `Rapport_${order.order_number || orderId}.html`, 'text/html', dirName);
+    try { fs.unlinkSync(tmpFile); } catch {}
+    res.json({ ok: true, message: 'Rapport zu Drive hochgeladen' });
+  } catch (e) {
+    console.error('[Drive] Rapport upload error:', e.message);
+    res.status(500).json({ error: 'Drive-Upload fehlgeschlagen: ' + e.message });
+  }
+});
+
 // GET /api/email/rapport/:orderId – returns rapport HTML for print/preview
 router.get('/rapport/:orderId', requireLogin, (req, res) => {
   const db = getDb();
