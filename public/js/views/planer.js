@@ -18,6 +18,7 @@ const PlanerViews = {
           <button class="btn btn-ghost" onclick="window.location='/api/orders/import-template'">📄 Vorlage</button>
           <button class="btn btn-ghost" onclick="PlanerViews.openImport()">📥 Excel Import</button>
           <button class="btn btn-ghost" onclick="window.location='/api/orders/export'">📤 Excel Export</button>
+          <button class="btn btn-ghost" onclick="PlanerViews.openDownloadModal()">📦 Download</button>
           <button class="btn btn-ghost" onclick="PlanerViews.openColSettings()">📊 Spalten</button>
           <button class="btn btn-ghost" onclick="PlanerViews.printOrders()">🖨️ Drucken</button>
           <button class="btn btn-primary" onclick="PlanerViews.renderOrderForm()">+ Neuer Auftrag</button>
@@ -266,6 +267,125 @@ const PlanerViews = {
       setTimeout(() => w.print(), 500);
     } catch(e) {
       UI.toast('Drucken fehlgeschlagen: ' + e.message, 'error');
+    }
+  },
+
+  // ── Download Modal (Rapporte + Fotos gebündelt) ───────────────────────────
+  openDownloadModal() {
+    const statusVal = document.getElementById('filter-status')?.value || '';
+    const dateVal   = document.getElementById('filter-date')?.value   || '';
+    const cnt = (PlanerViews._filteredOrders.length || PlanerViews._allOrders.length);
+
+    UI.modal('📦 Gebündelter Download',
+      `<div style="display:flex;flex-direction:column;gap:20px;padding:8px 0">
+        <p class="text-sm text-muted" style="margin:0">
+          Aktuell <strong>${cnt}</strong> Aufträge sichtbar
+          ${statusVal ? `(Status: <em>${statusVal}</em>)` : ''}
+          ${dateVal   ? `(Datum: <em>${dateVal}</em>)` : ''}
+          – bitte Datum-Filter nutzen um die Auswahl einzuschränken.
+        </p>
+
+        <div style="border:1px solid var(--border);border-radius:8px;padding:14px">
+          <div style="font-weight:700;font-size:15px;margin-bottom:6px">🖨 Rapporte als PDF (ZIP)</div>
+          <p class="text-sm text-muted" style="margin:0 0 12px">Generiert für jeden Auftrag ein PDF. Max. 50 Aufträge.</p>
+          <div class="flex gap-2 flex-wrap">
+            <div class="field" style="flex:1;min-width:140px">
+              <label style="font-size:12px">Status</label>
+              <select id="dl-r-status" style="width:100%">
+                <option value="">Alle (ausser Archiv)</option>
+                <option value="abgeschlossen" ${statusVal==='abgeschlossen'?'selected':''}>Abgeschlossen</option>
+                <option value="in_bearbeitung" ${statusVal==='in_bearbeitung'?'selected':''}>In Bearbeitung</option>
+                <option value="geplant" ${statusVal==='geplant'?'selected':''}>Geplant</option>
+              </select>
+            </div>
+            <div class="field" style="flex:1;min-width:120px">
+              <label style="font-size:12px">Datum von</label>
+              <input type="date" id="dl-r-from" value="${dateVal}">
+            </div>
+            <div class="field" style="flex:1;min-width:120px">
+              <label style="font-size:12px">Datum bis</label>
+              <input type="date" id="dl-r-to">
+            </div>
+          </div>
+          <button class="btn btn-primary btn-sm mt-2" style="width:100%" onclick="PlanerViews.downloadBundle('rapporte')">
+            ⬇ Rapporte herunterladen
+          </button>
+        </div>
+
+        <div style="border:1px solid var(--border);border-radius:8px;padding:14px">
+          <div style="font-weight:700;font-size:15px;margin-bottom:6px">🖼 Fotos (ZIP)</div>
+          <p class="text-sm text-muted" style="margin:0 0 12px">Alle Fotos der gefilterten Aufträge — Dateinamen beginnen mit der Auftragsnummer.</p>
+          <div class="flex gap-2 flex-wrap">
+            <div class="field" style="flex:1;min-width:140px">
+              <label style="font-size:12px">Status</label>
+              <select id="dl-f-status" style="width:100%">
+                <option value="">Alle (ausser Archiv)</option>
+                <option value="abgeschlossen" ${statusVal==='abgeschlossen'?'selected':''}>Abgeschlossen</option>
+                <option value="in_bearbeitung" ${statusVal==='in_bearbeitung'?'selected':''}>In Bearbeitung</option>
+                <option value="geplant" ${statusVal==='geplant'?'selected':''}>Geplant</option>
+              </select>
+            </div>
+            <div class="field" style="flex:1;min-width:120px">
+              <label style="font-size:12px">Datum von</label>
+              <input type="date" id="dl-f-from" value="${dateVal}">
+            </div>
+            <div class="field" style="flex:1;min-width:120px">
+              <label style="font-size:12px">Datum bis</label>
+              <input type="date" id="dl-f-to">
+            </div>
+          </div>
+          <button class="btn btn-primary btn-sm mt-2" style="width:100%" onclick="PlanerViews.downloadBundle('fotos')">
+            ⬇ Fotos herunterladen
+          </button>
+        </div>
+      </div>`,
+      `<button class="btn btn-ghost" onclick="UI.closeModal()">Schliessen</button>`
+    );
+  },
+
+  async downloadBundle(type) {
+    const prefix = type === 'rapporte' ? 'r' : 'f';
+    const status = document.getElementById(`dl-${prefix}-status`)?.value || '';
+    const from   = document.getElementById(`dl-${prefix}-from`)?.value  || '';
+    const to     = document.getElementById(`dl-${prefix}-to`)?.value    || '';
+
+    const params = new URLSearchParams();
+    if (status) params.set('status', status);
+    if (from)   params.set('from', from);
+    if (to)     params.set('to', to);
+
+    const endpoint = type === 'rapporte'
+      ? `/api/export/rapporte-zip?${params}`
+      : `/api/export/fotos-zip?${params}`;
+
+    // Show loading feedback
+    const btn = document.querySelector(`[onclick="PlanerViews.downloadBundle('${type}')"]`);
+    const origText = btn?.textContent;
+    if (btn) { btn.textContent = '⏳ Wird vorbereitet…'; btn.disabled = true; }
+
+    try {
+      const resp = await fetch(endpoint, { credentials: 'include' });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ error: resp.statusText }));
+        UI.toast(err.error || 'Download fehlgeschlagen', 'error', 6000);
+        return;
+      }
+      // Trigger download via blob
+      const blob = await resp.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      const cd   = resp.headers.get('Content-Disposition') || '';
+      const fnMatch = cd.match(/filename="([^"]+)"/);
+      a.download = fnMatch ? fnMatch[1] : `${type}.zip`;
+      a.href = url;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch(e) {
+      UI.toast('Download fehlgeschlagen: ' + e.message, 'error');
+    } finally {
+      if (btn) { btn.textContent = origText; btn.disabled = false; }
     }
   },
 
