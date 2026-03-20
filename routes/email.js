@@ -56,17 +56,22 @@ router.post('/send', requireLogin, async (req, res) => {
 
     const htmlReport = buildHtmlReport(parsedOrder, attachments, photos);
 
-    // Generate PDF
-    let pdfAttachment = null;
+    // Generate PDF – fall back to HTML attachment if Chromium unavailable
+    let rapportAttachment;
     try {
       const pdfBuffer = await generatePdf(htmlReport);
-      pdfAttachment = {
-        filename: `Installationsrapport_${order.order_number || orderId}.pdf`,
-        content:  pdfBuffer,
+      rapportAttachment = {
+        filename:    `Installationsrapport_${order.order_number || orderId}.pdf`,
+        content:     pdfBuffer,
         contentType: 'application/pdf',
       };
     } catch (pdfErr) {
-      console.warn('[Email] PDF-Generierung fehlgeschlagen:', pdfErr.message);
+      console.warn('[Email] PDF fehlgeschlagen, sende HTML-Anhang:', pdfErr.message);
+      rapportAttachment = {
+        filename:    `Installationsrapport_${order.order_number || orderId}.html`,
+        content:     Buffer.from(htmlReport, 'utf8'),
+        contentType: 'text/html',
+      };
     }
 
     const transporter = getTransporter();
@@ -75,7 +80,7 @@ router.post('/send', requireLogin, async (req, res) => {
       to,
       subject: subject || `Installationsrapport ${order.order_number} – ${order.customer_name || ''}`,
       html:    htmlReport,
-      attachments: [...mailAttachments, ...(pdfAttachment ? [pdfAttachment] : [])],
+      attachments: [...mailAttachments, rapportAttachment],
     });
 
     // Rapport als HTML in Drive speichern
