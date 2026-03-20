@@ -72,7 +72,8 @@ const UI = {
     const map = {
       geplant:       ['badge-blue',   'Geplant'],
       in_bearbeitung:['badge-orange', 'In Bearbeitung'],
-      abgeschlossen: ['badge-green',  'Abgeschlossen'],
+      abgeschlossen: ['badge-green',  'Zu verrechnen'],
+      abgerechnet:   ['badge-purple', 'Abgerechnet'],
       archiviert:    ['badge-gray',   'Archiviert'],
     };
     const [cls, label] = map[s] || ['badge-gray', s];

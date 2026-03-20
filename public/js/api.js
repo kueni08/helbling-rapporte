@@ -42,6 +42,7 @@ const API = {
   updateOrder:    (id, d) => API.put(`/api/orders/${id}`, d),
   deleteOrder:    (id)    => API.delete(`/api/orders/${id}`),
   reorderOrders:  (items) => API.patch('/api/orders/reorder', { items }),
+  bulkUpdateStatus: (ids, status) => API.patch('/api/orders/bulk-status', { ids, status }),
   importOrders:        (form) => API.upload('/api/orders/import', form),
   orderCustomerForm:   (id)   => API.post(`/api/orders/${id}/customer-form`),
 

@@ -455,6 +455,23 @@ router.put('/:id', requireLogin, (req, res) => {
 
 });
 
+// PATCH /api/orders/bulk-status  – set status for multiple orders (planer + admin only)
+router.patch('/bulk-status', requireRole('admin', 'planer'), (req, res) => {
+  const { ids, status } = req.body;
+  if (!Array.isArray(ids) || !ids.length || !status) {
+    return res.status(400).json({ error: 'ids (Array) und status erforderlich' });
+  }
+  const allowed = ['geplant','in_bearbeitung','abgeschlossen','abgerechnet','archiviert'];
+  if (!allowed.includes(status)) return res.status(400).json({ error: 'Ungültiger Status' });
+
+  const db = getDb();
+  const placeholders = ids.map(() => '?').join(',');
+  const result = db.prepare(
+    `UPDATE orders SET status = ?, updated_at = datetime('now') WHERE id IN (${placeholders})`
+  ).run(status, ...ids);
+  res.json({ ok: true, updated: result.changes });
+});
+
 // PATCH /api/orders/reorder  – update sort_order for monteur day view
 router.patch('/reorder', requireRole('admin', 'planer'), (req, res) => {
   const { items } = req.body; // [{ id, sort_order }]

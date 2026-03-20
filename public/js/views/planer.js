@@ -8,6 +8,30 @@ const PlanerViews = {
     if (!this._monteure) this._monteure = await API.getMonteure();
   },
 
+  // ── Filter Persistence ──────────────────────────────────────────────────
+  _saveFilter() {
+    try {
+      const f = {
+        status: document.getElementById('filter-status')?.value || '',
+        date:   document.getElementById('filter-date')?.value   || '',
+        search: document.getElementById('filter-search')?.value || '',
+      };
+      localStorage.setItem('planer_filter', JSON.stringify(f));
+    } catch {}
+  },
+
+  _restoreFilter() {
+    try {
+      const f = JSON.parse(localStorage.getItem('planer_filter') || '{}');
+      const s = document.getElementById('filter-status');
+      const d = document.getElementById('filter-date');
+      const t = document.getElementById('filter-search');
+      if (s && f.status !== undefined) s.value = f.status;
+      if (d && f.date   !== undefined) d.value = f.date;
+      if (t && f.search !== undefined) t.value = f.search;
+    } catch {}
+  },
+
   // ── Order List ──────────────────────────────────────────────────────────
   async renderOrders() {
     const el = document.getElementById('main-content');
@@ -20,22 +44,25 @@ const PlanerViews = {
           <button class="btn btn-ghost" onclick="window.location='/api/orders/export'">📤 Excel Export</button>
           <button class="btn btn-ghost" onclick="PlanerViews.openColSettings()">📊 Spalten</button>
           <button class="btn btn-ghost" onclick="PlanerViews.printOrders()">🖨️ Drucken</button>
+          <button id="btn-bulk-abgerechnet" class="btn btn-ghost" style="display:none" onclick="PlanerViews.bulkSetAbgerechnet()">✅ Verrechnet setzen</button>
           <button class="btn btn-primary" onclick="PlanerViews.renderOrderForm()">+ Neuer Auftrag</button>
         </div>
       </div>
       <div class="card mb-3">
         <div class="flex gap-2 flex-wrap">
-          <select id="filter-status" style="width:180px" onchange="PlanerViews.applyFilter()">
+          <select id="filter-status" style="width:180px" onchange="PlanerViews._saveFilter();PlanerViews.applyFilter()">
             <option value="">Alle Status</option>
             <option value="geplant">Geplant</option>
             <option value="in_bearbeitung">In Bearbeitung</option>
-            <option value="abgeschlossen">Abgeschlossen</option>
+            <option value="abgeschlossen">Zu verrechnen</option>
+            <option value="abgerechnet">Abgerechnet</option>
           </select>
-          <input type="date" id="filter-date" style="width:160px" onchange="PlanerViews.applyFilter()">
-          <input type="text" id="filter-search" placeholder="Suche…" style="flex:1;min-width:140px" oninput="PlanerViews.applyFilter()">
+          <input type="date" id="filter-date" style="width:160px" onchange="PlanerViews._saveFilter();PlanerViews.applyFilter()">
+          <input type="text" id="filter-search" placeholder="Suche…" style="flex:1;min-width:140px" oninput="PlanerViews._saveFilter();PlanerViews.applyFilter()">
         </div>
       </div>
       <div class="card"><div class="table-wrap"><div id="orders-list">Lade…</div></div></div>`;
+    PlanerViews._restoreFilter();
     await PlanerViews.loadOrdersTable();
   },
 
@@ -98,6 +125,11 @@ const PlanerViews = {
     const el = document.getElementById('orders-list');
     if (!el) return;
 
+    // Show/hide bulk button depending on whether any "zu verrechnen" orders exist
+    const hasBillable = orders.some(o => o.status === 'abgeschlossen');
+    const bulkBtn = document.getElementById('btn-bulk-abgerechnet');
+    if (bulkBtn) bulkBtn.style.display = hasBillable ? '' : 'none';
+
     const sortTh = (label, colId) => {
       const isActive = PlanerViews._sortCol === colId;
       const cls = isActive ? (PlanerViews._sortDir === 'asc' ? 'sortable sort-asc' : 'sortable sort-desc') : 'sortable';
@@ -108,6 +140,7 @@ const PlanerViews = {
 
     el.innerHTML = orders.length ? `<table>
       <thead><tr>
+        <th style="width:32px"><input type="checkbox" id="chk-all" title="Alle wählen" onchange="PlanerViews.toggleSelectAll(this.checked)"></th>
         ${sortTh('Nr.','order_number')}
         ${cols.has('project_number') ? sortTh('Projekt','project_number') : ''}
         ${sortTh('Kunde','customer_name')}
@@ -126,7 +159,9 @@ const PlanerViews = {
         const rowStyle = hasExtra ? 'background:rgba(212,138,0,.10);' : '';
         const totalFiles = (o.attachment_count || 0) + (o.photo_count || 0);
         const attachBadge = totalFiles > 0 ? ` <span title="${totalFiles} Anhänge/Fotos" style="color:#555;font-size:11px;font-weight:600">📎${totalFiles}</span>` : '';
-        return `<tr style="${rowStyle}">
+        const canCheck = o.status === 'abgeschlossen';
+        return `<tr style="${rowStyle}" data-order-id="${o.id}" data-status="${o.status}">
+          <td style="text-align:center">${canCheck ? `<input type="checkbox" class="row-chk" value="${o.id}" onchange="PlanerViews._onRowCheckChange()">` : ''}</td>
           <td><code>${UI.esc(o.order_number)}</code>${attachBadge}${hasExtra ? ' <span title="Nicht auf LS aufgeführt" style="color:#d48a00;font-size:12px">⚠️</span>' : ''}</td>
           ${cols.has('project_number') ? `<td style="font-size:12px;color:var(--accent)">${UI.esc(o.project_number||'')}</td>` : ''}
           <td class="inline-edit-cell" onclick="PlanerViews.inlineEdit(event,${o.id},'customer_name','${UI.esc(o.customer_name||o.cust_name||'')}')">${UI.esc(o.customer_name || o.cust_name || '–')}</td>
@@ -145,6 +180,64 @@ const PlanerViews = {
         </tr>`;
       }).join('')}
       </tbody></table>` : '<p class="text-muted text-sm">Keine Aufträge gefunden.</p>';
+  },
+
+  // ── Checkbox / Bulk Selection ────────────────────────────────────────────
+  toggleSelectAll(checked) {
+    document.querySelectorAll('.row-chk').forEach(cb => { cb.checked = checked; });
+    PlanerViews._updateBulkButton();
+  },
+
+  _onRowCheckChange() {
+    const all = document.querySelectorAll('.row-chk');
+    const checked = document.querySelectorAll('.row-chk:checked');
+    const chkAll = document.getElementById('chk-all');
+    if (chkAll) chkAll.indeterminate = checked.length > 0 && checked.length < all.length;
+    PlanerViews._updateBulkButton();
+  },
+
+  _updateBulkButton() {
+    const checked = document.querySelectorAll('.row-chk:checked');
+    const btn = document.getElementById('btn-bulk-abgerechnet');
+    if (btn) {
+      if (checked.length > 0) {
+        btn.style.display = '';
+        btn.textContent = `✅ ${checked.length} als Abgerechnet setzen`;
+      } else {
+        // Show if there are billable orders
+        const hasBillable = PlanerViews._filteredOrders.some(o => o.status === 'abgeschlossen');
+        btn.style.display = hasBillable ? '' : 'none';
+        btn.textContent = '✅ Verrechnet setzen';
+      }
+    }
+  },
+
+  async bulkSetAbgerechnet() {
+    const checked = [...document.querySelectorAll('.row-chk:checked')];
+    let ids;
+    if (checked.length > 0) {
+      ids = checked.map(cb => parseInt(cb.value));
+    } else {
+      // All "zu verrechnen" orders in current view
+      ids = PlanerViews._filteredOrders
+        .filter(o => o.status === 'abgeschlossen')
+        .map(o => o.id);
+    }
+    if (!ids.length) { UI.toast('Keine Aufträge ausgewählt', 'error'); return; }
+    const n = ids.length;
+    if (!await new Promise(resolve => {
+      UI.modal('Abrechnung bestätigen',
+        `<p>${n} Auftrag${n>1?'e':''} als <strong>Abgerechnet</strong> markieren?</p>`,
+        `<button class="btn btn-ghost" onclick="UI.closeModal();window._confirmResolve(false)">Abbrechen</button>
+         <button class="btn btn-primary" onclick="UI.closeModal();window._confirmResolve(true)">Bestätigen</button>`
+      );
+      window._confirmResolve = resolve;
+    })) return;
+    try {
+      const res = await API.bulkUpdateStatus(ids, 'abgerechnet');
+      UI.toast(`${res.updated} Auftrag${res.updated>1?'e':''} als Abgerechnet markiert`, 'success');
+      await PlanerViews.loadOrdersTable();
+    } catch(e) { UI.toast(e.message, 'error'); }
   },
 
   // ── Inline Editing ──────────────────────────────────────────────────────
@@ -184,8 +277,8 @@ const PlanerViews = {
     const td = e.currentTarget;
     if (td.querySelector('select')) return;
 
-    const statuses = ['geplant','in_bearbeitung','abgeschlossen'];
-    td.innerHTML = `<select class="inline-edit-input" style="width:130px">
+    const statuses = ['geplant','in_bearbeitung','abgeschlossen','abgerechnet'];
+    td.innerHTML = `<select class="inline-edit-input" style="width:140px">
       ${statuses.map(s => `<option value="${s}" ${s===currentStatus?'selected':''}>${UI.statusName(s)}</option>`).join('')}
     </select>`;
     const sel = td.querySelector('select');
@@ -460,7 +553,7 @@ const PlanerViews = {
             <div class="field">
               <label>Status</label>
               <select id="f-status">
-                ${['geplant','in_bearbeitung','abgeschlossen'].map(s => `<option value="${s}" ${order?.status===s?'selected':''}>${UI.statusName(s)}</option>`).join('')}
+                ${['geplant','in_bearbeitung','abgeschlossen','abgerechnet'].map(s => `<option value="${s}" ${order?.status===s?'selected':''}>${UI.statusName(s)}</option>`).join('')}
               </select>
             </div>
           </div>
@@ -1037,7 +1130,7 @@ const PlanerViews = {
 // ── Extend UI helper ──────────────────────────────────────────────────────
 UI.statusName = s => ({
   geplant:'Geplant', in_bearbeitung:'In Bearbeitung',
-  abgeschlossen:'Abgeschlossen', archiviert:'Archiviert',
+  abgeschlossen:'Zu verrechnen', abgerechnet:'Abgerechnet', archiviert:'Archiviert',
   versendet:'Versendet', 'ausgefüllt':'Ausgefüllt',
 }[s] || s);
 
