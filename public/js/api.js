@@ -68,8 +68,9 @@ const API = {
   fileUrl:           (orderId, fn)   => `/api/files/${orderId}/${fn}`,
 
   // Email
-  sendEmail:      (d)     => API.post('/api/email/send', d),
-  emailStatus:    ()      => API.get('/api/email/config-status'),
+  sendEmail:           (d)   => API.post('/api/email/send', d),
+  emailStatus:         ()    => API.get('/api/email/config-status'),
+  uploadRapportToDrive:(id)  => API.post(`/api/email/rapport/${id}/drive`),
 
   // Settings – Article Import & SMTP
   importArticles: (form) => API.upload('/api/settings/articles/import', form),
