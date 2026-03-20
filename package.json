@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
+    "archiver": "^7.0.1",
     "bcryptjs": "^2.4.3",
     "better-sqlite3": "^9.4.3",
     "chokidar": "^5.0.0",

@@ -49,6 +49,7 @@ app.use('/api/orders',   require('./routes/orders'));
 app.use('/api/settings', require('./routes/settings'));
 app.use('/api/files',    require('./routes/files'));
 app.use('/api/email',    require('./routes/email'));
+app.use('/api/export',   require('./routes/export'));
 app.use('/api/anfrage',       require('./routes/anfrage'));      // public customer form submit
 app.use('/api/anfragen',      require('./routes/anfrage'));      // admin list/manage
 app.use('/api/lieferschein',  require('./routes/lieferschein')); // PDF auto-import
