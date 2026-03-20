@@ -926,74 +926,82 @@ const MonteurViews = {
   },
 
   async closeOrder(orderId) {
-    // Step 1: Checklist
-    const answers = await new Promise(resolve => {
-      window._clResolve = (val) => { window._clResolve = () => {}; resolve(val); };
-      UI.modal('Auftrag abschliessen – Checkliste',
-        `<div style="display:flex;flex-direction:column;gap:16px;padding:8px 0">
-          <label style="display:flex;align-items:center;gap:12px;font-size:15px;cursor:pointer">
-            <input type="checkbox" id="cl-material" style="width:20px;height:20px">
-            Zusätzliches Material aufgeführt? (nicht auf LS)
-          </label>
-          <label style="display:flex;align-items:center;gap:12px;font-size:15px;cursor:pointer">
-            <input type="checkbox" id="cl-foto" style="width:20px;height:20px">
-            Foto gemacht?
-          </label>
-          <label style="display:flex;align-items:center;gap:12px;font-size:15px;cursor:pointer">
-            <input type="checkbox" id="cl-done" style="width:20px;height:20px">
-            Auftrag abgeschlossen?
-          </label>
-        </div>`,
-        `<button class="btn btn-ghost" onclick="window._clResolve(null);UI.closeModal()">Abbrechen</button>
-         <button class="btn btn-success" style="background:#2d7a2d" onclick="window._clResolve({material:document.getElementById('cl-material').checked,foto:document.getElementById('cl-foto').checked,done:document.getElementById('cl-done').checked});UI.closeModal()">Weiter</button>`
-      );
-      const mc = document.getElementById('modal-container');
-      const obs = new MutationObserver(() => { if (!mc.innerHTML.trim()) { obs.disconnect(); window._clResolve(null); } });
-      obs.observe(mc, { childList: true });
-    });
+    const isPlanerOrAdmin = App.state?.role === 'planer' || App.state?.role === 'admin';
+    let travelData = null;
 
-    if (!answers || !answers.done) {
-      if (answers !== null) UI.toast('Auftrag nicht abgeschlossen – Status unverändert.', 'warning');
-      return;
-    }
-    if (!UI.getMultiCheck('ausgefuehrte_arbeiten').length) {
-      UI.toast('Bitte mindestens eine ausgef\u00fchrte Arbeit ausw\u00e4hlen', 'error'); return;
-    }
-    if (answers.material && !MonteurViews.getExtraRows().length) {
-      UI.toast('Hinweis: Bitte zusätzliches Material unter "Zusätzliche Positionen" eintragen.', 'warning');
-    }
+    if (!isPlanerOrAdmin) {
+      // Step 1: Checklist
+      const answers = await new Promise(resolve => {
+        window._clResolve = (val) => { window._clResolve = () => {}; resolve(val); };
+        UI.modal('Auftrag abschliessen – Checkliste',
+          `<div style="display:flex;flex-direction:column;gap:16px;padding:8px 0">
+            <label style="display:flex;align-items:center;gap:12px;font-size:15px;cursor:pointer">
+              <input type="checkbox" id="cl-material" style="width:20px;height:20px">
+              Zusätzliches Material aufgeführt? (nicht auf LS)
+            </label>
+            <label style="display:flex;align-items:center;gap:12px;font-size:15px;cursor:pointer">
+              <input type="checkbox" id="cl-foto" style="width:20px;height:20px">
+              Foto gemacht?
+            </label>
+            <label style="display:flex;align-items:center;gap:12px;font-size:15px;cursor:pointer">
+              <input type="checkbox" id="cl-done" style="width:20px;height:20px">
+              Auftrag abgeschlossen?
+            </label>
+          </div>`,
+          `<button class="btn btn-ghost" onclick="window._clResolve(null);UI.closeModal()">Abbrechen</button>
+           <button class="btn btn-success" style="background:#2d7a2d" onclick="window._clResolve({material:document.getElementById('cl-material').checked,foto:document.getElementById('cl-foto').checked,done:document.getElementById('cl-done').checked});UI.closeModal()">Weiter</button>`
+        );
+        const mc = document.getElementById('modal-container');
+        const obs = new MutationObserver(() => { if (!mc.innerHTML.trim()) { obs.disconnect(); window._clResolve(null); } });
+        obs.observe(mc, { childList: true });
+      });
 
-    // Step 2: Fahrzeit & Kilometer
-    const travelData = await new Promise(resolve => {
-      window._tvResolve = (val) => { window._tvResolve = () => {}; resolve(val); };
-      UI.modal('Fahrzeit & Kilometer',
-        `<div style="display:flex;flex-direction:column;gap:16px;padding:8px 0">
-          <div class="field">
-            <label style="font-weight:600;display:block;margin-bottom:6px">Kilometer Anfahrt</label>
-            <input type="number" id="tv-km" min="0" step="1" placeholder="z.B. 45"
-              style="width:100%;padding:8px 12px;border:1px solid #ccc;border-radius:6px;font-size:15px">
-          </div>
-          <div class="field">
-            <label style="font-weight:600;display:block;margin-bottom:6px">Fahrzeit in h</label>
-            <input type="number" id="tv-time" min="0" step="0.25" placeholder="z.B. 0.5"
-              style="width:100%;padding:8px 12px;border:1px solid #ccc;border-radius:6px;font-size:15px">
-          </div>
-        </div>`,
-        `<button class="btn btn-ghost" onclick="window._tvResolve(null);UI.closeModal()">Abbrechen</button>
-         <button class="btn btn-success" style="background:#2d7a2d" onclick="window._tvResolve({km:document.getElementById('tv-km').value,time:document.getElementById('tv-time').value});UI.closeModal()">Auftrag abschliessen</button>`
-      );
-      const mc = document.getElementById('modal-container');
-      const obs = new MutationObserver(() => { if (!mc.innerHTML.trim()) { obs.disconnect(); window._tvResolve(null); } });
-      obs.observe(mc, { childList: true });
-    });
+      if (!answers || !answers.done) {
+        if (answers !== null) UI.toast('Auftrag nicht abgeschlossen – Status unverändert.', 'warning');
+        return;
+      }
+      if (!UI.getMultiCheck('ausgefuehrte_arbeiten').length) {
+        UI.toast('Bitte mindestens eine ausgef\u00fchrte Arbeit ausw\u00e4hlen', 'error'); return;
+      }
+      if (answers.material && !MonteurViews.getExtraRows().length) {
+        UI.toast('Hinweis: Bitte zusätzliches Material unter "Zusätzliche Positionen" eintragen.', 'warning');
+      }
 
-    if (travelData === null) {
-      UI.toast('Abgeschlossen – Fahrzeit nicht eingetragen.', 'warning');
+      // Step 2: Fahrzeit & Kilometer
+      travelData = await new Promise(resolve => {
+        window._tvResolve = (val) => { window._tvResolve = () => {}; resolve(val); };
+        UI.modal('Fahrzeit & Kilometer',
+          `<div style="display:flex;flex-direction:column;gap:16px;padding:8px 0">
+            <div class="field">
+              <label style="font-weight:600;display:block;margin-bottom:6px">Kilometer Anfahrt</label>
+              <input type="number" id="tv-km" min="0" step="1" placeholder="z.B. 45"
+                style="width:100%;padding:8px 12px;border:1px solid #ccc;border-radius:6px;font-size:15px">
+            </div>
+            <div class="field">
+              <label style="font-weight:600;display:block;margin-bottom:6px">Fahrzeit in h</label>
+              <input type="number" id="tv-time" min="0" step="0.25" placeholder="z.B. 0.5"
+                style="width:100%;padding:8px 12px;border:1px solid #ccc;border-radius:6px;font-size:15px">
+            </div>
+          </div>`,
+          `<button class="btn btn-ghost" onclick="window._tvResolve(null);UI.closeModal()">Abbrechen</button>
+           <button class="btn btn-success" style="background:#2d7a2d" onclick="window._tvResolve({km:document.getElementById('tv-km').value,time:document.getElementById('tv-time').value});UI.closeModal()">Auftrag abschliessen</button>`
+        );
+        const mc = document.getElementById('modal-container');
+        const obs = new MutationObserver(() => { if (!mc.innerHTML.trim()) { obs.disconnect(); window._tvResolve(null); } });
+        obs.observe(mc, { childList: true });
+      });
+
+      if (travelData === null) {
+        UI.toast('Abgeschlossen – Fahrzeit nicht eingetragen.', 'warning');
+      }
+
+      // Set work_time_to to now only for technicians
+      const now = new Date();
+      const toEl = document.getElementById('f-work-to');
+      if (toEl) toEl.value = MonteurViews._fmtTime(now);
     }
 
     const now = new Date();
-    const toEl = document.getElementById('f-work-to');
-    if (toEl) toEl.value = MonteurViews._fmtTime(now);
 
     if (MonteurViews._timerRunning(orderId)) {
       const key = MonteurViews._timerKey(orderId);
@@ -1010,6 +1018,11 @@ const MonteurViews = {
       ...MonteurViews.getLsItemRows(),
       ...MonteurViews.getItemRows()
     ];
+
+    // Planer/Admin: keep existing work_time_to; Monteur: use current time (already set above)
+    const workTimeTo = isPlanerOrAdmin
+      ? (document.getElementById('f-work-to')?.value || null)
+      : MonteurViews._fmtTime(now);
 
     const data = {
       executed_work:       UI.getMultiCheck('ausgefuehrte_arbeiten'),
@@ -1032,7 +1045,7 @@ const MonteurViews = {
       },
       work_date:        document.getElementById('f-work-date')?.value || null,
       work_time_from:   document.getElementById('f-work-from')?.value || null,
-      work_time_to:     MonteurViews._fmtTime(now),
+      work_time_to:     workTimeTo,
       travel_time:      travelData ? (parseFloat(travelData.time) || null) : null,
       travel_km:        travelData ? (parseInt(travelData.km) || null) : null,
       technician_name:  document.getElementById('f-technician')?.value.trim() || null,

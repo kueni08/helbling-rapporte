@@ -4,7 +4,7 @@ const fs = require('fs');
 const { getDb } = require('../lib/database');
 const { requireLogin } = require('../middleware/auth');
 const drive = require('../lib/drive');
-const { getSmtpConfig, getTransporter, buildHtmlReport, generatePdf } = require('../lib/mailer');
+const { getSmtpConfig, getTransporter, buildHtmlReport, generatePdfSafe } = require('../lib/mailer');
 
 const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(__dirname, '..', 'uploads');
 
@@ -56,22 +56,17 @@ router.post('/send', requireLogin, async (req, res) => {
 
     const htmlReport = buildHtmlReport(parsedOrder, attachments, photos);
 
-    // Generate PDF – fall back to HTML attachment if Chromium unavailable
-    let rapportAttachment;
+    // Generate PDF (max 25 MB – falls back to no-photo version if too large)
+    let pdfAttachment = null;
     try {
-      const pdfBuffer = await generatePdf(htmlReport);
-      rapportAttachment = {
-        filename:    `Installationsrapport_${order.order_number || orderId}.pdf`,
-        content:     pdfBuffer,
+      const pdfBuffer = await generatePdfSafe(parsedOrder, attachments, photos);
+      pdfAttachment = {
+        filename: `Installationsrapport_${order.order_number || orderId}.pdf`,
+        content:  pdfBuffer,
         contentType: 'application/pdf',
       };
     } catch (pdfErr) {
-      console.warn('[Email] PDF fehlgeschlagen, sende HTML-Anhang:', pdfErr.message);
-      rapportAttachment = {
-        filename:    `Installationsrapport_${order.order_number || orderId}.html`,
-        content:     Buffer.from(htmlReport, 'utf8'),
-        contentType: 'text/html',
-      };
+      console.warn('[Email] PDF fehlgeschlagen:', pdfErr.message);
     }
 
     const transporter = getTransporter();
@@ -80,7 +75,7 @@ router.post('/send', requireLogin, async (req, res) => {
       to,
       subject: subject || `Installationsrapport ${order.order_number} – ${order.customer_name || ''}`,
       html:    htmlReport,
-      attachments: [...mailAttachments, rapportAttachment],
+      attachments: [...mailAttachments, ...(pdfAttachment ? [pdfAttachment] : [])],
     });
 
     // Rapport als HTML in Drive speichern

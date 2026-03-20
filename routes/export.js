@@ -4,7 +4,7 @@ const fs      = require('fs');
 const archiver = require('archiver');
 const { getDb }         = require('../lib/database');
 const { requireRole }   = require('../middleware/auth');
-const { buildHtmlReport, generatePdf } = require('../lib/mailer');
+const { buildHtmlReport, generatePdfSafe } = require('../lib/mailer');
 
 const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(__dirname, '..', 'uploads');
 
@@ -126,8 +126,7 @@ router.get('/rapporte-zip', requireRole('admin', 'planer'), async (req, res) => 
       const attachments = db.prepare('SELECT * FROM order_attachments WHERE order_id = ?').all(order.id);
       const photos      = db.prepare('SELECT * FROM order_photos      WHERE order_id = ?').all(order.id);
 
-      const html    = buildHtmlReport(parsedOrder, attachments, photos);
-      const pdfBuf  = await generatePdf(html);
+      const pdfBuf  = await generatePdfSafe(parsedOrder, attachments, photos);
 
       const orderNum   = sanitize(order.order_number);
       const custName   = sanitize(order.customer_name || '');
