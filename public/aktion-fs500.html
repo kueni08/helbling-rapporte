@@ -1,0 +1,177 @@
+<!-- Embeddable hero section for Helbling FS500 Einführungsaktion -->
+<section class="fs-aktion-hero" aria-labelledby="fs-aktion-heading">
+  <div class="fs-aktion-wrap">
+    <div class="fs-aktion-logo">
+      <span class="fs-logo-facette">FACETTE</span><span class="fs-logo-star">STAR</span><sup>®</sup>
+    </div>
+    <div class="fs-aktion-badge">Einführungsaktion · gültig bis <strong>29.05.2026</strong></div>
+    <h1 id="fs-aktion-heading" class="fs-aktion-title">FS500 mit <span>Digitalanzeige</span></h1>
+    <p class="fs-aktion-sub">Jetzt zum attraktiven Einführungspreis – inkl. Starterkit und Wendeplatten.</p>
+
+    <div class="fs-aktion-table">
+      <div class="fs-aktion-row">
+        <span class="fs-item-label">FS500 inkl. Digitalanzeige</span>
+        <span class="fs-item-old">CHF 7'950.–</span>
+        <span class="fs-item-new">CHF 7'400.–</span>
+      </div>
+      <div class="fs-aktion-row">
+        <span class="fs-item-label">Inkl. Starterkit</span>
+        <span class="fs-item-old">CHF 475.–</span>
+        <span class="fs-item-new fs-item-free">CHF 0.–</span>
+      </div>
+      <div class="fs-aktion-row">
+        <span class="fs-item-label">Inkl. 1 VE Wendeplatten</span>
+        <span class="fs-item-old">CHF 234.–</span>
+        <span class="fs-item-new fs-item-free">CHF 0.–</span>
+      </div>
+    </div>
+
+    <div class="fs-aktion-savings">Sie sparen CHF 1'259.–</div>
+
+    <p class="fs-aktion-footnote">Preise exkl. MwSt., ab Werk, nicht kumulierbar mit weiteren Rabatten.</p>
+
+    <div class="fs-aktion-ctas">
+      <a class="fs-btn fs-btn-primary" href="mailto:info@helbling.net?subject=Bestellung%20Einf%C3%BChrungsaktion%20FS500">Jetzt bestellen</a>
+      <span class="fs-aktion-mail">Mail an: <a href="mailto:info@helbling.net">info@helbling.net</a></span>
+    </div>
+  </div>
+</section>
+<style>
+  .fs-aktion-hero {
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans";
+    color: #000;
+    background: #fff;
+    padding: 1rem 0.8rem;
+    border: 1px solid #e6e6e9;
+    border-radius: 12px;
+  }
+  .fs-aktion-wrap { max-width: 600px; margin: 0 auto; }
+
+  /* Logo */
+  .fs-aktion-logo {
+    font-weight: 900;
+    font-size: 1.3rem;
+    letter-spacing: 0.04em;
+    margin-bottom: 0.5rem;
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0;
+    background: #222;
+    color: #fff;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+  }
+  .fs-logo-facette { color: #fff; }
+  .fs-logo-star { color: #f5c800; }
+  .fs-aktion-logo sup { font-size: 0.55rem; color: #f5c800; margin-left: 1px; }
+
+  /* Badge */
+  .fs-aktion-badge {
+    display: inline-block;
+    font-size: 0.75rem;
+    color: #5b5b5b;
+    border: 1px solid #e6e6e9;
+    background: #fff;
+    padding: 0.25rem 0.5rem;
+    border-radius: 999px;
+    margin-bottom: 0.4rem;
+  }
+
+  /* Title */
+  .fs-aktion-title {
+    margin: 0.2rem 0 0.2rem 0;
+    font-weight: 800;
+    line-height: 1.1;
+    font-size: clamp(1.2rem, 2.8vw, 1.6rem);
+  }
+  .fs-aktion-title span { color: #c49b00; }
+
+  /* Subtitle */
+  .fs-aktion-sub {
+    margin: 0.1rem 0 0.8rem 0;
+    font-size: 0.85rem;
+    color: #5b5b5b;
+  }
+
+  /* Price table */
+  .fs-aktion-table {
+    border: 1px solid #e6e6e9;
+    border-radius: 10px;
+    overflow: hidden;
+    margin: 0.6rem 0;
+  }
+  .fs-aktion-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 0.5rem;
+    align-items: center;
+    padding: 0.45rem 0.7rem;
+    font-size: 0.85rem;
+    border-bottom: 1px solid #e6e6e9;
+    background: #f9f9f9;
+  }
+  .fs-aktion-row:last-child { border-bottom: none; }
+  .fs-item-label { color: #000; }
+  .fs-item-old {
+    text-decoration: line-through;
+    opacity: 0.5;
+    white-space: nowrap;
+    text-align: right;
+  }
+  .fs-item-new {
+    font-weight: 700;
+    color: #000;
+    white-space: nowrap;
+    text-align: right;
+    min-width: 90px;
+  }
+  .fs-item-free { color: #c49b00; }
+
+  /* Savings banner */
+  .fs-aktion-savings {
+    background: #fef9e0;
+    border: 1px solid #f5c800;
+    border-radius: 8px;
+    text-align: center;
+    font-weight: 800;
+    font-size: 1rem;
+    color: #c49b00;
+    padding: 0.5rem 0.8rem;
+    margin: 0.5rem 0;
+  }
+
+  /* Footnote */
+  .fs-aktion-footnote {
+    margin: 0.4rem 0 0.6rem 0;
+    font-size: 0.72rem;
+    color: #5b5b5b;
+  }
+
+  /* CTAs */
+  .fs-aktion-ctas {
+    display: flex;
+    gap: 0.7rem;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .fs-aktion-mail {
+    font-size: 0.82rem;
+    color: #5b5b5b;
+  }
+  .fs-aktion-mail a {
+    color: #c49b00;
+    text-decoration: underline;
+  }
+
+  .fs-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    height: 32px; padding: 0 0.9rem; border-radius: 999px;
+    font-weight: 700; font-size: 0.8rem;
+    text-decoration: none; border: 1px solid transparent;
+    transition: transform .06s ease, background .15s ease, color .15s ease, border-color .15s ease;
+  }
+  .fs-btn:focus { outline: none; box-shadow: 0 0 0 3px rgba(245,200,0,0.4); }
+  .fs-btn:hover { transform: translateY(-1px); }
+  .fs-btn-primary { background: #f5c800; color: #222; border-color: #f5c800; }
+  .fs-btn-primary:hover { background: #e0b600; border-color: #e0b600; }
+</style>
