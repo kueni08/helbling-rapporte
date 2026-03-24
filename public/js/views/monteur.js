@@ -148,13 +148,17 @@ const MonteurViews = {
     MonteurViews.applyFilter();
   },
 
-  quickToggleTimer(orderId) {
+  async quickToggleTimer(orderId) {
     if (MonteurViews._timerRunning(orderId)) {
       // Stop and navigate to form
       MonteurViews.renderWorkForm(orderId);
     } else {
+      // Load order to have sessions context before starting
+      if (!MonteurViews._currentOrder || MonteurViews._currentOrder.id !== orderId) {
+        try { MonteurViews._currentOrder = await API.getOrder(orderId); } catch(e) {}
+      }
       MonteurViews.startTimer(orderId);
-      UI.toast('Timer gestartet', 'success');
+      UI.toast('Arbeit begonnen', 'success');
       MonteurViews.applyFilter(); // refresh card to show stop icon
     }
   },
@@ -176,6 +180,8 @@ const MonteurViews = {
     const currentIdx = filteredOrders.findIndex(o => o.id === orderId);
     const prevOrder = currentIdx > 0 ? filteredOrders[currentIdx - 1] : null;
     const nextOrder = currentIdx < filteredOrders.length - 1 ? filteredOrders[currentIdx + 1] : null;
+
+    MonteurViews._currentOrder = order;
 
     const projectLabel = order.project_number || order.order_number;
     const isStamped = MonteurViews._isStamped(orderId);
@@ -396,18 +402,19 @@ const MonteurViews = {
         </div>
         <div class="section-body">
 
-          <!-- Start/Stop Timer -->
+          <!-- Start/Stop Timer & Sessions -->
           <div id="timer-box" style="background:var(--bg3);border-radius:8px;padding:14px 16px;margin-bottom:16px">
             <div class="flex gap-3 align-items-center flex-wrap">
               <div id="timer-display" style="font-size:22px;font-weight:700;font-family:monospace;letter-spacing:2px;min-width:90px">
                 ${MonteurViews._timerDisplay(orderId)}
               </div>
-              <button id="timer-btn-start" class="btn ${isStamped && !isRunning ? 'btn-ghost' : 'btn-primary'}" onclick="MonteurViews.startTimer(${orderId})"
-                style="${isRunning ? 'display:none' : ''}">${isStamped ? '\u21bb Neu starten' : '\u25b6 Arbeit starten'}</button>
+              <button id="timer-btn-start" class="btn btn-primary" onclick="MonteurViews.startTimer(${orderId})"
+                style="${isRunning ? 'display:none' : ''}">\u25b6 Arbeit beginnen</button>
               <button id="timer-btn-stop" class="btn btn-danger" onclick="MonteurViews.stopTimer(${orderId})"
                 style="${isRunning ? '' : 'display:none'}">\u23f9 Arbeit stoppen</button>
-              <button class="btn btn-ghost btn-sm" onclick="MonteurViews.resetTimer(${orderId})" title="Timer zur\u00fccksetzen">\u21ba</button>
-              ${isStamped && !isRunning ? `<span class="text-sm" style="color:var(--success);font-weight:600">\u2713 Eingestempelt</span>` : ''}
+            </div>
+            <div id="sessions-list" style="margin-top:${(order.work_sessions||[]).length ? '12px' : '0'}">
+              ${MonteurViews._renderSessionsList(order.work_sessions || [])}
             </div>
           </div>
 
@@ -689,6 +696,7 @@ const MonteurViews = {
   // ── Work Timer ──────────────────────────────────────────────────────────
   _timerInterval: null,
   _lsItems: [],
+  _currentOrder: null,
 
   _timerKey: (orderId) => `work_start_${orderId}`,
   _stampedKey: (orderId) => `stamped_${orderId}`,
@@ -720,21 +728,60 @@ const MonteurViews = {
     return `${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`;
   },
 
+  // Render sessions list HTML (used in timer-box and on update)
+  _renderSessionsList(sessions) {
+    if (!sessions || !sessions.length) return '';
+    const fmtDur = (s, e) => {
+      if (!s || !e) return '';
+      const [sh, sm] = s.split(':').map(Number);
+      const [eh, em] = e.split(':').map(Number);
+      const diff = (eh * 60 + em) - (sh * 60 + sm);
+      if (diff <= 0) return '';
+      const h = Math.floor(diff / 60), m = diff % 60;
+      return h > 0 ? `${h}h${m > 0 ? ' ' + m + 'min' : ''}` : `${m}min`;
+    };
+    const rows = sessions.map((s, i) => {
+      const dur = fmtDur(s.start, s.end);
+      return `<div style="display:flex;gap:12px;align-items:center;padding:4px 0;font-size:13px;border-bottom:1px solid var(--border)">
+        <span style="color:var(--text2);min-width:80px">${UI.fmtDate(s.date)}</span>
+        <span style="font-family:monospace">${UI.esc(s.start||'–')} – ${s.end ? UI.esc(s.end) : '<span style="color:var(--warning);font-weight:600">läuft</span>'}</span>
+        ${dur ? `<span style="color:var(--text2)">(${dur})</span>` : ''}
+      </div>`;
+    }).join('');
+    return `<div style="margin-top:8px">${rows}</div>`;
+  },
+
   startTimer(orderId) {
     const key = MonteurViews._timerKey(orderId);
     const now = new Date();
+    const timeStr = MonteurViews._fmtTime(now);
+    const dateStr = now.toISOString().split('T')[0];
 
-    // Always update start time (overwrite if already running)
+    // Build new session entry
+    const sessions = MonteurViews._currentOrder ? [...(MonteurViews._currentOrder.work_sessions || [])] : [];
+    // Only add new session if no currently open one
+    const hasOpen = sessions.some(s => !s.end);
+    if (!hasOpen) {
+      sessions.push({ date: dateStr, start: timeStr, end: null });
+      if (MonteurViews._currentOrder) MonteurViews._currentOrder.work_sessions = sessions;
+      // Save to backend immediately
+      API.updateOrder(orderId, {
+        work_sessions: sessions,
+        work_date: sessions[0].date,
+        work_time_from: sessions[0].start,
+      }).catch(e => console.error('Session save error:', e));
+      // Update sessions list in DOM
+      const sl = document.getElementById('sessions-list');
+      if (sl) { sl.style.marginTop = '12px'; sl.innerHTML = MonteurViews._renderSessionsList(sessions); }
+    }
+
     clearInterval(MonteurViews._timerInterval);
     localStorage.setItem(key, now.toISOString());
     localStorage.setItem(MonteurViews._stampedKey(orderId), 'true');
 
-    // Always set work-from field
-    const fromEl = document.getElementById('f-work-from');
-    if (fromEl) fromEl.value = MonteurViews._fmtTime(now);
-    // set work-date
+    // set work-date field
     const dateEl = document.getElementById('f-work-date');
-    if (dateEl) dateEl.value = now.toISOString().split('T')[0];
+    if (dateEl && !dateEl.value) dateEl.value = dateStr;
 
     // toggle buttons
     const startBtn = document.getElementById('timer-btn-start');
@@ -752,26 +799,44 @@ const MonteurViews = {
     if (!startIso) return;
     const now  = new Date();
     const start = new Date(startIso);
+    const endStr = MonteurViews._fmtTime(now);
+
     localStorage.removeItem(key);
     clearInterval(MonteurViews._timerInterval);
     MonteurViews._timerInterval = null;
+
+    // Close the open session
+    const sessions = MonteurViews._currentOrder ? [...(MonteurViews._currentOrder.work_sessions || [])] : [];
+    const openIdx = sessions.findIndex(s => !s.end);
+    if (openIdx !== -1) {
+      sessions[openIdx] = { ...sessions[openIdx], end: endStr };
+      if (MonteurViews._currentOrder) MonteurViews._currentOrder.work_sessions = sessions;
+      // Save to backend immediately
+      const lastCompleted = sessions.filter(s => s.end).pop();
+      API.updateOrder(orderId, {
+        work_sessions: sessions,
+        work_time_to: endStr,
+        ...(lastCompleted ? {} : {}),
+      }).catch(e => console.error('Session save error:', e));
+      // Update sessions list in DOM
+      const sl = document.getElementById('sessions-list');
+      if (sl) sl.innerHTML = MonteurViews._renderSessionsList(sessions);
+    }
+
     // fill in work-to
     const toEl = document.getElementById('f-work-to');
-    if (toEl) toEl.value = MonteurViews._fmtTime(now);
+    if (toEl) toEl.value = endStr;
     // update display to final elapsed
     const elapsed = Math.floor((now - start) / 1000);
     const display = document.getElementById('timer-display');
     if (display) display.textContent = MonteurViews._fmtElapsed(elapsed);
-    // toggle buttons – show "Neu starten" (rewind) since already stamped
+    // toggle buttons
     const stopBtn = document.getElementById('timer-btn-stop');
     const startBtn = document.getElementById('timer-btn-start');
     if (stopBtn) stopBtn.style.display = 'none';
-    if (startBtn) {
-      startBtn.style.display = '';
-      startBtn.textContent = '\u21bb Neu starten';
-      startBtn.className = 'btn btn-ghost';
-    }
-    UI.toast(`Arbeitszeit gestoppt: ${MonteurViews._fmtTime(start)} \u2013 ${MonteurViews._fmtTime(now)}`, 'success', 4000);
+    if (startBtn) startBtn.style.display = '';
+
+    UI.toast(`Arbeitszeit gestoppt: ${MonteurViews._fmtTime(start)} \u2013 ${endStr}`, 'success', 4000);
   },
 
   resetTimer(orderId) {
@@ -787,7 +852,7 @@ const MonteurViews = {
     if (stopBtn) stopBtn.style.display = 'none';
     if (startBtn) {
       startBtn.style.display = '';
-      startBtn.textContent = '\u25b6 Arbeit starten';
+      startBtn.textContent = '\u25b6 Arbeit beginnen';
       startBtn.className = 'btn btn-primary';
     }
   },
@@ -904,6 +969,7 @@ const MonteurViews = {
         id:    document.getElementById('f-keys-id')?.value.trim() || null,
         note:  document.getElementById('f-keys-note')?.value.trim() || null,
       },
+      work_sessions:    MonteurViews._currentOrder?.work_sessions || [],
       work_date:        document.getElementById('f-work-date')?.value || null,
       work_time_from:   document.getElementById('f-work-from')?.value || null,
       work_time_to:     document.getElementById('f-work-to')?.value || null,
@@ -1009,6 +1075,15 @@ const MonteurViews = {
       clearInterval(MonteurViews._timerInterval);
       MonteurViews._timerInterval = null;
     }
+    // Close any open session with the current end time
+    if (MonteurViews._currentOrder) {
+      const sessions = MonteurViews._currentOrder.work_sessions || [];
+      const openIdx = sessions.findIndex(s => !s.end);
+      if (openIdx !== -1) {
+        sessions[openIdx] = { ...sessions[openIdx], end: MonteurViews._fmtTime(now) };
+        MonteurViews._currentOrder.work_sessions = sessions;
+      }
+    }
     localStorage.setItem('last_order_end_time', now.toISOString());
     localStorage.setItem('last_order_id', String(orderId));
     localStorage.removeItem(MonteurViews._stampedKey(orderId));
@@ -1043,6 +1118,7 @@ const MonteurViews = {
         id:    document.getElementById('f-keys-id')?.value.trim() || null,
         note:  document.getElementById('f-keys-note')?.value.trim() || null,
       },
+      work_sessions:    MonteurViews._currentOrder?.work_sessions || [],
       work_date:        document.getElementById('f-work-date')?.value || null,
       work_time_from:   document.getElementById('f-work-from')?.value || null,
       work_time_to:     workTimeTo,
