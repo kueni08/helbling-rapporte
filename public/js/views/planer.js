@@ -639,6 +639,10 @@ const PlanerViews = {
               <label>Spätestes Montagedatum</label>
               <input type="date" id="f-latest-date" value="${UI.esc(order?.latest_date||'')}">
             </div>
+            <div class="field">
+              <label>Frühster Liefertermin (Zylinder)</label>
+              <input type="date" id="f-earliest-delivery" value="${UI.esc(order?.earliest_delivery_date||'')}">
+            </div>
           </div>
 
           <div class="field mt-3">
@@ -803,6 +807,7 @@ const PlanerViews = {
       arrival_time:          document.getElementById('f-arrival-time').value.trim(),
       planned_date:          document.getElementById('f-planned-date').value,
       latest_date:           document.getElementById('f-latest-date').value,
+      earliest_delivery_date: document.getElementById('f-earliest-delivery')?.value || null,
       work_types:            UI.getMultiCheck('arbeit'),
       notes_planer:          document.getElementById('f-notes-planer').value.trim(),
       assigned_to:           document.getElementById('f-assigned-to').value || null,
@@ -880,6 +885,7 @@ const PlanerViews = {
             ['Ankunftszeit',   fv(order.arrival_time)],
             ['Montagedatum',   UI.fmtDate(order.planned_date)],
             ['Spätestes Datum',UI.fmtDate(order.latest_date)],
+            ...(order.earliest_delivery_date ? [['Frühster Liefertermin (Zylinder)', UI.fmtDate(order.earliest_delivery_date)]] : []),
             ['Arbeit',         fa(order.work_types)],
             ['Bemerkungen',    fv(order.notes_planer)],
           ].map(([l,v]) => `<div class="flex mb-2"><span style="width:180px;color:var(--text2);font-size:12px;font-weight:600">${l}</span><span>${v}</span></div>`).join('')}
@@ -890,11 +896,49 @@ const PlanerViews = {
           ${[
             ['Ausgeführte Arbeiten', fa(order.executed_work)],
             ['Datum',               UI.fmtDate(order.work_date)],
-            ['Arbeitszeit',         `${fv(order.work_time_from)} – ${fv(order.work_time_to)}`],
             ['Techniker',           fv(order.technician_name)],
             ['Blockschrift',        fv(order.technician_block)],
             ['Bemerkungen',         fv(order.notes_monteur)],
           ].map(([l,v]) => `<div class="flex mb-2"><span style="width:180px;color:var(--text2);font-size:12px;font-weight:600">${l}</span><span>${v}</span></div>`).join('')}
+
+          ${(() => {
+            const sessions = order.work_sessions || [];
+            if (sessions.length) {
+              const fmtDur = (s, e) => {
+                if (!s || !e) return '–';
+                const [sh, sm] = s.split(':').map(Number);
+                const [eh, em] = e.split(':').map(Number);
+                const diff = (eh * 60 + em) - (sh * 60 + sm);
+                if (diff <= 0) return '–';
+                const h = Math.floor(diff / 60), m = diff % 60;
+                return h > 0 ? `${h}h ${m > 0 ? m + 'min' : ''}`.trim() : `${m}min`;
+              };
+              const totalMin = sessions.reduce((acc, s) => {
+                if (!s.start || !s.end) return acc;
+                const [sh, sm] = s.start.split(':').map(Number);
+                const [eh, em] = s.end.split(':').map(Number);
+                const d = (eh * 60 + em) - (sh * 60 + sm);
+                return acc + (d > 0 ? d : 0);
+              }, 0);
+              const totalH = (totalMin / 60).toFixed(2).replace(/\.?0+$/, '');
+              return `<div class="mt-3">
+                <p class="text-sm text-muted mb-2" style="font-weight:600">Arbeitszeiten vor Ort</p>
+                <table class="items-table" style="min-width:0">
+                  <thead><tr><th>Datum</th><th>Beginn</th><th>Ende</th><th>Dauer</th></tr></thead>
+                  <tbody>${sessions.map(s => `<tr>
+                    <td>${UI.fmtDate(s.date)}</td>
+                    <td>${UI.esc(s.start || '–')}</td>
+                    <td>${s.end ? UI.esc(s.end) : '<em style="color:var(--warning)">läuft</em>'}</td>
+                    <td>${fmtDur(s.start, s.end)}</td>
+                  </tr>`).join('')}</tbody>
+                </table>
+                <div class="mt-2" style="font-weight:600;font-size:14px">Gesamtarbeitszeit: ${totalH} h</div>
+              </div>`;
+            } else if (order.work_time_from || order.work_time_to) {
+              return `<div class="flex mb-2"><span style="width:180px;color:var(--text2);font-size:12px;font-weight:600">Arbeitszeit</span><span>${fv(order.work_time_from)} – ${fv(order.work_time_to)}</span></div>`;
+            }
+            return '';
+          })()}
 
           ${order.signature_data ? `
           <div class="mt-3">
