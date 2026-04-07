@@ -2,7 +2,7 @@ rapporte.helbling.net {
     basicauth {
         # Passwort-Hash generieren mit: caddy hash-password
         # Den generierten Hash unten nach "admin " eintragen
-        admin $2a$14$HASH_PLATZHALTER_BITTE_ERSETZEN
+        admin $2a$14$Jm/zS6DQ5d1mib1JZxT6P.c6fTU3BPdsyDtjqS7tsskX4yr/.KFuK
     }
     reverse_proxy localhost:3000
 }
