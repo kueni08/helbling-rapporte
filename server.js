@@ -75,7 +75,7 @@ app.get('*', (req, res) => {
 
 // Initialize DB then start server
 initDatabase();
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`\n✅ Helbling Rapporte läuft auf http://localhost:${PORT}`);
   console.log(`   Standard-Login: admin / admin123`);
 
