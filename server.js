@@ -62,14 +62,6 @@ app.get('/anfrage/f/:token', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'anfrage.html'));
 });
 
-// TEMP: DB download endpoint (remove after migration)
-app.get('/db-export-8f3k2x', (req, res) => {
-  const dbPath = path.join(__dirname, 'db', 'rapporte.db');
-  res.download(dbPath, 'rapporte.db', (err) => {
-    if (err) res.status(500).send('DB path: ' + dbPath + ' | Error: ' + err.message);
-  });
-});
-
 // Serve the SPA for any non-API route
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -77,7 +69,7 @@ app.get('*', (req, res) => {
 
 // Initialize DB then start server
 initDatabase();
-app.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, () => {
   console.log(`\n✅ Helbling Rapporte läuft auf http://localhost:${PORT}`);
   console.log(`   Standard-Login: admin / admin123`);
 
