@@ -6,18 +6,65 @@ Diese Anleitung beschreibt, wie du die Rapporte-App auf einem Windows-PC install
 
 ---
 
-## Voraussetzungen
+## Voraussetzungen – manuelle Installation
 
-### 1. Node.js installieren (Version 18 oder neuer)
-- Herunterladen und installieren von [nodejs.org](https://nodejs.org)
-- Prüfen ob es geklappt hat: Eingabeaufforderung öffnen und `node --version` eingeben
+Diese drei Programme müssen zuerst manuell installiert werden. Danach kann Claude Code den Rest automatisch einrichten.
+
+---
+
+### 1. Node.js installieren
+
+**Download**: [nodejs.org/de](https://nodejs.org/de) → grüner Button „LTS empfohlen"
+
+1. Installer herunterladen (`node-v##-x64.msi`)
+2. Installer starten → alles auf Standard lassen → „Install"
+3. Nach der Installation: Eingabeaufforderung öffnen und prüfen:
+   ```
+   node --version
+   ```
+   Muss eine Versionsnummer wie `v22.x.x` anzeigen.
+
+---
 
 ### 2. Git installieren
-- Herunterladen und installieren von [git-scm.com](https://git-scm.com)
+
+**Download**: [git-scm.com/download/win](https://git-scm.com/download/win) → „64-bit Git for Windows Setup"
+
+1. Installer herunterladen und starten
+2. Alles auf Standard lassen → durchklicken → „Install"
+3. Prüfen:
+   ```
+   git --version
+   ```
+
+---
 
 ### 3. Caddy herunterladen
-- Herunterladen von [caddyserver.com/download](https://caddyserver.com/download) → Windows, 64-bit
-- Die Datei `caddy.exe` in den Projektordner legen (gleicher Ordner wie `server.js`)
+
+**Download**: [caddyserver.com/download](https://caddyserver.com/download)
+
+Einstellungen auf der Download-Seite:
+- **OS**: Windows
+- **Architecture**: amd64 (= 64-bit, Standard für moderne PCs)
+- Keine Plugins nötig → direkt „Download"
+
+Es wird eine Datei `caddy_windows_amd64.exe` heruntergeladen.
+
+1. Datei umbenennen zu `caddy.exe`
+2. `caddy.exe` in den Projektordner legen (gleicher Ordner wie `server.js`)
+
+---
+
+### 4. Claude Code installieren (optional, für automatisches Setup)
+
+**Download**: [claude.ai/code](https://claude.ai/code) → „Download for Windows"
+
+Mit Claude Code kann der Rest der Installation automatisch erledigt werden:
+- Repo klonen, `npm install`, `.env` konfigurieren
+- Datenbank initialisieren
+- Caddy-Passwort-Hash generieren und eintragen
+
+Ohne Claude Code: die Schritte unten manuell ausführen.
 
 ---
 
