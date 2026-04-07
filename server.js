@@ -62,6 +62,12 @@ app.get('/anfrage/f/:token', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'anfrage.html'));
 });
 
+// TEMP: DB download endpoint (remove after migration)
+app.get('/db-export-8f3k2x', (req, res) => {
+  const dbPath = path.join(__dirname, 'db', 'rapporte.db');
+  res.download(dbPath, 'rapporte.db');
+});
+
 // Serve the SPA for any non-API route
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
