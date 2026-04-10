@@ -1272,14 +1272,25 @@ const PlanerViews = {
   // ── Excel Import ────────────────────────────────────────────────────────
   openImport() {
     UI.modal('Excel Import – Aufträge',
-      `<p class="text-muted text-sm mb-3">
-        <strong>Standard-Format:</strong> Spalten: <code>Kunde</code>, <code>Montagedatum</code>, <code>Montageadresse</code>, <code>Besteller</code>, <code>Bemerkungen</code>, <code>Projekt</code><br>
-        <strong>ERPNext Lieferschein:</strong> Spalten: <code>ID</code>, <code>Kunde</code>, <code>Datum</code>, <code>Anweisungen</code>, <code>Projekt</code>, <code>Artikel-Code</code>, <code>Artikelname</code>, <code>Anzahl</code>, <code>Einheit</code> (Lieferschein-Artikel)
-      </p>
-       <div class="field">
-         <label>Excel-Datei (.xlsx/.xls)</label>
-         <input type="file" id="import-file" accept=".xlsx,.xls">
-       </div>`,
+      `<div style="margin-bottom:12px">
+        <p class="text-muted text-sm mb-2"><strong>Standard-Format</strong> – Spalten (Datum: dd.mm.yyyy):</p>
+        <p class="text-muted text-sm mb-1" style="font-size:11px">
+          <code>Kunde</code>, <code>Montageadresse</code>, <code>Besteller</code>, <code>Datum</code>, <code>Reihenfolge</code>,
+          <code>Bemerkungen Planer</code>, <code>Auszuführende Arbeiten</code>, <code>Techniker</code>, <code>Projekt</code>
+        </p>
+        <a href="/api/orders/import-template?format=standard" class="btn btn-ghost btn-sm" style="font-size:11px" download>⬇ Vorlage Standard</a>
+      </div>
+      <div style="margin-bottom:12px">
+        <p class="text-muted text-sm mb-1"><strong>ERPNext Lieferschein-Format</strong> – hat Spalte <code>ID</code> + Artikel-Spalten</p>
+        <p class="text-muted text-sm mb-1" style="font-size:11px">
+          Zusätzlich unterstützt: <code>Bemerkungen Planer</code>, <code>Auszuführende Arbeiten</code>, <code>Techniker</code>, <code>Reihenfolge</code>
+        </p>
+        <a href="/api/orders/import-template" class="btn btn-ghost btn-sm" style="font-size:11px" download>⬇ Vorlage ERPNext</a>
+      </div>
+      <div class="field">
+        <label>Excel-Datei (.xlsx/.xls)</label>
+        <input type="file" id="import-file" accept=".xlsx,.xls">
+      </div>`,
       `<button class="btn btn-ghost" onclick="UI.closeModal()">Abbrechen</button>
        <button class="btn btn-primary" onclick="PlanerViews.runImport()">Importieren</button>`
     );
