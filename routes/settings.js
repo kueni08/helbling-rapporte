@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const path   = require('path');
 const fs     = require('fs');
+const archiver = require('archiver');
 const { getDb } = require('../lib/database');
 const { requireLogin, requireRole } = require('../middleware/auth');
 const XLSX = require('xlsx');
@@ -10,6 +11,7 @@ const Anthropic = require('@anthropic-ai/sdk');
 const { DEFAULT_EXTRACTION_PROMPT } = require('../lib/lieferschein-watcher');
 const drive = require('../lib/drive');
 const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(__dirname, '..', 'uploads');
+const DB_PATH = path.join(__dirname, '..', 'db', 'rapporte.db');
 
 // GET /api/settings/options  – all active options grouped by field_name
 router.get('/options', requireLogin, (req, res) => {
@@ -341,6 +343,35 @@ router.post('/drive-retry', requireRole('admin'), async (req, res) => {
   }
 
   res.json({ ok, fail, total: atts.length + photos.length });
+});
+
+// ── Backup / Download ─────────────────────────────────────────────────────────
+
+// GET /api/settings/backup/db  – download SQLite database file (admin only)
+router.get('/backup/db', requireRole('admin'), (req, res) => {
+  if (!fs.existsSync(DB_PATH)) {
+    return res.status(404).json({ error: 'Datenbankdatei nicht gefunden' });
+  }
+  const date = new Date().toISOString().slice(0, 10);
+  res.setHeader('Content-Type', 'application/octet-stream');
+  res.setHeader('Content-Disposition', `attachment; filename="rapporte_backup_${date}.db"`);
+  res.sendFile(DB_PATH);
+});
+
+// GET /api/settings/backup/uploads  – download all uploads as ZIP (admin only)
+router.get('/backup/uploads', requireRole('admin'), (req, res) => {
+  if (!fs.existsSync(UPLOADS_DIR)) {
+    return res.status(404).json({ error: 'Uploads-Ordner nicht gefunden' });
+  }
+  const date = new Date().toISOString().slice(0, 10);
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', `attachment; filename="uploads_backup_${date}.zip"`);
+
+  const archive = archiver('zip', { zlib: { level: 6 } });
+  archive.on('error', err => { console.error('[Backup ZIP]', err); res.end(); });
+  archive.pipe(res);
+  archive.directory(UPLOADS_DIR, 'uploads');
+  archive.finalize();
 });
 
 module.exports = router;

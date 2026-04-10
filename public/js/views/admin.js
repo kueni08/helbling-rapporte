@@ -104,16 +104,16 @@ const AdminViews = {
         <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('customers')">Kunden</button>
         <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('email')">✉️ E-Mail</button>
         <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('lieferschein')">📥 LS-Import</button>
-        <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('drive')">☁️ Drive</button>
         <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('prompt')">🤖 KI-Prompt</button>
         <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('cleanup')">🗑️ Dateien</button>
+        <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('backup')">💾 Backup</button>
       </div>
       <div id="settings-content"></div>`;
     await AdminViews.showSettingsTab('options');
   },
 
   async showSettingsTab(tab) {
-    const tabs = ['options','articles','customers','email','lieferschein','drive','prompt','cleanup'];
+    const tabs = ['options','articles','customers','email','lieferschein','prompt','cleanup','backup'];
     document.querySelectorAll('#settings-tabs .btn').forEach(b => b.classList.remove('btn-primary'));
     document.querySelectorAll('#settings-tabs .btn')[tabs.indexOf(tab)]?.classList.add('btn-primary');
     if (tab === 'options')      await AdminViews.renderOptions();
@@ -121,9 +121,9 @@ const AdminViews = {
     if (tab === 'customers')    await AdminViews.renderCustomers();
     if (tab === 'email')        await AdminViews.renderEmailSettings();
     if (tab === 'lieferschein') await AdminViews.renderLieferscheinImport();
-    if (tab === 'drive')        await AdminViews.renderDriveStatus();
     if (tab === 'prompt')       await AdminViews.renderPromptAssistant();
     if (tab === 'cleanup')      await AdminViews.renderFileCleanup();
+    if (tab === 'backup')       await AdminViews.renderBackup();
   },
 
   async renderOptions() {
@@ -820,5 +820,39 @@ const AdminViews = {
       const res = await API.cleanupFiles(days);
       UI.toast(`${res.deleted} Datei(en) gelöscht (älter als ${days} Tage)`, 'success');
     } catch(e) { UI.toast(e.message, 'error'); }
+  },
+
+  // ── Backup & Download ───────────────────────────────────────────────────
+  async renderBackup() {
+    const el = document.getElementById('settings-content');
+    el.innerHTML = `
+      <div class="card">
+        <div class="card-title">💾 Datenbank-Backup</div>
+        <p class="text-muted text-sm mb-3">
+          Lädt die vollständige SQLite-Datenbank herunter (alle Aufträge, Benutzer, Einstellungen).
+          Die Datei kann direkt mit DB-Browser for SQLite oder ähnlichen Tools geöffnet werden.
+        </p>
+        <a href="/api/settings/backup/db" class="btn btn-primary" download>
+          ⬇ Datenbank herunterladen (.db)
+        </a>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <div class="card-title">📁 Fotos & Anhänge herunterladen</div>
+        <p class="text-muted text-sm mb-3">
+          Lädt alle hochgeladenen Fotos und Dokumente als ZIP-Archiv herunter.
+          Bei vielen Dateien kann dies etwas dauern.
+        </p>
+        <a href="/api/settings/backup/uploads" class="btn btn-primary" download>
+          ⬇ Alle Uploads herunterladen (.zip)
+        </a>
+      </div>
+
+      <div class="card" style="margin-top:16px;border-left:4px solid #f59e0b;background:#fffbeb">
+        <p class="text-sm" style="margin:0">
+          <strong>Tipp:</strong> Erstelle regelmässig ein Backup beider Dateien.
+          Zusammen decken sie die gesamten Daten der Applikation ab.
+        </p>
+      </div>`;
   },
 };

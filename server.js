@@ -76,24 +76,4 @@ app.listen(PORT, () => {
   // Lieferschein-Watcher starten (lokaler Ordner)
   const { startWatcher } = require('./lib/lieferschein-watcher');
   startWatcher();
-
-  // Google Drive Poller starten
-  const { startPoller } = require('./lib/drive-poller');
-  startPoller().catch(e => console.error('[Drive-Poller] Start fehlgeschlagen:', e.message));
-
-  // Drive-Status beim Start loggen
-  const { isDriveEnabled } = require('./lib/drive');
-  const driveOk = isDriveEnabled();
-  console.log(`\n📁 Google Drive: ${driveOk ? '✅ aktiv' : '❌ nicht aktiv'}`);
-  if (!driveOk) {
-    if (!process.env.GOOGLE_SERVICE_ACCOUNT_JSON && !process.env.GOOGLE_SERVICE_ACCOUNT_FILE) {
-      console.log('   → GOOGLE_SERVICE_ACCOUNT_JSON fehlt');
-    }
-    if (!process.env.GOOGLE_DRIVE_FOLDER_ID) {
-      console.log('   → GOOGLE_DRIVE_FOLDER_ID fehlt');
-    }
-  } else {
-    console.log(`   → Folder: ${process.env.GOOGLE_DRIVE_FOLDER_ID}`);
-  }
-  console.log('');
 });
