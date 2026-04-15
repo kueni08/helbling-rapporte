@@ -107,13 +107,14 @@ const AdminViews = {
         <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('prompt')">🤖 KI-Prompt</button>
         <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('cleanup')">🗑️ Dateien</button>
         <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('backup')">💾 Backup</button>
+        <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('database')">🗄️ Datenbank</button>
       </div>
       <div id="settings-content"></div>`;
     await AdminViews.showSettingsTab('options');
   },
 
   async showSettingsTab(tab) {
-    const tabs = ['options','articles','customers','email','lieferschein','prompt','cleanup','backup'];
+    const tabs = ['options','articles','customers','email','lieferschein','prompt','cleanup','backup','database'];
     document.querySelectorAll('#settings-tabs .btn').forEach(b => b.classList.remove('btn-primary'));
     document.querySelectorAll('#settings-tabs .btn')[tabs.indexOf(tab)]?.classList.add('btn-primary');
     if (tab === 'options')      await AdminViews.renderOptions();
@@ -124,6 +125,7 @@ const AdminViews = {
     if (tab === 'prompt')       await AdminViews.renderPromptAssistant();
     if (tab === 'cleanup')      await AdminViews.renderFileCleanup();
     if (tab === 'backup')       await AdminViews.renderBackup();
+    if (tab === 'database')     await AdminViews.renderDbViewer();
   },
 
   async renderOptions() {
@@ -820,6 +822,58 @@ const AdminViews = {
       const res = await API.cleanupFiles(days);
       UI.toast(`${res.deleted} Datei(en) gelöscht (älter als ${days} Tage)`, 'success');
     } catch(e) { UI.toast(e.message, 'error'); }
+  },
+
+  // ── Datenbank-Browser ──────────────────────────────────────────────────
+  async renderDbViewer(table) {
+    const el = document.getElementById('settings-content');
+    const tables = ['orders','users','customers','order_attachments','order_photos','articles','lieferschein_imports'];
+    const tableLabels = {
+      orders:               'Aufträge',
+      users:                'Benutzer',
+      customers:            'Kunden',
+      order_attachments:    'Anhänge',
+      order_photos:         'Fotos',
+      articles:             'Artikel',
+      lieferschein_imports: 'LS-Imports',
+    };
+
+    const activeTable = table || 'orders';
+
+    el.innerHTML = `
+      <div class="card">
+        <div class="card-title">🗄️ Datenbank-Browser</div>
+        <p class="text-muted text-sm mb-3">Schreibgeschützte Ansicht — max. 500 Zeilen pro Tabelle.</p>
+        <div class="flex gap-2 mb-3 flex-wrap">
+          ${tables.map(t => `<button class="btn btn-sm ${t === activeTable ? 'btn-primary' : 'btn-ghost'}"
+            onclick="AdminViews.renderDbViewer('${t}')">${tableLabels[t]}</button>`).join('')}
+        </div>
+        <div id="db-viewer-table">Lade…</div>
+      </div>`;
+
+    try {
+      const data = await fetch(`/api/settings/db-table/${activeTable}`).then(r => r.json());
+      const tableEl = document.getElementById('db-viewer-table');
+      if (!data.rows || data.rows.length === 0) {
+        tableEl.innerHTML = '<p class="text-muted text-sm">Keine Einträge vorhanden.</p>';
+        return;
+      }
+      tableEl.innerHTML = `<div style="overflow-x:auto">
+        <table style="font-size:0.75rem">
+          <thead><tr>${data.columns.map(c => `<th>${UI.esc(c)}</th>`).join('')}</tr></thead>
+          <tbody>
+            ${data.rows.map(row => `<tr>${data.columns.map(c => {
+              const val = row[c];
+              const display = val === null || val === undefined ? '<span class="text-muted">–</span>' : UI.esc(String(val));
+              return `<td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${val === null ? '' : UI.esc(String(val))}">${display}</td>`;
+            }).join('')}</tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+      <p class="text-muted text-sm" style="margin-top:8px">${data.rows.length} Zeile(n) geladen.</p>`;
+    } catch (e) {
+      document.getElementById('db-viewer-table').innerHTML = `<p class="text-muted text-sm">Fehler: ${UI.esc(e.message)}</p>`;
+    }
   },
 
   // ── Backup & Download ───────────────────────────────────────────────────

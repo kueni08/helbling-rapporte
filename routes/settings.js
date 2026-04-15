@@ -345,6 +345,26 @@ router.post('/drive-retry', requireRole('admin'), async (req, res) => {
   res.json({ ok, fail, total: atts.length + photos.length });
 });
 
+// ── Datenbank-Tabellen-Viewer (admin only) ────────────────────────────────────
+const ALLOWED_TABLES = {
+  orders:              'id, order_number, customer_name, installation_address, planned_date, work_date, status, assigned_to, technician_name, ls_number, email_sent_at, created_at',
+  users:               'id, username, full_name, email, role, active, created_at',
+  customers:           'id, name, address, contact_name, contact_email, contact_phone',
+  order_attachments:   'id, order_id, original_name, file_type, created_at',
+  order_photos:        'id, order_id, original_name, photo_type, created_at',
+  articles:            'id, article_number, name, unit, active',
+  lieferschein_imports:'id, ls_number, order_number, file_name, imported_at, status',
+};
+
+router.get('/db-table/:table', requireRole('admin'), (req, res) => {
+  const table = req.params.table;
+  if (!ALLOWED_TABLES[table]) return res.status(404).json({ error: 'Tabelle nicht verfügbar' });
+  const db = getDb();
+  const rows = db.prepare(`SELECT ${ALLOWED_TABLES[table]} FROM ${table} ORDER BY id DESC LIMIT 500`).all();
+  const columns = ALLOWED_TABLES[table].split(',').map(c => c.trim());
+  res.json({ columns, rows, table });
+});
+
 // ── Backup / Download ─────────────────────────────────────────────────────────
 
 // GET /api/settings/backup/db  – download SQLite database file (admin only)
