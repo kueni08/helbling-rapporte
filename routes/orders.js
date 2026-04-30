@@ -314,8 +314,8 @@ router.post('/', requireRole('admin', 'planer'), (req, res) => {
       order_number, status, customer_id, customer_name, customer_address,
       installation_address, orderer, on_site_contact, on_site_contact_phone, arrival_time,
       planned_date, latest_date, work_types, notes_planer,
-      assigned_to, created_by, sort_order, project_number
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+      assigned_to, created_by, sort_order, project_number, zylinder_status
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
   `).run(
     orderNumber,
     b.status || 'geplant',
@@ -334,7 +334,8 @@ router.post('/', requireRole('admin', 'planer'), (req, res) => {
     b.assigned_to || null,
     req.session.userId,
     b.sort_order || 0,
-    b.project_number || null
+    b.project_number || null,
+    b.zylinder_status || null
   );
 
   res.status(201).json(formatOrder(db.prepare('SELECT * FROM orders WHERE id = ?').get(result.lastInsertRowid)));
@@ -393,7 +394,7 @@ router.put('/:id', requireLogin, (req, res) => {
       UPDATE orders SET
         status = ?, customer_id = ?, customer_name = ?, customer_address = ?,
         installation_address = ?, orderer = ?, on_site_contact = ?, on_site_contact_phone = ?,
-        arrival_time = ?, planned_date = ?, latest_date = ?, earliest_delivery_date = ?,
+        arrival_time = ?, planned_date = ?, latest_date = ?, earliest_delivery_date = ?, zylinder_status = ?,
         work_types = ?, notes_planer = ?, assigned_to = ?, sort_order = ?,
         project_number = ?, ls_number = ?,
         executed_work = ?, items_table = ?, additional_material = ?,
@@ -419,6 +420,7 @@ router.put('/:id', requireLogin, (req, res) => {
       b.planned_date ?? order.planned_date,
       b.latest_date ?? order.latest_date,
       b.earliest_delivery_date !== undefined ? b.earliest_delivery_date || null : order.earliest_delivery_date,
+      b.zylinder_status !== undefined ? b.zylinder_status || null : order.zylinder_status,
       JSON.stringify(b.work_types ?? parseJSON(order.work_types, [])),
       b.notes_planer ?? order.notes_planer,
       b.assigned_to ?? order.assigned_to,
