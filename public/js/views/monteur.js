@@ -360,9 +360,22 @@ const MonteurViews = {
         <div class="section-body">
           <div class="form-grid">
             <div>
-              <p class="text-sm text-muted mb-2">Halteringe</p>
-              ${UI.multiCheck('halteringe', opts.halteringe || [], order.rings_data?.type ? [order.rings_data.type] : [])}
-              <div class="flex gap-2 mt-2">
+              <p class="text-sm mb-2" style="font-weight:600">Halteringe abgegeben? <span class="req">*</span></p>
+              <div class="flex gap-3 mb-3">
+                <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer">
+                  <input type="radio" name="f-halteringe-abgegeben" value="nichts"
+                    ${order.rings_data?.handed_over==='ja' ? '' : 'checked'}
+                    onchange="document.getElementById('halteringe-count-row').style.display='none'">
+                  Nichts abgegeben
+                </label>
+                <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer">
+                  <input type="radio" name="f-halteringe-abgegeben" value="ja"
+                    ${order.rings_data?.handed_over==='ja' ? 'checked' : ''}
+                    onchange="document.getElementById('halteringe-count-row').style.display='flex'">
+                  Ringe abgegeben
+                </label>
+              </div>
+              <div id="halteringe-count-row" style="display:${order.rings_data?.handed_over==='ja' ? 'flex' : 'none'};gap:8px">
                 <div class="field flex-1">
                   <label>Anzahl Stk.</label>
                   <input type="number" id="f-rings-count" value="${UI.esc(String(order.rings_data?.count||''))}" min="0">
@@ -372,6 +385,8 @@ const MonteurViews = {
                   <input type="text" id="f-rings-note" value="${UI.esc(order.rings_data?.note||'')}">
                 </div>
               </div>
+              <p class="text-sm text-muted mt-2 mb-1">Art der Halteringe</p>
+              ${UI.multiCheck('halteringe', opts.halteringe || [], order.rings_data?.type ? [order.rings_data.type] : [])}
             </div>
             <div>
               <p class="text-sm text-muted mb-2">Schl\u00fcssel</p>
@@ -950,6 +965,9 @@ const MonteurViews = {
       ...MonteurViews.getItemRows()
     ];
 
+    const handedOverVal = document.querySelector('input[name="f-halteringe-abgegeben"]:checked')?.value || null;
+    if (!handedOverVal) { UI.toast('Bitte "Halteringe abgegeben?" ausfüllen','error'); return; }
+
     const data = {
       executed_work:       UI.getMultiCheck('ausgefuehrte_arbeiten'),
       items_table:         allItems,
@@ -959,6 +977,7 @@ const MonteurViews = {
       extra_argumentation: document.getElementById('f-extra-argumentation')?.value.trim() || null,
       notes_monteur:       document.getElementById('f-notes-monteur')?.value.trim() || null,
       rings_data: {
+        handed_over: handedOverVal,
         type:  UI.getMultiCheck('halteringe')[0] || null,
         count: document.getElementById('f-rings-count')?.value || null,
         note:  document.getElementById('f-rings-note')?.value.trim() || null,
@@ -1099,6 +1118,9 @@ const MonteurViews = {
       ? (document.getElementById('f-work-to')?.value || null)
       : MonteurViews._fmtTime(now);
 
+    const handedOverVal = document.querySelector('input[name="f-halteringe-abgegeben"]:checked')?.value || null;
+    if (!handedOverVal) { UI.toast('Bitte "Halteringe abgegeben?" ausfüllen','error'); return; }
+
     const data = {
       executed_work:       UI.getMultiCheck('ausgefuehrte_arbeiten'),
       items_table:         allItems,
@@ -1108,6 +1130,7 @@ const MonteurViews = {
       extra_argumentation: document.getElementById('f-extra-argumentation')?.value.trim() || null,
       notes_monteur:       document.getElementById('f-notes-monteur')?.value.trim() || null,
       rings_data: {
+        handed_over: handedOverVal,
         type:  UI.getMultiCheck('halteringe')[0] || null,
         count: document.getElementById('f-rings-count')?.value || null,
         note:  document.getElementById('f-rings-note')?.value.trim() || null,
@@ -1149,7 +1172,8 @@ const MonteurViews = {
             </div>
             <table style="width:100%;border-collapse:collapse;font-size:13px">
               <tr><td style="padding:5px 8px;font-weight:600;width:40%">Techniker</td><td style="padding:5px 8px">${UI.esc(data.technician_name)}</td></tr>
-              <tr style="background:#f5f5f5"><td style="padding:5px 8px;font-weight:600">Datum</td><td style="padding:5px 8px">${UI.esc(data.work_date||'–')}</td></tr>
+              <tr style="background:#f5f5f5"><td style="padding:5px 8px;font-weight:600">Halteringe</td><td style="padding:5px 8px">${data.rings_data?.handed_over==='ja' ? `Abgegeben${data.rings_data?.count ? ' ('+data.rings_data.count+' Stk.)' : ''}` : 'Nichts abgegeben'}</td></tr>
+              <tr><td style="padding:5px 8px;font-weight:600">Datum</td><td style="padding:5px 8px">${UI.esc(data.work_date||'–')}</td></tr>
               <tr><td style="padding:5px 8px;font-weight:600">Arbeitszeit</td><td style="padding:5px 8px">${UI.esc(data.work_time_from||'–')} – ${UI.esc(data.work_time_to||'–')}</td></tr>
               ${data.travel_time ? `<tr style="background:#f5f5f5"><td style="padding:5px 8px;font-weight:600">Fahrzeit</td><td style="padding:5px 8px">${data.travel_time} h</td></tr>` : ''}
               ${data.travel_km ? `<tr><td style="padding:5px 8px;font-weight:600">Kilometer</td><td style="padding:5px 8px">${data.travel_km} km</td></tr>` : ''}
