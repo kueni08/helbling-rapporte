@@ -172,7 +172,7 @@ const PlanerViews = {
           <td>${UI.esc(o.assigned_name || '–')}</td>
           ${cols.has('sort_order') ? `<td class="inline-edit-cell" style="text-align:center" onclick="PlanerViews.inlineEdit(event,${o.id},'sort_order','${o.sort_order||0}','number')" title="Klicken zum Bearbeiten">${o.sort_order||0}</td>` : ''}
           ${cols.has('notes_planer') ? `<td style="font-size:12px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${UI.esc(o.notes_planer||'')}">${UI.esc((o.notes_planer||'').substring(0,60))}${(o.notes_planer||'').length>60?'…':''}</td>` : ''}
-          <td class="inline-edit-cell" onclick="PlanerViews.inlineEditStatus(event,${o.id},'${o.status}')">${UI.statusBadge(o.status)}</td>
+          <td class="inline-edit-cell" onclick="PlanerViews.inlineEditStatus(event,${o.id},'${o.status}')">${UI.statusBadge(o.status)}${o.zylinder_status==='bestellt' ? ' <span class="badge badge-red" style="font-size:10px;padding:1px 5px;margin-left:4px">Zyl. bestellt</span>' : ''}</td>
           <td class="text-right" style="white-space:nowrap">
             <button class="btn btn-ghost btn-sm" onclick="PlanerViews.renderOrderDetail(${o.id})">Ansicht</button>
             <button class="btn btn-ghost btn-sm" onclick="PlanerViews.renderOrderForm(${o.id})">Bearb.</button>
@@ -646,6 +646,19 @@ const PlanerViews = {
           </div>
 
           <div class="field mt-3">
+            <label>Zylinder-Status</label>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px">
+              ${[
+                ['bestellt',        '🔴 Bestellt (noch nicht geliefert)'],
+                ['vorhanden',       '✅ Vorhanden'],
+                ['nicht_notwendig', '– Kein Zylinder nötig'],
+              ].map(([val, lbl]) => `<label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;padding:4px 10px;border-radius:6px;border:1px solid var(--border);font-size:13px">
+                <input type="radio" name="f-zyl-status" value="${val}" ${order?.zylinder_status===val?'checked':''}> ${lbl}
+              </label>`).join('')}
+            </div>
+          </div>
+
+          <div class="field mt-3">
             <label>Arbeit <span class="req">*</span></label>
             ${UI.multiCheck('arbeit', opts.arbeit || [], order?.work_types || [])}
           </div>
@@ -808,6 +821,7 @@ const PlanerViews = {
       planned_date:          document.getElementById('f-planned-date').value,
       latest_date:           document.getElementById('f-latest-date').value,
       earliest_delivery_date: document.getElementById('f-earliest-delivery')?.value || null,
+      zylinder_status:       document.querySelector('input[name="f-zyl-status"]:checked')?.value || null,
       work_types:            UI.getMultiCheck('arbeit'),
       notes_planer:          document.getElementById('f-notes-planer').value.trim(),
       assigned_to:           document.getElementById('f-assigned-to').value || null,
@@ -886,6 +900,7 @@ const PlanerViews = {
             ['Montagedatum',   UI.fmtDate(order.planned_date)],
             ['Spätestes Datum',UI.fmtDate(order.latest_date)],
             ...(order.earliest_delivery_date ? [['Frühster Liefertermin (Zylinder)', UI.fmtDate(order.earliest_delivery_date)]] : []),
+            ...(order.zylinder_status ? [['Zylinder', (() => { const m={bestellt:['badge-red','🔴 Zylinder bestellt'],vorhanden:['badge-green','✅ Zylinder vorhanden'],nicht_notwendig:['badge-gray','Kein Zylinder nötig']}; const [cls,lbl]=m[order.zylinder_status]||['badge-gray',order.zylinder_status]; return `<span class="badge ${cls}">${lbl}</span>`; })()] ] : []),
             ['Arbeit',         fa(order.work_types)],
             ['Bemerkungen',    fv(order.notes_planer)],
           ].map(([l,v]) => `<div class="flex mb-2"><span style="width:180px;color:var(--text2);font-size:12px;font-weight:600">${l}</span><span>${v}</span></div>`).join('')}
@@ -899,6 +914,7 @@ const PlanerViews = {
             ['Techniker',           fv(order.technician_name)],
             ['Blockschrift',        fv(order.technician_block)],
             ['Bemerkungen',         fv(order.notes_monteur)],
+            ...(order.rings_data ? [['Halteringe', (() => { const rd = typeof order.rings_data === 'string' ? JSON.parse(order.rings_data) : order.rings_data; if (!rd?.handed_over) return '<span style="color:var(--text2)">–</span>'; return rd.handed_over==='ja' ? `<span class="badge badge-orange">Ringe abgegeben${rd.count ? ' · '+rd.count+' Stk.' : ''}</span>` : '<span class="badge badge-ok">✓ Nichts abgegeben</span>'; })()] ] : []),
           ].map(([l,v]) => `<div class="flex mb-2"><span style="width:180px;color:var(--text2);font-size:12px;font-weight:600">${l}</span><span>${v}</span></div>`).join('')}
 
           ${(() => {
