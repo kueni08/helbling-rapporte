@@ -226,18 +226,40 @@ router.get('/export', requireRole('admin', 'planer'), (req, res) => {
 });
 
 // GET /api/orders/import-template  (planer + admin)
+// ?format=standard für einfaches Format, default = ERPNext Lieferschein-Format
 router.get('/import-template', requireRole('admin', 'planer'), (req, res) => {
+  const wb = XLSX.utils.book_new();
+
+  if (req.query.format === 'standard') {
+    // ── Standard-Format Vorlage ────────────────────────────────────────
+    const headers = [
+      'Kunde', 'Montageadresse', 'Besteller', 'Datum', 'Reihenfolge',
+      'Bemerkungen Planer', 'Ausz\u00fchrende Arbeiten', 'Techniker', 'Projekt'
+    ];
+    const example = [
+      'Muster GmbH', 'Musterstrasse 1, 8001 Z\u00fcrich', 'Max Muster',
+      '15.06.2025', '1', 'Zylinder mitbringen', 'montage', 'Hans M\u00fcller', 'P-001'
+    ];
+    const ws = XLSX.utils.aoa_to_sheet([headers, example]);
+    XLSX.utils.book_append_sheet(wb, ws, 'Standard');
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="import_standard_vorlage.xlsx"');
+    return res.send(Buffer.from(buf));
+  }
+
+  // ── ERPNext Lieferschein-Format Vorlage ──────────────────────────────
   const headers = [
     'ID', 'Nummernkreis', 'Kunde', 'Abteilung', 'Datum', 'Buchungszeit',
     'Unternehmen', 'W\u00e4hrung', 'Wechselkurs', 'Preisliste', 'Preislistenw\u00e4hrung',
     'Preislisten-Wechselkurs', 'Kontaktperson des Unternehmens', 'Status',
     'Rechnungsadresse', 'Anweisungen', 'Projekt',
+    'Bemerkungen Planer', 'Ausz\u00fchrende Arbeiten', 'Techniker', 'Reihenfolge',
     'ID (Lieferschein-Artikel)', 'Anzahl (Lieferschein-Artikel)',
     'Artikel-Code (Lieferschein-Artikel)', 'Artikelname (Lieferschein-Artikel)',
     'Einheit (Lieferschein-Artikel)', 'Lagerma\u00dfeinheit (Lieferschein-Artikel)',
     'Ma\u00dfeinheit-Umrechnungsfaktor (Lieferschein-Artikel)'
   ];
-  const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet([headers]);
   XLSX.utils.book_append_sheet(wb, ws, 'Vorlage');
   const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
@@ -353,6 +375,7 @@ router.put('/:id', requireLogin, (req, res) => {
   // Monteur can only update their own orders and only monteur fields
   if (role === 'monteur') {
     if (order.assigned_to !== userId) return res.status(403).json({ error: 'Keine Berechtigung' });
+    // Use !== undefined so partial updates (e.g. timer-only saves) don't overwrite other fields
     db.prepare(`
       UPDATE orders SET
         executed_work = ?, items_table = ?, additional_material = ?,
@@ -366,26 +389,26 @@ router.put('/:id', requireLogin, (req, res) => {
         updated_at = datetime('now')
       WHERE id = ?
     `).run(
-      JSON.stringify(b.executed_work || []),
-      JSON.stringify(b.items_table || []),
-      JSON.stringify(b.additional_material || []),
-      JSON.stringify(b.extra_material || []),
-      b.extra_aufwand != null ? parseFloat(b.extra_aufwand) || null : null,
-      b.extra_argumentation || null,
-      b.notes_monteur || null,
-      JSON.stringify(b.rings_data || {}),
-      JSON.stringify(b.keys_data || {}),
-      b.work_date || null,
-      b.work_time_from || null,
-      b.work_time_to || null,
-      JSON.stringify(b.work_sessions || []),
-      b.travel_time != null ? parseFloat(b.travel_time) || null : null,
-      b.travel_km != null ? parseInt(b.travel_km) || null : null,
-      b.technician_name || null,
-      b.technician_block || null,
-      b.signature_data || null,
-      b.agb_accepted ? 1 : 0,
-      b.status || order.status,
+      b.executed_work !== undefined ? JSON.stringify(b.executed_work) : order.executed_work,
+      b.items_table !== undefined ? JSON.stringify(b.items_table) : order.items_table,
+      b.additional_material !== undefined ? JSON.stringify(b.additional_material) : order.additional_material,
+      b.extra_material !== undefined ? JSON.stringify(b.extra_material) : order.extra_material,
+      b.extra_aufwand !== undefined ? (b.extra_aufwand != null ? parseFloat(b.extra_aufwand) || null : null) : order.extra_aufwand,
+      b.extra_argumentation !== undefined ? (b.extra_argumentation || null) : order.extra_argumentation,
+      b.notes_monteur !== undefined ? (b.notes_monteur || null) : order.notes_monteur,
+      b.rings_data !== undefined ? JSON.stringify(b.rings_data) : order.rings_data,
+      b.keys_data !== undefined ? JSON.stringify(b.keys_data) : order.keys_data,
+      b.work_date !== undefined ? (b.work_date || null) : order.work_date,
+      b.work_time_from !== undefined ? (b.work_time_from || null) : order.work_time_from,
+      b.work_time_to !== undefined ? (b.work_time_to || null) : order.work_time_to,
+      b.work_sessions !== undefined ? JSON.stringify(b.work_sessions) : order.work_sessions,
+      b.travel_time !== undefined ? (b.travel_time != null ? parseFloat(b.travel_time) || null : null) : order.travel_time,
+      b.travel_km !== undefined ? (b.travel_km != null ? parseInt(b.travel_km) || null : null) : order.travel_km,
+      b.technician_name !== undefined ? (b.technician_name || null) : order.technician_name,
+      b.technician_block !== undefined ? (b.technician_block || null) : order.technician_block,
+      b.signature_data !== undefined ? (b.signature_data || null) : order.signature_data,
+      b.agb_accepted !== undefined ? (b.agb_accepted ? 1 : 0) : order.agb_accepted,
+      b.status !== undefined ? (b.status || order.status) : order.status,
       req.params.id
     );
   } else {
@@ -572,42 +595,57 @@ router.post('/import', requireRole('admin', 'planer'), upload.single('file'), (r
       'Artikel-Code (Lieferschein-Artikel)' in rows[0]
     );
 
+    // Datum-Parsing: unterstützt YYYY-MM-DD, dd.mm.yyyy und Excel-Zahlen
+    function parseImportDate(rawDate) {
+      if (!rawDate) return null;
+      if (typeof rawDate === 'number') {
+        const d = XLSX.SSF.parse_date_code(rawDate);
+        return `${d.y}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`;
+      }
+      const s = String(rawDate).trim().substring(0, 10);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+      const m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+      if (m) return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+      return null;
+    }
+
+    // Techniker-Name → user.id Lookup (cached)
+    const techLookupCache = {};
+    function resolveTechnician(name) {
+      if (!name) return null;
+      const key = name.trim().toLowerCase();
+      if (key in techLookupCache) return techLookupCache[key];
+      const user = db.prepare("SELECT id FROM users WHERE lower(full_name) = ? AND role = 'monteur' AND active = 1").get(key);
+      techLookupCache[key] = user?.id || null;
+      return techLookupCache[key];
+    }
+
     const tx = db.transaction(() => {
       if (isLS) {
         // ── Lieferschein-Format (ERPNext) ────────────────────────────────
         const orders = [];
         let current = null;
 
-        function parseLSDate(rawDate) {
-          if (!rawDate) return null;
-          if (typeof rawDate === 'number') {
-            const d = XLSX.SSF.parse_date_code(rawDate);
-            return `${d.y}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`;
-          }
-          const s = String(rawDate).trim().substring(0, 10);
-          if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-          const m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
-          if (m) return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
-          return null;
-        }
-
         rows.forEach(row => {
           const orderId = String(row['ID'] || '').trim();
 
           if (orderId) {
             // New order header row
+            const workTypesRaw = String(row['Auszuführende Arbeiten'] || row['Arbeit'] || '').trim();
             current = {
               source_id: orderId,
               customer_name: String(row['Kunde'] || row['Kundenname'] || row['Unternehmen'] || '').trim() || null,
               orderer: String(row['Kontaktperson des Unternehmens'] || '').trim() || null,
               on_site_contact: String(row['Kontakt'] || '').trim() || null,
-              // Anweisungen = Montageadresse (NEU), Fallback auf Lieferadresse
               installation_address: stripHtml(row['Anweisungen'] || row['Lieferadresse'] || ''),
-              // Rechnungsadresse = Kundenadresse
               customer_address: stripHtml(row['Rechnungsadresse'] || ''),
-              planned_date: parseLSDate(row['Datum']),
+              planned_date: parseImportDate(row['Datum']),
               abteilung: String(row['Abteilung'] || '').trim(),
               project_number: String(row['Projekt'] || '').trim() || null,
+              notes_planer: String(row['Bemerkungen Planer'] || row['Notizen'] || '').trim() || null,
+              work_types: workTypesRaw ? workTypesRaw.split(',').map(s => s.trim()).filter(Boolean) : [],
+              assigned_to: resolveTechnician(row['Techniker'] || ''),
+              sort_order: parseInt(row['Reihenfolge']) || 0,
               items: []
             };
             orders.push(current);
@@ -640,8 +678,8 @@ router.post('/import', requireRole('admin', 'planer'), upload.single('file'), (r
               order_number, status, customer_name, customer_address,
               installation_address, orderer, on_site_contact,
               planned_date, notes_planer, items_table, created_by, work_types,
-              project_number, ls_number
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+              project_number, ls_number, assigned_to, sort_order
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
           `).run(
             orderNumber, 'geplant',
             orderData.customer_name,
@@ -650,12 +688,14 @@ router.post('/import', requireRole('admin', 'planer'), upload.single('file'), (r
             orderData.orderer || null,
             orderData.on_site_contact || null,
             orderData.planned_date,
-            null,
+            orderData.notes_planer,
             JSON.stringify(orderData.items),
             req.session.userId,
-            '[]',
+            JSON.stringify(orderData.work_types),
             orderData.project_number,
-            orderData.source_id || null
+            orderData.source_id || null,
+            orderData.assigned_to,
+            orderData.sort_order
           );
           inserted.push({ id: result.lastInsertRowid, order_number: orderNumber, project_number: orderData.project_number, customer_name: orderData.customer_name, items: orderData.items.length });
         });
@@ -664,18 +704,25 @@ router.post('/import', requireRole('admin', 'planer'), upload.single('file'), (r
         // ── Standard-Format ─────────────────────────────────────────────
         rows.forEach(row => {
           const orderNumber = genOrderNumber(db);
-          const planned_date = row['Montagedatum'] || row['planned_date'] || row['Datum'] || null;
+          const planned_date = parseImportDate(row['Datum'] || row['Montagedatum'] || row['planned_date'] || null);
           const customer_name = row['Kunde'] || row['customer_name'] || row['Kundenname'] || null;
           const installation_address = row['Montageadresse'] || row['Anweisungen'] || row['installation_address'] || null;
           const orderer = row['Besteller'] || row['orderer'] || null;
-          const notes_planer = row['Bemerkungen'] || row['notes'] || null;
+          const notes_planer = row['Bemerkungen Planer'] || row['Bemerkungen'] || row['notes'] || null;
           const project_number = row['Projekt'] || row['Projektnummer'] || null;
+          const sort_order = parseInt(row['Reihenfolge']) || 0;
+          const workTypesRaw = String(row['Auszuführende Arbeiten'] || row['Arbeit'] || '').trim();
+          const work_types = workTypesRaw ? workTypesRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
+          const assigned_to = resolveTechnician(row['Techniker'] || '');
 
           const result = db.prepare(`
             INSERT INTO orders (order_number, status, customer_name, installation_address,
-              orderer, planned_date, notes_planer, created_by, work_types, project_number)
-            VALUES (?,?,?,?,?,?,?,?,?,?)
-          `).run(orderNumber, 'geplant', customer_name, installation_address, orderer, planned_date, notes_planer, req.session.userId, '[]', project_number || null);
+              orderer, planned_date, notes_planer, created_by, work_types, project_number,
+              assigned_to, sort_order)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+          `).run(orderNumber, 'geplant', customer_name, installation_address, orderer,
+            planned_date, notes_planer, req.session.userId, JSON.stringify(work_types),
+            project_number || null, assigned_to, sort_order);
 
           inserted.push({ id: result.lastInsertRowid, order_number: orderNumber, customer_name });
         });

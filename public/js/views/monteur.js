@@ -226,10 +226,16 @@ const MonteurViews = {
             ['Montagedatum',    UI.fmtDate(order.planned_date)],
             ['Sp\u00e4testes Datum', UI.fmtDate(order.latest_date)],
             ['Arbeit',          (order.work_types||[]).join(', ') || '\u2013'],
-          ].map(([l,v]) => `<div class="flex mb-2 gap-2">
-            <span style="width:180px;flex-shrink:0;color:var(--text2);font-size:12px;font-weight:600">${l}</span>
-            <span>${UI.esc(String(v))}</span>
-          </div>`).join('')}
+          ].map(([l,v]) => {
+            let valHtml;
+            if (l === 'Montageadresse' && v && v !== '\u2013') {
+              const mapsUrl = 'https://maps.google.com/?q=' + encodeURIComponent(v);
+              valHtml = '<a href="' + mapsUrl + '" target="_blank" rel="noopener" style="color:var(--accent);font-weight:600;text-decoration:none">\ud83d\udccd ' + UI.esc(String(v)) + '</a>';
+            } else {
+              valHtml = '<span>' + UI.esc(String(v)) + '</span>';
+            }
+            return '<div class="flex mb-2 gap-2"><span style="width:180px;flex-shrink:0;color:var(--text2);font-size:12px;font-weight:600">' + l + '</span>' + valHtml + '</div>';
+          }).join('')}
           ${order.notes_planer ? `<div class="flex mb-2 gap-2">
             <span style="width:180px;flex-shrink:0;color:var(--text2);font-size:12px;font-weight:600">Bemerkungen</span>
             <span>${UI.esc(order.notes_planer)}</span>

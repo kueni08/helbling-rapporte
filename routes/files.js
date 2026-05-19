@@ -6,7 +6,6 @@ const archiver = require('archiver');
 const { v4: uuidv4 } = require('uuid');
 const { getDb } = require('../lib/database');
 const { requireLogin, requireRole } = require('../middleware/auth');
-const drive = require('../lib/drive');
 const { buildHtmlReport } = require('../lib/mailer');
 
 const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(__dirname, '..', 'uploads');
@@ -56,18 +55,6 @@ router.post('/:orderId/attachments', requireLogin, upload.array('files', 20), (r
     `).run(req.params.orderId, f.filename, f.originalname, isImage ? 'image' : 'document', req.session.userId, dirName);
     const insertId = result.lastInsertRowid;
 
-    // Drive-Upload (asynchron, blockiert nicht die Antwort)
-    if (drive.isDriveEnabled()) {
-      drive.uploadFile(f.path, f.originalname, f.mimetype, dirName)
-        .then(driveFile => {
-          if (driveFile) {
-            db.prepare('UPDATE order_attachments SET google_drive_file_id=?, google_drive_web_url=? WHERE id=?')
-              .run(driveFile.id, driveFile.webViewLink, insertId);
-          }
-        })
-        .catch(err => console.error('[Drive] Attachment upload error:', err));
-    }
-
     return { id: insertId, filename: f.filename, original_name: f.originalname };
   });
 
@@ -87,18 +74,6 @@ router.post('/:orderId/photos', requireLogin, upload.array('photos', 20), (req, 
       VALUES (?, ?, ?, ?, ?, ?)
     `).run(req.params.orderId, f.filename, f.originalname, req.body.photo_type || 'standort', req.session.userId, dirName);
     const insertId = result.lastInsertRowid;
-
-    // Drive-Upload (asynchron, blockiert nicht die Antwort)
-    if (drive.isDriveEnabled()) {
-      drive.uploadFile(f.path, f.originalname, f.mimetype, dirName)
-        .then(driveFile => {
-          if (driveFile) {
-            db.prepare('UPDATE order_photos SET google_drive_file_id=?, google_drive_web_url=? WHERE id=?')
-              .run(driveFile.id, driveFile.webViewLink, insertId);
-          }
-        })
-        .catch(err => console.error('[Drive] Photo upload error:', err));
-    }
 
     return { id: insertId, filename: f.filename, original_name: f.originalname };
   });
@@ -212,11 +187,6 @@ router.delete('/:orderId/attachments/:id', requireLogin, (req, res) => {
   const fp = candidates.find(p => fs.existsSync(p));
   if (fp) fs.unlinkSync(fp);
 
-  // Drive löschen
-  if (att.google_drive_file_id) {
-    drive.deleteFile(att.google_drive_file_id).catch(() => {});
-  }
-
   res.json({ ok: true });
 });
 
@@ -233,11 +203,6 @@ router.delete('/:orderId/photos/:id', requireLogin, (req, res) => {
   candidates.push(path.join(UPLOADS_DIR, String(req.params.orderId), photo.filename));
   const fp = candidates.find(p => fs.existsSync(p));
   if (fp) fs.unlinkSync(fp);
-
-  // Drive löschen
-  if (photo.google_drive_file_id) {
-    drive.deleteFile(photo.google_drive_file_id).catch(() => {});
-  }
 
   res.json({ ok: true });
 });

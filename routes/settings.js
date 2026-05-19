@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const path   = require('path');
 const fs     = require('fs');
+const archiver = require('archiver');
 const { getDb } = require('../lib/database');
 const { requireLogin, requireRole } = require('../middleware/auth');
 const XLSX = require('xlsx');
@@ -10,6 +11,7 @@ const Anthropic = require('@anthropic-ai/sdk');
 const { DEFAULT_EXTRACTION_PROMPT } = require('../lib/lieferschein-watcher');
 const drive = require('../lib/drive');
 const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(__dirname, '..', 'uploads');
+const DB_PATH = path.join(__dirname, '..', 'db', 'rapporte.db');
 
 // GET /api/settings/options  – all active options grouped by field_name
 router.get('/options', requireLogin, (req, res) => {
@@ -341,6 +343,55 @@ router.post('/drive-retry', requireRole('admin'), async (req, res) => {
   }
 
   res.json({ ok, fail, total: atts.length + photos.length });
+});
+
+// ── Datenbank-Tabellen-Viewer (admin only) ────────────────────────────────────
+const ALLOWED_TABLES = {
+  orders:              'id, order_number, customer_name, installation_address, planned_date, work_date, status, assigned_to, technician_name, ls_number, email_sent_at, created_at',
+  users:               'id, username, full_name, email, role, active, created_at',
+  customers:           'id, name, address, contact_name, contact_email, contact_phone',
+  order_attachments:   'id, order_id, original_name, file_type, created_at',
+  order_photos:        'id, order_id, original_name, photo_type, created_at',
+  articles:            'id, article_number, name, unit, active',
+  lieferschein_imports:'id, ls_number, order_number, file_name, imported_at, status',
+};
+
+router.get('/db-table/:table', requireRole('admin'), (req, res) => {
+  const table = req.params.table;
+  if (!ALLOWED_TABLES[table]) return res.status(404).json({ error: 'Tabelle nicht verfügbar' });
+  const db = getDb();
+  const rows = db.prepare(`SELECT ${ALLOWED_TABLES[table]} FROM ${table} ORDER BY id DESC LIMIT 500`).all();
+  const columns = ALLOWED_TABLES[table].split(',').map(c => c.trim());
+  res.json({ columns, rows, table });
+});
+
+// ── Backup / Download ─────────────────────────────────────────────────────────
+
+// GET /api/settings/backup/db  – download SQLite database file (admin only)
+router.get('/backup/db', requireRole('admin'), (req, res) => {
+  if (!fs.existsSync(DB_PATH)) {
+    return res.status(404).json({ error: 'Datenbankdatei nicht gefunden' });
+  }
+  const date = new Date().toISOString().slice(0, 10);
+  res.setHeader('Content-Type', 'application/octet-stream');
+  res.setHeader('Content-Disposition', `attachment; filename="rapporte_backup_${date}.db"`);
+  res.sendFile(DB_PATH);
+});
+
+// GET /api/settings/backup/uploads  – download all uploads as ZIP (admin only)
+router.get('/backup/uploads', requireRole('admin'), (req, res) => {
+  if (!fs.existsSync(UPLOADS_DIR)) {
+    return res.status(404).json({ error: 'Uploads-Ordner nicht gefunden' });
+  }
+  const date = new Date().toISOString().slice(0, 10);
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', `attachment; filename="uploads_backup_${date}.zip"`);
+
+  const archive = archiver('zip', { zlib: { level: 6 } });
+  archive.on('error', err => { console.error('[Backup ZIP]', err); res.end(); });
+  archive.pipe(res);
+  archive.directory(UPLOADS_DIR, 'uploads');
+  archive.finalize();
 });
 
 module.exports = router;

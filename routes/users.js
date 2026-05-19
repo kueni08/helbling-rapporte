@@ -65,8 +65,21 @@ router.put('/:id', requireRole('admin'), (req, res) => {
 // DELETE /api/users/inactive  (admin only – permanently delete all inactive users)
 router.delete('/inactive', requireRole('admin'), (req, res) => {
   const db = getDb();
-  const result = db.prepare('DELETE FROM users WHERE active = 0 AND id != ?').run(req.session.userId);
-  res.json({ ok: true, deleted: result.changes });
+  const inactive = db.prepare('SELECT id FROM users WHERE active = 0 AND id != ?').all(req.session.userId);
+  if (inactive.length === 0) return res.json({ ok: true, deleted: 0 });
+
+  const ids = inactive.map(u => u.id);
+  const ph  = ids.map(() => '?').join(',');
+
+  const tx = db.transaction(() => {
+    db.prepare(`UPDATE orders            SET assigned_to  = NULL WHERE assigned_to  IN (${ph})`).run(...ids);
+    db.prepare(`UPDATE orders            SET created_by   = NULL WHERE created_by   IN (${ph})`).run(...ids);
+    db.prepare(`UPDATE order_attachments SET uploaded_by  = NULL WHERE uploaded_by  IN (${ph})`).run(...ids);
+    db.prepare(`UPDATE order_photos      SET uploaded_by  = NULL WHERE uploaded_by  IN (${ph})`).run(...ids);
+    return db.prepare(`DELETE FROM users WHERE id IN (${ph})`).run(...ids).changes;
+  });
+
+  res.json({ ok: true, deleted: tx() });
 });
 
 // DELETE /api/users/:id  (admin only – soft delete)
