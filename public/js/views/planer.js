@@ -157,7 +157,8 @@ const PlanerViews = {
       <tbody>
       ${orders.map(o => {
         const hasExtra = (o.extra_material?.length > 0) || (o.extra_aufwand > 0);
-        const rowStyle = hasExtra ? 'background:rgba(212,138,0,.10);' : '';
+        const zylBestellt = o.zylinder_status === 'bestellt';
+        const rowStyle = zylBestellt ? 'background:rgba(239,68,68,.08);' : hasExtra ? 'background:rgba(212,138,0,.10);' : '';
         const totalFiles = (o.attachment_count || 0) + (o.photo_count || 0);
         const attachBadge = totalFiles > 0 ? ` <span title="${totalFiles} Anhänge/Fotos" style="color:#555;font-size:11px;font-weight:600">📎${totalFiles}</span>` : '';
         const canCheck = o.status === 'abgeschlossen';
@@ -172,7 +173,11 @@ const PlanerViews = {
           <td>${UI.esc(o.assigned_name || '–')}</td>
           ${cols.has('sort_order') ? `<td class="inline-edit-cell" style="text-align:center" onclick="PlanerViews.inlineEdit(event,${o.id},'sort_order','${o.sort_order||0}','number')" title="Klicken zum Bearbeiten">${o.sort_order||0}</td>` : ''}
           ${cols.has('notes_planer') ? `<td style="font-size:12px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${UI.esc(o.notes_planer||'')}">${UI.esc((o.notes_planer||'').substring(0,60))}${(o.notes_planer||'').length>60?'…':''}</td>` : ''}
-          <td class="inline-edit-cell" onclick="PlanerViews.inlineEditStatus(event,${o.id},'${o.status}')">${UI.statusBadge(o.status)}${o.zylinder_status==='bestellt' ? ' <span class="badge badge-red" style="font-size:10px;padding:1px 5px;margin-left:4px">Zyl. bestellt</span>' : ''}</td>
+          <td class="inline-edit-cell" onclick="PlanerViews.inlineEditStatus(event,${o.id},'${o.status}')">${UI.statusBadge(o.status)}${
+            o.zylinder_status === 'bestellt'        ? ' <span class="badge badge-red"   style="font-size:10px;padding:2px 6px;margin-left:4px">🔴 Zyl. nicht geliefert</span>'
+          : o.zylinder_status === 'vorhanden'       ? ' <span class="badge badge-green" style="font-size:10px;padding:2px 6px;margin-left:4px">✅ Zyl. vorhanden</span>'
+          : o.zylinder_status === 'nicht_notwendig' ? ' <span class="badge badge-gray"  style="font-size:10px;padding:2px 6px;margin-left:4px">Kein Zylinder</span>'
+          : ''}</td>
           <td class="text-right" style="white-space:nowrap">
             <button class="btn btn-ghost btn-sm" onclick="PlanerViews.renderOrderDetail(${o.id})">Ansicht</button>
             <button class="btn btn-ghost btn-sm" onclick="PlanerViews.renderOrderForm(${o.id})">Bearb.</button>
@@ -647,14 +652,20 @@ const PlanerViews = {
 
           <div class="field mt-3">
             <label>Zylinder-Status</label>
-            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px">
+            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px" id="zyl-status-group">
               ${[
-                ['bestellt',        '🔴 Bestellt (noch nicht geliefert)'],
+                ['bestellt',        '🔴 Noch nicht geliefert'],
                 ['vorhanden',       '✅ Vorhanden'],
                 ['nicht_notwendig', '– Kein Zylinder nötig'],
-              ].map(([val, lbl]) => `<label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;padding:4px 10px;border-radius:6px;border:1px solid var(--border);font-size:13px">
-                <input type="radio" name="f-zyl-status" value="${val}" ${order?.zylinder_status===val?'checked':''}> ${lbl}
-              </label>`).join('')}
+              ].map(([val, lbl]) => {
+                const isSelected = order?.zylinder_status === val;
+                const selStyle = isSelected ? 'background:#f0f9ff;border-color:#3b82f6;font-weight:600;' : '';
+                return `<label id="zyl-lbl-${val}" style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;padding:6px 12px;border-radius:6px;border:1px solid var(--border);font-size:13px;${selStyle}">
+                  <input type="radio" name="f-zyl-status" value="${val}" ${isSelected?'checked':''}
+                    onchange="document.querySelectorAll('#zyl-status-group label').forEach(l=>l.style.cssText=l.style.cssText.replace(/background[^;]*;|border-color[^;]*;|font-weight[^;]*;/g,''));this.closest('label').style.background='#f0f9ff';this.closest('label').style.borderColor='#3b82f6';this.closest('label').style.fontWeight='600'">
+                  ${lbl}
+                </label>`;
+              }).join('')}
             </div>
           </div>
 
