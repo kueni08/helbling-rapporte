@@ -192,7 +192,6 @@ const PlanerViews = {
           ${cols.has('latest_date') ? `<td>${UI.fmtDate(o.latest_date)}</td>` : ''}
           ${cols.has('notes_planer') ? `<td style="font-size:12px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${UI.esc(o.notes_planer||'')}">${UI.esc((o.notes_planer||'').substring(0,60))}${(o.notes_planer||'').length>60?'…':''}</td>` : ''}
           <td class="text-right order-actions-col" style="white-space:nowrap">
-            <button class="btn btn-ghost btn-sm order-icon-btn" title="Ansicht" aria-label="Auftrag ansehen" onclick="event.stopPropagation();PlanerViews.openSplit(${o.id},false)">👁</button>
             <button class="btn btn-ghost btn-sm order-icon-btn" title="Bearbeiten" aria-label="Auftrag bearbeiten" onclick="event.stopPropagation();PlanerViews.openSplit(${o.id},true)">✎</button>
             <button class="btn btn-danger btn-sm order-icon-btn" title="Archivieren" aria-label="Auftrag archivieren" onclick="event.stopPropagation();PlanerViews.deleteOrder(${o.id})">✕</button>
           </td>

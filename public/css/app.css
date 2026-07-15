@@ -724,7 +724,7 @@ thead th.sort-desc::after { content: ' ↓'; color: var(--accent); }
 #orders-list td { padding-left:7px; padding-right:7px; }
 #orders-list tr.selected-order { outline:2px solid var(--accent); outline-offset:-2px; background:rgba(26,79,160,.08) !important; }
 .order-actions-col { position:sticky; right:0; z-index:3; background:var(--bg2); box-shadow:-6px 0 10px rgba(15,17,23,.08); }
-.order-actions-col { width:112px; min-width:112px; padding-left:4px; padding-right:4px; }
+.order-actions-col { width:76px; min-width:76px; padding-left:4px; padding-right:4px; }
 .order-icon-btn { width:30px; min-width:30px; padding:4px; font-size:15px; line-height:1.1; }
 thead .order-actions-col { z-index:4; }
 #orders-list tr:hover .order-actions-col, #orders-list tr.selected-order .order-actions-col { background:#eef4fb; }
