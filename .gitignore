@@ -5,6 +5,7 @@ db/rapporte.db
 db/rapporte.db-shm
 db/rapporte.db-wal
 db/rapporte-before-*.db
+db/backups/
 db/sessions.db
 uploads/
 rapporte.db

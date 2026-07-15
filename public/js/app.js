@@ -77,9 +77,7 @@ const App = {
       navItems.push({ id: 'planer-orders',       icon: '📋', label: 'Aufträge' });
       navItems.push({ id: 'planer-anfragen',     icon: '📩', label: 'Kundenanfragen' });
       navItems.push({ id: 'tagesuebersicht',     icon: '📊', label: 'Tagesübersicht' });
-      if (role === 'planer') {
-        navItems.push({ id: 'planer-lieferschein', icon: '📥', label: 'LS-Import' });
-      }
+      navItems.push({ id: 'planer-lieferschein', icon: '📥', label: 'LS-Import' });
     }
 
     if (role === 'admin') {

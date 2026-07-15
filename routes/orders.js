@@ -7,6 +7,7 @@ const { requireLogin, requireRole } = require('../middleware/auth');
 const { v4: uuidv4 } = require('uuid');
 const { sendCompletionEmail } = require('../lib/mailer');
 const { FIELD_DEFINITIONS, allowedFields } = require('../lib/order-fields');
+const { cleanAddress, parseSwissAddress, syncOrderAddressParts } = require('../lib/address');
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -19,25 +20,13 @@ function genOrderNumber(db) {
 
 // Strip HTML tags from address fields (e.g. <br> → ", ") and normalize newlines
 function stripHtml(s) {
-  return String(s || '')
-    .replace(/<br\s*\/?>/gi, ', ')
-    .replace(/<[^>]+>/g, '')
-    .replace(/\r\n|\r|\n/g, ', ')
-    .replace(/,\s*,/g, ', ')
-    .replace(/,\s*$/, '')
-    .replace(/^\s*,\s*/, '')
-    .replace(/\s{2,}/g, ' ')
-    .trim();
+  return cleanAddress(s);
 }
 
 // Parse Swiss address "Strasse NR, PLZ ORT" → { strasse, plz, ort }
 function parseAddress(raw) {
-  const addr = stripHtml(raw);
-  if (!addr) return { strasse: '', plz: '', ort: '' };
-  // Look for 4-digit Swiss PLZ
-  const m = addr.match(/(.+?),?\s*(\d{4})\s+([A-ZÄÖÜa-zäöü][^\n,]+)/);
-  if (m) return { strasse: m[1].trim(), plz: m[2], ort: m[3].replace(/,.*$/, '').trim() };
-  return { strasse: addr, plz: '', ort: '' };
+  const parsed = parseSwissAddress(raw);
+  return { strasse: parsed.street, plz: parsed.postalCode, ort: parsed.city };
 }
 
 function parseJSON(v, fallback) {
@@ -361,6 +350,7 @@ router.post('/', requireRole('admin', 'planer'), (req, res) => {
     b.zylinder_status || null
   );
 
+  syncOrderAddressParts(db, result.lastInsertRowid, b.installation_address);
   res.status(201).json(formatOrder(db.prepare('SELECT * FROM orders WHERE id = ?').get(result.lastInsertRowid)));
 });
 
@@ -475,6 +465,7 @@ router.put('/:id', requireLogin, (req, res) => {
       b.agb_accepted !== undefined ? (b.agb_accepted ? 1 : 0) : order.agb_accepted,
       req.params.id
     );
+    if (b.installation_address !== undefined) syncOrderAddressParts(db, req.params.id, b.installation_address);
   }
 
   const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
@@ -726,6 +717,7 @@ router.post('/import', requireRole('admin', 'planer'), upload.single('file'), (r
             orderData.assigned_to,
             orderData.sort_order
           );
+          syncOrderAddressParts(db, result.lastInsertRowid, orderData.installation_address);
           inserted.push({ id: result.lastInsertRowid, order_number: orderNumber, project_number: orderData.project_number, customer_name: orderData.customer_name, items: orderData.items.length });
         });
 
@@ -753,6 +745,7 @@ router.post('/import', requireRole('admin', 'planer'), upload.single('file'), (r
             planned_date, notes_planer, req.session.userId, JSON.stringify(work_types),
             project_number || null, assigned_to, sort_order);
 
+          syncOrderAddressParts(db, result.lastInsertRowid, installation_address);
           inserted.push({ id: result.lastInsertRowid, order_number: orderNumber, customer_name });
         });
       }

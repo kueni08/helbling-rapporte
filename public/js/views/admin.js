@@ -103,7 +103,6 @@ const AdminViews = {
         <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('articles')">Artikel</button>
         <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('customers')">Kunden</button>
         <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('email')">✉️ E-Mail</button>
-        <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('lieferschein')">📥 LS-Import</button>
         <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('prompt')">🤖 KI-Prompt</button>
         <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('cleanup')">🗑️ Dateien</button>
         <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('backup')">💾 Backup</button>
@@ -114,14 +113,13 @@ const AdminViews = {
   },
 
   async showSettingsTab(tab) {
-    const tabs = ['options','articles','customers','email','lieferschein','prompt','cleanup','backup','database'];
+    const tabs = ['options','articles','customers','email','prompt','cleanup','backup','database'];
     document.querySelectorAll('#settings-tabs .btn').forEach(b => b.classList.remove('btn-primary'));
     document.querySelectorAll('#settings-tabs .btn')[tabs.indexOf(tab)]?.classList.add('btn-primary');
     if (tab === 'options')      await AdminViews.renderOptions();
     if (tab === 'articles')     await AdminViews.renderArticles();
     if (tab === 'customers')    await AdminViews.renderCustomers();
     if (tab === 'email')        await AdminViews.renderEmailSettings();
-    if (tab === 'lieferschein') await AdminViews.renderLieferscheinImport();
     if (tab === 'prompt')       await AdminViews.renderPromptAssistant();
     if (tab === 'cleanup')      await AdminViews.renderFileCleanup();
     if (tab === 'backup')       await AdminViews.renderBackup();
@@ -517,7 +515,7 @@ const AdminViews = {
           <span class="text-sm text-muted">Mehrere Lieferscheine gleichzeitig möglich</span>
         </div>
         <div class="flex gap-2 mt-2 flex-wrap">
-          <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('lieferschein')">↺ Aktualisieren</button>
+          <button class="btn btn-ghost btn-sm" onclick="AdminViews.renderLieferscheinImport()">↺ Aktualisieren</button>
         </div>
         ${status.inbox_files.length ? `
           <p class="text-sm mt-2"><strong>Inbox (${status.inbox_files.length} PDF${status.inbox_files.length>1?'s':''} ausstehend):</strong></p>
@@ -575,7 +573,7 @@ const AdminViews = {
       </div>`;
     }).join('');
     UI.modal('Lieferscheine prüfen und freigeben', `<div style="max-height:65vh;overflow:auto">${rows}</div>`,
-      `<button class="btn btn-ghost" onclick="UI.closeModal();AdminViews.showSettingsTab('lieferschein')">Schliessen</button>`);
+      `<button class="btn btn-ghost" onclick="UI.closeModal();AdminViews.renderLieferscheinImport()">Schliessen</button>`);
   },
 
   async confirmLs(id, allowDuplicate) {
@@ -591,13 +589,13 @@ const AdminViews = {
       UI.toast('Retry gestartet…', 'info', 2000);
       await API.retryLsImport(id);
       UI.toast('Erneuter Versuch gestartet', 'success');
-      setTimeout(() => AdminViews.showSettingsTab('lieferschein'), 2000);
+      setTimeout(() => AdminViews.renderLieferscheinImport(), 2000);
     } catch(e) { UI.toast(e.message, 'error'); }
   },
 
   async deleteLsImport(id) {
     if (!await UI.confirm('Import-Eintrag löschen?')) return;
-    try { await API.deleteLsImport(id); await AdminViews.showSettingsTab('lieferschein'); }
+    try { await API.deleteLsImport(id); await AdminViews.renderLieferscheinImport(); }
     catch(e) { UI.toast(e.message, 'error'); }
   },
 

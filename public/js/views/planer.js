@@ -170,7 +170,7 @@ const PlanerViews = {
           <td><code>${UI.esc(o.order_number)}</code>${attachBadge}${hasExtra ? ' <span title="Nicht auf LS aufgeführt" style="color:#d48a00;font-size:12px">⚠️</span>' : ''}</td>
           ${cols.has('project_number') ? `<td style="font-size:12px;color:var(--accent)">${UI.esc(o.project_number||'')}</td>` : ''}
           <td class="inline-edit-cell" onclick="PlanerViews.inlineEdit(event,${o.id},'customer_name','${UI.esc(o.customer_name||o.cust_name||'')}')">${UI.esc(o.customer_name || o.cust_name || '–')}</td>
-          <td class="inline-edit-cell" onclick="PlanerViews.inlineEdit(event,${o.id},'installation_address','${UI.esc(o.installation_address||'')}')">${UI.esc(o.installation_address || '–')}</td>
+          <td>${UI.esc(o.installation_address || '–')}</td>
           <td class="inline-edit-cell" onclick="PlanerViews.inlineEdit(event,${o.id},'planned_date','${UI.esc(o.planned_date||'')}','date')">${UI.fmtDate(o.planned_date)}</td>
           ${cols.has('latest_date') ? `<td>${UI.fmtDate(o.latest_date)}</td>` : ''}
           <td>${UI.esc(o.assigned_name || '–')}</td>
@@ -642,8 +642,20 @@ const PlanerViews = {
               <input type="text" id="f-on-site-contact-phone" value="${UI.esc(order?.on_site_contact_phone||'')}" placeholder="z.B. 079 366 65 58">
             </div>
             <div class="field">
-              <label>Montageadresse <span class="req">*</span></label>
-              <input type="text" id="f-installation-address" value="${UI.esc(order?.installation_address||'')}">
+              <label>Objekt / Zusatz</label>
+              <input type="text" id="f-installation-name" value="${UI.esc(order?.installation_name||'')}" placeholder="z.B. Pflegezentrum, Haus B">
+            </div>
+            <div class="field">
+              <label>Strasse / Nr. <span class="req">*</span></label>
+              <input type="text" id="f-installation-street" value="${UI.esc(order?.installation_street||order?.installation_address||'')}" placeholder="z.B. Bahnhofstrasse 50">
+            </div>
+            <div class="field">
+              <label>PLZ <span class="req">*</span></label>
+              <input type="text" id="f-installation-postal" value="${UI.esc(order?.installation_postal_code||'')}" inputmode="numeric" maxlength="4" placeholder="8000">
+            </div>
+            <div class="field">
+              <label>Ort <span class="req">*</span></label>
+              <input type="text" id="f-installation-city" value="${UI.esc(order?.installation_city||'')}" placeholder="Zürich">
             </div>
             <div class="field">
               <label>Projektnummer</label>
@@ -842,6 +854,11 @@ const PlanerViews = {
   },
 
   async saveOrder(orderId, goNext = false) {
+    const installationName = document.getElementById('f-installation-name').value.trim();
+    const installationStreet = document.getElementById('f-installation-street').value.trim();
+    const installationPostal = document.getElementById('f-installation-postal').value.trim();
+    const installationCity = document.getElementById('f-installation-city').value.trim();
+    const installationAddress = [installationName, installationStreet, [installationPostal, installationCity].filter(Boolean).join(' ')].filter(Boolean).join(', ');
     const data = {
       customer_id:           null,
       customer_name:         document.getElementById('f-customer-name').value.trim(),
@@ -849,7 +866,7 @@ const PlanerViews = {
       orderer:               document.getElementById('f-orderer').value.trim(),
       on_site_contact:       document.getElementById('f-on-site-contact').value.trim(),
       on_site_contact_phone: document.getElementById('f-on-site-contact-phone')?.value.trim() || null,
-      installation_address:  document.getElementById('f-installation-address').value.trim(),
+      installation_address:  installationAddress,
       arrival_time:          document.getElementById('f-arrival-time').value.trim(),
       planned_date:          document.getElementById('f-planned-date').value,
       latest_date:           document.getElementById('f-latest-date').value,
@@ -867,7 +884,9 @@ const PlanerViews = {
 
     if (!data.customer_name) { UI.toast('Kundenname erforderlich','error'); return; }
     if (!data.orderer) { UI.toast('Besteller erforderlich','error'); return; }
-    if (!data.installation_address) { UI.toast('Montageadresse erforderlich','error'); return; }
+    if (!installationStreet) { UI.toast('Strasse und Hausnummer erforderlich','error'); return; }
+    if (!/^\d{4}$/.test(installationPostal)) { UI.toast('Bitte eine vierstellige PLZ eingeben','error'); return; }
+    if (!installationCity) { UI.toast('Ort erforderlich','error'); return; }
     if (!data.planned_date) { UI.toast('Vorgesehenes Montagedatum erforderlich','error'); return; }
     if (!data.work_types.length) { UI.toast('Mindestens eine Arbeit wählen','error'); return; }
 
