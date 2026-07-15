@@ -164,11 +164,14 @@ const MonteurViews = {
   },
 
   // ── Work Form (Monteur fills in) ────────────────────────────────────────
-  async renderWorkForm(orderId) {
+  async renderWorkForm(orderId, targetId = 'main-content') {
+    if (!UI.guardDiscard()) return;
     await this._loadMeta();
     const order = await API.getOrder(orderId);
     const opts = this._options;
-    const main = document.getElementById('main-content');
+    const main = document.getElementById(targetId);
+    const isPlanerOrAdmin = App.state?.role === 'planer' || App.state?.role === 'admin';
+    MonteurViews._formTarget = targetId;
 
     // Separate LS items (from planer/import) and monteur items
     const allItems = order.items_table || [];
@@ -176,7 +179,7 @@ const MonteurViews = {
     const monteurItems = allItems.filter(i => i._source !== 'planer');
 
     // Prev/Next navigation
-    const filteredOrders = MonteurViews._myOrders.filter(o => o.status !== 'archiviert');
+    const filteredOrders = isPlanerOrAdmin ? (PlanerViews._filteredOrders || []) : MonteurViews._myOrders.filter(o => o.status !== 'archiviert');
     const currentIdx = filteredOrders.findIndex(o => o.id === orderId);
     const prevOrder = currentIdx > 0 ? filteredOrders[currentIdx - 1] : null;
     const nextOrder = currentIdx < filteredOrders.length - 1 ? filteredOrders[currentIdx + 1] : null;
@@ -186,19 +189,19 @@ const MonteurViews = {
     const projectLabel = order.project_number || order.order_number;
     const isStamped = MonteurViews._isStamped(orderId);
     const isRunning = MonteurViews._timerRunning(orderId);
-    const isLocked = order.status === 'abgeschlossen';
+    const isLocked = order.status === 'abgeschlossen' && !isPlanerOrAdmin;
 
     main.innerHTML = `
       <div class="page-header" style="flex-wrap:wrap">
         <div class="flex gap-2 align-items-center">
-          <button class="btn btn-ghost btn-sm" onclick="MonteurViews.renderMyOrders()">\u2190 Zur\u00fcck</button>
+          ${targetId === 'main-content' ? `<button class="btn btn-ghost btn-sm" onclick="${isPlanerOrAdmin ? 'PlanerViews.renderOrders()' : 'MonteurViews.renderMyOrders()'}">\u2190 Zur\u00fcck</button>` : ''}
           <h2 style="color:var(--accent)">${UI.esc(projectLabel)}</h2>
           ${order.project_number ? `<span class="text-muted text-sm">${UI.esc(order.order_number)}</span>` : ''}
           ${UI.statusBadge(order.status)}
         </div>
         <div class="flex gap-2">
-          ${prevOrder ? `<button class="btn btn-ghost btn-sm" onclick="MonteurViews.renderWorkForm(${prevOrder.id})">\u2190 Vorheriger</button>` : ''}
-          ${nextOrder ? `<button class="btn btn-ghost btn-sm" onclick="MonteurViews.renderWorkForm(${nextOrder.id})">N\u00e4chster \u2192</button>` : ''}
+          ${prevOrder ? `<button class="btn btn-ghost btn-sm" onclick="MonteurViews.renderWorkForm(${prevOrder.id},'${targetId}')">\u2190 Vorheriger</button>` : ''}
+          ${nextOrder ? `<button class="btn btn-ghost btn-sm" onclick="MonteurViews.renderWorkForm(${nextOrder.id},'${targetId}')">N\u00e4chster \u2192</button>` : ''}
         </div>
       </div>
 
@@ -457,7 +460,14 @@ const MonteurViews = {
               <label>Techniker (Druckschrift) <span class="req">*</span></label>
               <input type="text" id="f-technician" value="${UI.esc(order.technician_name || (App.state?.fullName||''))}">
             </div>
-            <div class="field"></div>
+            <div class="field">
+              <label>Fahrzeit (Std.)</label>
+              <input type="number" id="f-travel-time" min="0" step="0.25" value="${UI.esc(String(order.travel_time ?? ''))}">
+            </div>
+            <div class="field">
+              <label>Kilometer</label>
+              <input type="number" id="f-travel-km" min="0" step="1" value="${UI.esc(String(order.travel_km ?? ''))}">
+            </div>
           </div>
 
         </div>
@@ -475,10 +485,10 @@ const MonteurViews = {
           </div>
           <p class="text-muted text-sm mb-2">Bitte Unterschrift des Kunden hier einholen:</p>
           <div class="sig-wrap" id="sig-wrap-container">
-            <canvas id="sig-canvas" style="height:150px;cursor:crosshair"></canvas>
+            <canvas id="sig-canvas" style="height:150px;cursor:${isPlanerOrAdmin ? 'default' : 'crosshair'};pointer-events:${isPlanerOrAdmin ? 'none' : 'auto'}"></canvas>
           </div>
           <div class="sig-actions mt-2">
-            <button class="btn btn-ghost btn-sm" onclick="MonteurViews.clearSig()">L\u00f6schen</button>
+            ${isPlanerOrAdmin ? `<span class="text-muted text-sm">Planer/Admin können die bestehende Unterschrift nur ansehen oder über die Vorschau löschen.</span>` : `<button class="btn btn-ghost btn-sm" onclick="MonteurViews.clearSig()">L\u00f6schen</button>`}
           </div>
           <p class="text-muted text-sm mt-3">Es gelten unsere AGB's.</p>
 
@@ -533,15 +543,16 @@ const MonteurViews = {
         <button class="btn btn-primary" onclick="MonteurViews.saveWork(${orderId})">Speichern & Abschicken</button>
         <button class="btn btn-success" onclick="MonteurViews.closeOrder(${orderId})" style="background:#2d7a2d">✅ Auftrag abschliessen</button>
         ` : ''}
-        <button class="btn btn-ghost" onclick="MonteurViews.renderMyOrders()">Abbrechen</button>
+        <button class="btn btn-ghost" onclick="${isPlanerOrAdmin ? `PlanerViews.renderOrderDetail(${orderId},'${targetId}')` : 'MonteurViews.renderMyOrders()'}">Abbrechen</button>
       </div>
 
       <!-- Sticky save bar for mobile -->
       <div class="sticky-save-bar" id="sticky-save">
         ${!isLocked ? `<button class="btn btn-primary" style="flex:1" onclick="MonteurViews.saveWork(${orderId})">Speichern & Abschicken</button>` : ''}
-        <button class="btn btn-ghost" onclick="MonteurViews.renderMyOrders()">Zurück</button>
+        <button class="btn btn-ghost" onclick="${isPlanerOrAdmin ? `PlanerViews.renderOrderDetail(${orderId},'${targetId}')` : 'MonteurViews.renderMyOrders()'}">Zurück</button>
       </div>
     `;
+    UI.trackDirty(main);
 
     // Init signature pad
     setTimeout(() => {
@@ -998,21 +1009,24 @@ const MonteurViews = {
       work_date:        document.getElementById('f-work-date')?.value || null,
       work_time_from:   document.getElementById('f-work-from')?.value || null,
       work_time_to:     document.getElementById('f-work-to')?.value || null,
-      travel_time:      null,
-      travel_km:        null,
+      travel_time:      parseFloat(document.getElementById('f-travel-time')?.value) || null,
+      travel_km:        parseInt(document.getElementById('f-travel-km')?.value) || null,
       technician_name:  document.getElementById('f-technician')?.value.trim() || null,
       technician_block: document.getElementById('f-block')?.value.trim() || null,
       signature_data:   signatureData,
       agb_accepted:     true,
       status:           document.getElementById('f-m-status')?.value || 'in_bearbeitung',
     };
+    if (App.state?.role !== 'monteur') { delete data.signature_data; delete data.agb_accepted; }
 
     if (!data.technician_name) { UI.toast('Techniker-Name erforderlich','error'); return; }
 
     try {
       await API.updateOrder(orderId, data);
+      UI.markClean();
       UI.toast('Auftrag gespeichert','success');
-      MonteurViews.renderMyOrders();
+      if (App.state?.role === 'monteur') MonteurViews.renderMyOrders();
+      else PlanerViews.renderOrderDetail(orderId, MonteurViews._formTarget || 'main-content');
     } catch(e) { UI.toast(e.message,'error'); }
   },
 
@@ -1151,19 +1165,21 @@ const MonteurViews = {
       work_date:        document.getElementById('f-work-date')?.value || null,
       work_time_from:   document.getElementById('f-work-from')?.value || null,
       work_time_to:     workTimeTo,
-      travel_time:      travelData ? (parseFloat(travelData.time) || null) : null,
-      travel_km:        travelData ? (parseInt(travelData.km) || null) : null,
+      travel_time:      travelData ? (parseFloat(travelData.time) || null) : (parseFloat(document.getElementById('f-travel-time')?.value) || null),
+      travel_km:        travelData ? (parseInt(travelData.km) || null) : (parseInt(document.getElementById('f-travel-km')?.value) || null),
       technician_name:  document.getElementById('f-technician')?.value.trim() || null,
       technician_block: document.getElementById('f-block')?.value.trim() || null,
       signature_data:   signatureData,
       agb_accepted:     true,
       status:           'abgeschlossen',
     };
+    if (isPlanerOrAdmin) { delete data.signature_data; delete data.agb_accepted; }
 
     if (!data.technician_name) { UI.toast('Techniker-Name erforderlich','error'); return; }
 
     try {
       await API.updateOrder(orderId, data);
+      UI.markClean();
 
       // Erfolgs-Bestätigung anzeigen dann zurück zur Übersicht
       const order = await API.getOrder(orderId);

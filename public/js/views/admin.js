@@ -507,13 +507,16 @@ const AdminViews = {
           PDFs in diesen lokalen Ordner legen → automatisch als Auftrag importiert:<br>
           <code style="font-size:0.85rem;word-break:break-all">${UI.esc(status.inbox_dir)}</code>
         </p>
-        <div class="flex gap-2 mt-2 flex-wrap">
+        <div class="ls-drop-zone mt-2" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="event.preventDefault();this.classList.remove('drag-over');AdminViews.uploadLieferschein({files:event.dataTransfer.files,value:''})">
           <div>
             <label class="btn btn-ghost btn-sm" style="cursor:pointer">
-              📂 PDF manuell hochladen
+              📂 PDFs auswählen oder hierher ziehen
               <input type="file" accept=".pdf" multiple style="display:none" onchange="AdminViews.uploadLieferschein(this)">
             </label>
           </div>
+          <span class="text-sm text-muted">Mehrere Lieferscheine gleichzeitig möglich</span>
+        </div>
+        <div class="flex gap-2 mt-2 flex-wrap">
           <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('lieferschein')">↺ Aktualisieren</button>
         </div>
         ${status.inbox_files.length ? `

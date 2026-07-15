@@ -45,6 +45,8 @@ const API = {
   bulkUpdateStatus: (ids, status) => API.patch('/api/orders/bulk-status', { ids, status }),
   importOrders:        (form) => API.upload('/api/orders/import', form),
   orderCustomerForm:   (id)   => API.post(`/api/orders/${id}/customer-form`),
+  deleteSignature:     (id)   => API.delete(`/api/orders/${id}/signature`),
+  getOrderHistory:     (id)   => API.get(`/api/orders/${id}/history`),
 
   // Settings
   getOptions:         ()           => API.get('/api/settings/options'),

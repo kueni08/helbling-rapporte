@@ -1,6 +1,6 @@
 const CACHE = 'hr-v1';
 const STATIC = ['/css/app.css', '/js/api.js', '/js/ui.js', '/js/app.js',
-  '/js/views/admin.js', '/js/views/planer.js', '/js/views/monteur.js',
+  '/js/order-fields.js', '/js/views/admin.js', '/js/views/planer.js', '/js/views/monteur.js',
   '/js/views/tagesuebersicht.js', '/icons/icon.svg'];
 
 self.addEventListener('install', e => {

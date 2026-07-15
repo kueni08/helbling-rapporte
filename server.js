@@ -53,6 +53,7 @@ app.use('/api/export',   require('./routes/export'));
 app.use('/api/anfrage',       require('./routes/anfrage'));      // public customer form submit
 app.use('/api/anfragen',      require('./routes/anfrage'));      // admin list/manage
 app.use('/api/lieferschein',  require('./routes/lieferschein')); // PDF auto-import
+app.use('/api/email-import',  require('./routes/email-import')); // provider-neutral, currently disabled
 
 // Public customer inquiry form (new submission + token-based edit)
 app.get('/anfrage', (req, res) => {

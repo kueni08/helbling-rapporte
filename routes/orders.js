@@ -6,6 +6,7 @@ const { getDb } = require('../lib/database');
 const { requireLogin, requireRole } = require('../middleware/auth');
 const { v4: uuidv4 } = require('uuid');
 const { sendCompletionEmail } = require('../lib/mailer');
+const { FIELD_DEFINITIONS, allowedFields } = require('../lib/order-fields');
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -62,7 +63,7 @@ function formatOrder(o) {
 // GET /api/orders/tagesuebersicht?date=YYYY-MM-DD[&technicianId=ID]
 router.get('/tagesuebersicht', requireLogin, (req, res) => {
   const db = getDb();
-  const { role, userId } = req.session;
+  const { userRole: role, userId } = req.session;
   const date = req.query.date || new Date().toISOString().split('T')[0];
   let rows;
   if (role === 'monteur') {
@@ -124,7 +125,7 @@ router.get('/tagesuebersicht', requireLogin, (req, res) => {
 // GET /api/orders/tagesuebersicht/export  – Excel
 router.get('/tagesuebersicht/export', requireLogin, (req, res) => {
   const db = getDb();
-  const { role, userId } = req.session;
+  const { userRole: role, userId } = req.session;
   const date = req.query.date || new Date().toISOString().split('T')[0];
   let rows;
   if (role === 'monteur') {
@@ -271,7 +272,7 @@ router.get('/import-template', requireRole('admin', 'planer'), (req, res) => {
 // GET /api/orders
 router.get('/', requireLogin, (req, res) => {
   const db = getDb();
-  const { role, userId } = req.session;
+  const { userRole: role, userId } = req.session;
   let orders;
   if (role === 'monteur') {
     orders = db.prepare(`
@@ -315,7 +316,7 @@ router.get('/:id', requireLogin, (req, res) => {
   if (!o) return res.status(404).json({ error: 'Auftrag nicht gefunden' });
 
   // Role check for monteur
-  if (req.session.role === 'monteur' && o.assigned_to !== req.session.userId) {
+  if (req.session.userRole === 'monteur' && o.assigned_to !== req.session.userId) {
     return res.status(403).json({ error: 'Keine Berechtigung' });
   }
 
@@ -369,8 +370,11 @@ router.put('/:id', requireLogin, (req, res) => {
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
   if (!order) return res.status(404).json({ error: 'Auftrag nicht gefunden' });
 
-  const { role, userId } = req.session;
+  const { userRole: role, userId } = req.session;
   const b = req.body;
+  const permitted = allowedFields(role);
+  const forbidden = Object.keys(b).filter(key => FIELD_DEFINITIONS[key] && !permitted.has(key));
+  if (forbidden.length) return res.status(403).json({ error: `Keine Berechtigung für: ${forbidden.join(', ')}` });
 
   // Monteur can only update their own orders and only monteur fields
   if (role === 'monteur') {
@@ -467,13 +471,22 @@ router.put('/:id', requireLogin, (req, res) => {
       b.travel_km != null ? parseInt(b.travel_km) || null : order.travel_km,
       b.technician_name ?? order.technician_name,
       b.technician_block ?? order.technician_block,
-      b.signature_data ?? order.signature_data,
+      order.signature_data,
       b.agb_accepted !== undefined ? (b.agb_accepted ? 1 : 0) : order.agb_accepted,
       req.params.id
     );
   }
 
   const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
+  const changes = {};
+  for (const [key, value] of Object.entries(b)) {
+    if (!FIELD_DEFINITIONS[key]) continue;
+    const before = order[key];
+    const after = updatedOrder[key];
+    if (String(before ?? '') !== String(after ?? '')) changes[key] = { label: FIELD_DEFINITIONS[key].label, before, after };
+  }
+  if (Object.keys(changes).length) db.prepare(`INSERT INTO order_change_log (order_id,user_id,user_role,changes_json) VALUES (?,?,?,?)`)
+    .run(req.params.id, userId, role, JSON.stringify(changes));
   res.json(formatOrder(updatedOrder));
 
   // Abschluss-Mail automatisch versenden wenn Status neu auf "abgeschlossen" gesetzt
@@ -518,12 +531,28 @@ router.patch('/:id/notes', requireLogin, (req, res) => {
   const db = getDb();
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
   if (!order) return res.status(404).json({ error: 'Auftrag nicht gefunden' });
-  if (req.session.role === 'monteur' && order.assigned_to !== req.session.userId) {
+  if (req.session.userRole === 'monteur' && order.assigned_to !== req.session.userId) {
     return res.status(403).json({ error: 'Keine Berechtigung' });
   }
   db.prepare("UPDATE orders SET notes_monteur = ?, updated_at = datetime('now') WHERE id = ?")
     .run(req.body.notes_monteur || null, req.params.id);
   res.json({ ok: true });
+});
+
+router.delete('/:id/signature', requireRole('admin', 'planer'), (req, res) => {
+  const db = getDb();
+  const order = db.prepare('SELECT signature_data FROM orders WHERE id=?').get(req.params.id);
+  if (!order) return res.status(404).json({ error: 'Auftrag nicht gefunden' });
+  db.prepare("UPDATE orders SET signature_data=NULL, agb_accepted=0, updated_at=datetime('now') WHERE id=?").run(req.params.id);
+  db.prepare(`INSERT INTO order_change_log (order_id,user_id,user_role,action,changes_json) VALUES (?,?,?,?,?)`)
+    .run(req.params.id, req.session.userId, req.session.userRole, 'signature_deleted', JSON.stringify({ signature_data: { label: 'Kundenunterschrift', before: '[vorhanden]', after: null } }));
+  res.json({ ok: true });
+});
+
+router.get('/:id/history', requireRole('admin', 'planer'), (req, res) => {
+  const rows = getDb().prepare(`SELECT l.*, u.full_name AS user_name FROM order_change_log l LEFT JOIN users u ON u.id=l.user_id
+    WHERE l.order_id=? ORDER BY l.created_at DESC, l.id DESC`).all(req.params.id);
+  res.json(rows.map(r => ({ ...r, changes: JSON.parse(r.changes_json || '{}') })));
 });
 
 // DELETE /api/orders/:id (admin + planer)

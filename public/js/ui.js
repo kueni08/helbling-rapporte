@@ -1,5 +1,22 @@
 // ── UI Helpers ───────────────────────────────────────────────────────────
 const UI = {
+  _dirty: false,
+  trackDirty(container) {
+    UI._dirty = false;
+    if (!container) return;
+    const mark = () => { UI._dirty = true; };
+    container.querySelectorAll('input,select,textarea').forEach(el => {
+      el.addEventListener('input', mark);
+      el.addEventListener('change', mark);
+    });
+  },
+  markClean() { UI._dirty = false; },
+  guardDiscard() {
+    if (!UI._dirty) return true;
+    const ok = window.confirm('Es gibt ungespeicherte Änderungen. Wirklich verlassen?');
+    if (ok) UI._dirty = false;
+    return ok;
+  },
   toast(msg, type = 'info', duration = 3500) {
     const el = document.createElement('div');
     el.className = `toast toast-${type}`;

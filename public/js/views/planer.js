@@ -62,7 +62,10 @@ const PlanerViews = {
           <input type="text" id="filter-search" placeholder="Suche…" style="flex:1;min-width:140px" oninput="PlanerViews._saveFilter();PlanerViews.applyFilter()">
         </div>
       </div>
-      <div class="card"><div class="table-wrap"><div id="orders-list">Lade…</div></div></div>`;
+      <div class="order-split">
+        <div class="card order-master"><div class="table-wrap" id="order-list-scroll"><div id="orders-list">Lade…</div></div></div>
+        <div class="order-detail" id="order-preview"><div class="card text-muted">Links einen Auftrag auswählen.</div></div>
+      </div>`;
     PlanerViews._restoreFilter();
     await PlanerViews.loadOrdersTable();
   },
@@ -179,13 +182,27 @@ const PlanerViews = {
           : o.zylinder_status === 'nicht_notwendig' ? ' <span class="badge badge-gray"  style="font-size:10px;padding:2px 6px;margin-left:4px">Kein Zylinder</span>'
           : ''}</td>
           <td class="text-right" style="white-space:nowrap">
-            <button class="btn btn-ghost btn-sm" onclick="PlanerViews.renderOrderDetail(${o.id})">Ansicht</button>
-            <button class="btn btn-ghost btn-sm" onclick="PlanerViews.renderOrderForm(${o.id})">Bearb.</button>
+            <button class="btn btn-ghost btn-sm" onclick="PlanerViews.openSplit(${o.id},false)">Ansicht</button>
+            <button class="btn btn-ghost btn-sm" onclick="PlanerViews.openSplit(${o.id},true)">Bearb.</button>
             <button class="btn btn-danger btn-sm" onclick="PlanerViews.deleteOrder(${o.id})">✕</button>
           </td>
         </tr>`;
       }).join('')}
       </tbody></table>` : '<p class="text-muted text-sm">Keine Aufträge gefunden.</p>';
+    requestAnimationFrame(() => {
+      const scroller = document.getElementById('order-list-scroll');
+      if (scroller) scroller.scrollTop = Number(sessionStorage.getItem('planer_list_scroll') || 0);
+      if (PlanerViews._selectedOrderId) document.querySelector(`#orders-list tr[data-order-id="${PlanerViews._selectedOrderId}"]`)?.classList.add('selected-order');
+    });
+  },
+
+  openSplit(orderId, edit) {
+    PlanerViews._selectedOrderId = orderId;
+    const scroller = document.getElementById('order-list-scroll');
+    if (scroller) sessionStorage.setItem('planer_list_scroll', String(scroller.scrollTop));
+    document.querySelectorAll('#orders-list tr').forEach(r => r.classList.toggle('selected-order', Number(r.dataset.orderId) === orderId));
+    if (edit) PlanerViews.renderOrderForm(orderId, 'order-preview');
+    else PlanerViews.renderOrderDetail(orderId, 'order-preview');
   },
 
   // ── Checkbox / Bulk Selection ────────────────────────────────────────────
@@ -571,7 +588,8 @@ const PlanerViews = {
   },
 
   // ── Order Form (Create / Edit) ──────────────────────────────────────────
-  async renderOrderForm(orderId) {
+  async renderOrderForm(orderId, targetId = 'main-content') {
+    if (!UI.guardDiscard()) return;
     await this._loadMeta();
     let order = null;
     if (orderId) order = await API.getOrder(orderId);
@@ -580,17 +598,19 @@ const PlanerViews = {
     const monteure = this._monteure;
     const sel = (v) => (list, key) => list.map(i => `<option value="${i[key]||i.id}" ${(order?.[v])===String(i[key]||i.id)?'selected':''}>${UI.esc(i.name||i.full_name)}</option>`).join('');
 
-    const main = document.getElementById('main-content');
+    const main = document.getElementById(targetId);
+    PlanerViews._formTarget = targetId;
     main.innerHTML = `
       <div class="page-header">
         <div class="flex gap-2 align-items-center">
-          <button class="btn btn-ghost btn-sm" onclick="PlanerViews.renderOrders()">← Zurück</button>
+          ${targetId === 'main-content' ? `<button class="btn btn-ghost btn-sm" onclick="PlanerViews.renderOrders()">← Zurück</button>` : ''}
           <h2>${order ? `Auftrag ${order.order_number}` : 'Neuer Auftrag'}</h2>
         </div>
         <div class="flex gap-2">
-          ${order ? `<button class="btn btn-ghost" onclick="PlanerViews.renderOrderDetail(${orderId})">Vorschau</button>` : ''}
+          ${order ? `<button class="btn btn-ghost" onclick="PlanerViews.renderOrderDetail(${orderId},'${targetId}')">Vorschau</button>` : ''}
           ${order ? `<button class="btn btn-ghost" onclick="PlanerViews.sendOrderToCustomer(${orderId})">📧 An Kunden senden</button>` : ''}
-          <button class="btn btn-primary" onclick="PlanerViews.saveOrder(${orderId||'null'})">Speichern</button>
+          <button class="btn btn-primary" onclick="PlanerViews.saveOrder(${orderId||'null'},false)">Speichern</button>
+          ${order ? `<button class="btn btn-success" onclick="PlanerViews.saveOrder(${orderId},true)">Speichern und weiter</button>` : ''}
         </div>
       </div>
 
@@ -735,6 +755,7 @@ const PlanerViews = {
         </div>
       </div>` : '<div class="card"><p class="text-muted text-sm">Anhänge können nach dem Erstellen des Auftrags hochgeladen werden.</p></div>'}
     `;
+    UI.trackDirty(main);
 
     PlanerViews._planerItemCount = (order?.items_table||[]).length;
 
@@ -819,7 +840,7 @@ const PlanerViews = {
     } catch(e) { UI.toast(e.message,'error'); }
   },
 
-  async saveOrder(orderId) {
+  async saveOrder(orderId, goNext = false) {
     const data = {
       customer_id:           null,
       customer_name:         document.getElementById('f-customer-name').value.trim(),
@@ -853,16 +874,24 @@ const PlanerViews = {
       let saved;
       if (orderId) saved = await API.updateOrder(orderId, data);
       else         saved = await API.createOrder(data);
+      UI.markClean();
       UI.toast('Auftrag gespeichert','success');
-      PlanerViews.renderOrderForm(saved.id);
+      if (goNext) {
+        const idx = PlanerViews._filteredOrders.findIndex(o => o.id === saved.id);
+        const next = PlanerViews._filteredOrders[idx + 1];
+        if (next) return PlanerViews.renderOrderForm(next.id, PlanerViews._formTarget || 'main-content');
+        UI.toast('Letzter Auftrag der Liste erreicht', 'info');
+      }
+      PlanerViews.renderOrderForm(saved.id, PlanerViews._formTarget || 'main-content');
     } catch(e) { UI.toast(e.message,'error'); }
   },
 
   // ── Order Detail (read-only overview) ──────────────────────────────────
-  async renderOrderDetail(orderId) {
+  async renderOrderDetail(orderId, targetId = 'main-content') {
+    if (!UI.guardDiscard()) return;
     await this._loadMeta();
     const order = await API.getOrder(orderId);
-    const main = document.getElementById('main-content');
+    const main = document.getElementById(targetId);
 
     const fv = v => UI.esc(v || '–');
     const fa = v => (Array.isArray(v) ? v : []).join(', ') || '–';
@@ -875,7 +904,7 @@ const PlanerViews = {
     main.innerHTML = `
       <div class="page-header" style="flex-wrap:wrap">
         <div class="flex gap-2 align-items-center flex-wrap">
-          <button class="btn btn-ghost btn-sm" onclick="PlanerViews.renderOrders()">← Zurück</button>
+          ${targetId === 'main-content' ? `<button class="btn btn-ghost btn-sm" onclick="PlanerViews.renderOrders()">← Zurück</button>` : ''}
           <h2>${order.project_number ? `Projekt ${fv(order.project_number)}` : `Auftrag ${fv(order.order_number)}`}</h2>
           ${order.project_number ? `<span class="text-muted text-sm">${fv(order.order_number)}</span>` : ''}
           ${UI.statusBadge(order.status)}
@@ -883,15 +912,16 @@ const PlanerViews = {
         <div class="flex gap-2 flex-wrap align-items-center">
           ${filteredOrders.length > 1 ? `
           <div class="flex gap-1 align-items-center">
-            <button class="btn btn-ghost btn-sm" ${!prevOrder ? 'disabled' : ''} onclick="PlanerViews.renderOrderDetail(${prevOrder?.id})">← Vorheriger</button>
+            <button class="btn btn-ghost btn-sm" ${!prevOrder ? 'disabled' : ''} onclick="PlanerViews.renderOrderDetail(${prevOrder?.id},'${targetId}')">← Vorheriger</button>
             <span class="text-muted text-sm" style="white-space:nowrap">${idx + 1} / ${filteredOrders.length}</span>
-            <button class="btn btn-ghost btn-sm" ${!nextOrder ? 'disabled' : ''} onclick="PlanerViews.renderOrderDetail(${nextOrder?.id})">Nächster →</button>
+            <button class="btn btn-ghost btn-sm" ${!nextOrder ? 'disabled' : ''} onclick="PlanerViews.renderOrderDetail(${nextOrder?.id},'${targetId}')">Nächster →</button>
           </div>` : ''}
           <button class="btn btn-ghost" onclick="PlanerViews.printRapport(${order.id})">🖨 Drucken</button>
           <button class="btn btn-ghost" onclick="PlanerViews.openEmailModal(${order.id})">✉️ Per E-Mail</button>
           <a class="btn btn-ghost" href="/api/files/${order.id}/zip" download>⬇️ Download ZIP</a>
           <button class="btn btn-ghost" onclick="PlanerViews.sendOrderToCustomer(${order.id})">📧 An Kunden senden</button>
-          <button class="btn btn-primary" onclick="PlanerViews.renderOrderForm(${order.id})">Bearbeiten</button>
+          <button class="btn btn-primary" onclick="PlanerViews.renderOrderForm(${order.id},'${targetId}')">Auftrag bearbeiten</button>
+          <button class="btn btn-primary" onclick="MonteurViews.renderWorkForm(${order.id},'${targetId}')">Rapportfelder bearbeiten</button>
         </div>
       </div>
 
@@ -925,7 +955,10 @@ const PlanerViews = {
             ['Techniker',           fv(order.technician_name)],
             ['Blockschrift',        fv(order.technician_block)],
             ['Bemerkungen',         fv(order.notes_monteur)],
+            ['Fahrzeit',            order.travel_time != null ? `${fv(order.travel_time)} h` : '–'],
+            ['Kilometer',            order.travel_km != null ? `${fv(order.travel_km)} km` : '–'],
             ...(order.rings_data ? [['Halteringe', (() => { const rd = typeof order.rings_data === 'string' ? JSON.parse(order.rings_data) : order.rings_data; if (!rd?.handed_over) return '<span style="color:var(--text2)">–</span>'; return rd.handed_over==='ja' ? `<span class="badge badge-orange">Ringe abgegeben${rd.count ? ' · '+rd.count+' Stk.' : ''}</span>` : '<span class="badge badge-ok">✓ Nichts abgegeben</span>'; })()] ] : []),
+            ...(order.keys_data ? [['Schlüssel', (() => { const kd = typeof order.keys_data === 'string' ? JSON.parse(order.keys_data) : order.keys_data; return [kd?.type, kd?.count ? kd.count+' Stk.' : null, kd?.id ? 'Nr. '+kd.id : null, kd?.note].filter(Boolean).map(UI.esc).join(' · ') || '–'; })()] ] : []),
           ].map(([l,v]) => `<div class="flex mb-2"><span style="width:180px;color:var(--text2);font-size:12px;font-weight:600">${l}</span><span>${v}</span></div>`).join('')}
 
           ${(() => {
@@ -973,6 +1006,7 @@ const PlanerViews = {
             <div style="background:#fff;border-radius:6px;padding:4px;display:inline-block;max-width:100%">
               <img src="${order.signature_data}" style="max-width:300px;max-height:120px;display:block">
             </div>
+            <button class="btn btn-danger btn-sm mt-2" onclick="PlanerViews.deleteOrderSignature(${order.id},'${targetId}')">Unterschrift löschen und neu anfordern</button>
           </div>` : ''}
 
           ${order.items_table?.length ? `
@@ -1023,7 +1057,30 @@ const PlanerViews = {
       </div>` : ''}
 
       <p class="text-muted text-sm mt-3">Es gelten unsere AGB's.</p>
+      <div class="card mt-3"><div class="card-title">Änderungsverlauf</div><div id="order-history-${order.id}" class="text-sm text-muted">Lade…</div></div>
     `;
+    PlanerViews.loadOrderHistory(order.id);
+  },
+
+  async deleteOrderSignature(orderId, targetId) {
+    if (!await UI.confirm('Unterschrift löschen? Danach muss der Kunde neu unterschreiben.')) return;
+    try {
+      await API.deleteSignature(orderId);
+      UI.toast('Unterschrift gelöscht', 'success');
+      PlanerViews.renderOrderDetail(orderId, targetId);
+    } catch(e) { UI.toast(e.message, 'error'); }
+  },
+
+  async loadOrderHistory(orderId) {
+    const el = document.getElementById(`order-history-${orderId}`);
+    if (!el) return;
+    try {
+      const rows = await API.getOrderHistory(orderId);
+      el.innerHTML = rows.length ? rows.map(r => `<div style="padding:8px 0;border-bottom:1px solid var(--border)">
+        <strong>${UI.esc(r.user_name || r.user_role)}</strong> · ${UI.fmtDateTime(r.created_at)}<br>
+        ${Object.values(r.changes || {}).map(c => UI.esc(c.label)).join(', ')}
+      </div>`).join('') : 'Noch keine protokollierten Änderungen.';
+    } catch(e) { el.textContent = e.message; }
   },
 
   // ── Email Modal ─────────────────────────────────────────────────────────

@@ -100,6 +100,7 @@ const App = {
   },
 
   navigate(viewId) {
+    if (!UI.guardDiscard()) return;
     // Update active nav link
     document.querySelectorAll('#nav-menu a').forEach(a => {
       a.classList.toggle('active', a.dataset.view === viewId);
@@ -168,3 +169,8 @@ const App = {
 
 // ── Start ────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => App.init());
+window.addEventListener('beforeunload', e => {
+  if (!UI._dirty) return;
+  e.preventDefault();
+  e.returnValue = '';
+});
