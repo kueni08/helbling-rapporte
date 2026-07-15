@@ -143,7 +143,7 @@ const PlanerViews = {
     };
 
     const cols = PlanerViews._getVisibleCols();
-    const previewColspan = 10 + (cols.has('latest_date') ? 1 : 0) + (cols.has('notes_planer') ? 1 : 0);
+    const previewColspan = 12 + (cols.has('latest_date') ? 1 : 0) + (cols.has('notes_planer') ? 1 : 0);
     const previewCollapsed = document.getElementById('order-split')?.classList.contains('preview-collapsed');
 
     el.innerHTML = orders.length ? `<table>
@@ -157,6 +157,8 @@ const PlanerViews = {
         <th title="Kommunizierte Ankunftszeit">Zeit</th>
         <th title="Reihenfolge – klicken zum Bearbeiten">Reih.</th>
         ${sortTh('Kontakt','on_site_contact')}
+        ${sortTh('Status','status')}
+        ${sortTh('Zyl.','zylinder_status')}
         ${cols.has('latest_date') ? sortTh('Spätestens','latest_date') : ''}
         ${cols.has('notes_planer') ? `<th>Bemerkungen</th>` : ''}
         <th class="order-actions-col" aria-label="Aktionen"></th>
@@ -179,6 +181,14 @@ const PlanerViews = {
           <td>${UI.esc(o.arrival_time || '–')}</td>
           <td class="inline-edit-cell" style="text-align:center" onclick="PlanerViews.inlineEdit(event,${o.id},'sort_order','${o.sort_order||0}','number')" title="Reihenfolge bearbeiten">${o.sort_order||0}</td>
           <td>${UI.esc(o.on_site_contact || '–')}${o.on_site_contact_phone ? `<div class="text-muted" style="font-size:11px">${UI.esc(o.on_site_contact_phone)}</div>` : ''}</td>
+          <td class="inline-edit-cell" onclick="PlanerViews.inlineEditStatus(event,${o.id},'${o.status}')">${UI.statusBadge(o.status)}</td>
+          <td>${o.zylinder_status === 'bestellt'
+            ? '<span class="badge badge-red">Bestellt</span>'
+            : o.zylinder_status === 'vorhanden'
+              ? '<span class="badge badge-green">Vorhanden</span>'
+              : o.zylinder_status === 'nicht_notwendig'
+                ? '<span class="badge badge-gray">Nicht nötig</span>'
+                : '<span class="text-muted">–</span>'}</td>
           ${cols.has('latest_date') ? `<td>${UI.fmtDate(o.latest_date)}</td>` : ''}
           ${cols.has('notes_planer') ? `<td style="font-size:12px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${UI.esc(o.notes_planer||'')}">${UI.esc((o.notes_planer||'').substring(0,60))}${(o.notes_planer||'').length>60?'…':''}</td>` : ''}
           <td class="text-right order-actions-col" style="white-space:nowrap">
