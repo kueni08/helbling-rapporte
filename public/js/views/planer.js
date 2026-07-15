@@ -62,9 +62,9 @@ const PlanerViews = {
           <input type="text" id="filter-search" placeholder="Suche…" style="flex:1;min-width:140px" oninput="PlanerViews._saveFilter();PlanerViews.applyFilter()">
         </div>
       </div>
-      <div class="order-split">
+      <div class="order-split" id="order-split">
         <div class="card order-master"><div class="table-wrap" id="order-list-scroll"><div id="orders-list">Lade…</div></div></div>
-        <div class="order-detail" id="order-preview"><div class="card text-muted">Links einen Auftrag auswählen.</div></div>
+        <div class="order-detail" id="order-preview"></div>
       </div>`;
     PlanerViews._restoreFilter();
     await PlanerViews.loadOrdersTable();
@@ -155,7 +155,7 @@ const PlanerViews = {
         ${cols.has('sort_order') ? `<th title="Reihenfolge – klicken zum Bearbeiten">Reihenf.</th>` : ''}
         ${cols.has('notes_planer') ? `<th>Bemerkungen</th>` : ''}
         ${sortTh('Status','status')}
-        <th></th>
+        <th class="order-actions-col" aria-label="Aktionen"></th>
       </tr></thead>
       <tbody>
       ${orders.map(o => {
@@ -165,8 +165,8 @@ const PlanerViews = {
         const totalFiles = (o.attachment_count || 0) + (o.photo_count || 0);
         const attachBadge = totalFiles > 0 ? ` <span title="${totalFiles} Anhänge/Fotos" style="color:#555;font-size:11px;font-weight:600">📎${totalFiles}</span>` : '';
         const canCheck = o.status === 'abgeschlossen';
-        return `<tr style="${rowStyle}" data-order-id="${o.id}" data-status="${o.status}">
-          <td style="text-align:center">${canCheck ? `<input type="checkbox" class="row-chk" value="${o.id}" onchange="PlanerViews._onRowCheckChange()">` : ''}</td>
+        return `<tr style="${rowStyle}cursor:pointer" data-order-id="${o.id}" data-status="${o.status}" onclick="PlanerViews.openSplit(${o.id},false)">
+          <td style="text-align:center" onclick="event.stopPropagation()">${canCheck ? `<input type="checkbox" class="row-chk" value="${o.id}" onchange="PlanerViews._onRowCheckChange()">` : ''}</td>
           <td><code>${UI.esc(o.order_number)}</code>${attachBadge}${hasExtra ? ' <span title="Nicht auf LS aufgeführt" style="color:#d48a00;font-size:12px">⚠️</span>' : ''}</td>
           ${cols.has('project_number') ? `<td style="font-size:12px;color:var(--accent)">${UI.esc(o.project_number||'')}</td>` : ''}
           <td class="inline-edit-cell" onclick="PlanerViews.inlineEdit(event,${o.id},'customer_name','${UI.esc(o.customer_name||o.cust_name||'')}')">${UI.esc(o.customer_name || o.cust_name || '–')}</td>
@@ -181,10 +181,10 @@ const PlanerViews = {
           : o.zylinder_status === 'vorhanden'       ? ' <span class="badge badge-green" style="font-size:10px;padding:2px 6px;margin-left:4px">✅ Zyl. vorhanden</span>'
           : o.zylinder_status === 'nicht_notwendig' ? ' <span class="badge badge-gray"  style="font-size:10px;padding:2px 6px;margin-left:4px">Kein Zylinder</span>'
           : ''}</td>
-          <td class="text-right" style="white-space:nowrap">
-            <button class="btn btn-ghost btn-sm" onclick="PlanerViews.openSplit(${o.id},false)">Ansicht</button>
-            <button class="btn btn-ghost btn-sm" onclick="PlanerViews.openSplit(${o.id},true)">Bearb.</button>
-            <button class="btn btn-danger btn-sm" onclick="PlanerViews.deleteOrder(${o.id})">✕</button>
+          <td class="text-right order-actions-col" style="white-space:nowrap">
+            <button class="btn btn-ghost btn-sm order-icon-btn" title="Ansicht" aria-label="Auftrag ansehen" onclick="event.stopPropagation();PlanerViews.openSplit(${o.id},false)">👁</button>
+            <button class="btn btn-ghost btn-sm order-icon-btn" title="Bearbeiten" aria-label="Auftrag bearbeiten" onclick="event.stopPropagation();PlanerViews.openSplit(${o.id},true)">✎</button>
+            <button class="btn btn-danger btn-sm order-icon-btn" title="Archivieren" aria-label="Auftrag archivieren" onclick="event.stopPropagation();PlanerViews.deleteOrder(${o.id})">✕</button>
           </td>
         </tr>`;
       }).join('')}
@@ -198,6 +198,7 @@ const PlanerViews = {
 
   openSplit(orderId, edit) {
     PlanerViews._selectedOrderId = orderId;
+    document.getElementById('order-split')?.classList.add('has-selection');
     const scroller = document.getElementById('order-list-scroll');
     if (scroller) sessionStorage.setItem('planer_list_scroll', String(scroller.scrollTop));
     document.querySelectorAll('#orders-list tr').forEach(r => r.classList.toggle('selected-order', Number(r.dataset.orderId) === orderId));

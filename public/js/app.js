@@ -58,7 +58,7 @@ const App = {
 
   defaultView() {
     switch(App.state.role) {
-      case 'admin':   return 'admin-orders';
+      case 'admin':   return 'planer-orders';
       case 'planer':  return 'planer-orders';
       case 'monteur': return 'monteur-orders';
     }
@@ -84,7 +84,6 @@ const App = {
 
     if (role === 'admin') {
       navItems.push(
-        { id: 'admin-orders',  icon: '📋', label: 'Alle Aufträge' },
         { id: 'admin-users',   icon: '👥', label: 'Benutzer' },
         { id: 'admin-settings',icon: '⚙️',  label: 'Einstellungen' },
       );
@@ -112,7 +111,6 @@ const App = {
       'planer-orders':    'Aufträge',
       'planer-anfragen':  'Kundenanfragen',
       'planer-lieferschein': 'LS-Import',
-      'admin-orders':     'Alle Aufträge',
       'admin-users':      'Benutzer',
       'admin-settings':   'Einstellungen',
       'change-password':  'Passwort ändern',
@@ -126,7 +124,6 @@ const App = {
       case 'planer-orders':    PlanerViews.renderOrders(); break;
       case 'planer-anfragen':     PlanerViews.renderAnfragen(); break;
       case 'planer-lieferschein': PlanerViews.renderLieferschein(); break;
-      case 'admin-orders':     PlanerViews.renderOrders(); break;
       case 'admin-users':      AdminViews.renderUsers(); break;
       case 'admin-settings':   AdminViews.renderSettings(); break;
       case 'change-password':  App.renderChangePassword(); break;
