@@ -34,6 +34,8 @@ const PlanerViews = {
 
   // ── Order List ──────────────────────────────────────────────────────────
   async renderOrders() {
+    PlanerViews._selectedOrderId = null;
+    PlanerViews._previewEdit = false;
     const el = document.getElementById('main-content');
     el.innerHTML = `
       <div class="page-header">
@@ -41,7 +43,6 @@ const PlanerViews = {
         <div class="flex gap-2 flex-wrap">
           <button class="btn btn-ghost" onclick="PlanerViews.openDownloadModal()">📦 Download</button>
           <button class="btn btn-ghost" onclick="PlanerViews.printOrders()">🖨️ Drucken</button>
-          <button id="preview-toggle" class="btn btn-ghost hidden" onclick="PlanerViews.togglePreview()">▴ Vorschau schliessen</button>
           <button id="btn-bulk-abgerechnet" class="btn btn-ghost" style="display:none" onclick="PlanerViews.bulkSetAbgerechnet()">✅ Verrechnet setzen</button>
           <button class="btn btn-primary" onclick="PlanerViews.renderOrderForm()">+ Neuer Auftrag</button>
         </div>
@@ -61,7 +62,6 @@ const PlanerViews = {
       </div>
       <div class="order-split" id="order-split">
         <div class="card order-master"><div class="table-wrap" id="order-list-scroll"><div id="orders-list">Lade…</div></div></div>
-        <div class="order-detail" id="order-preview"></div>
       </div>`;
     PlanerViews._restoreFilter();
     await PlanerViews.loadOrdersTable();
@@ -123,6 +123,11 @@ const PlanerViews = {
 
     PlanerViews._filteredOrders = orders;
 
+    if (PlanerViews._selectedOrderId && !orders.some(o => o.id === PlanerViews._selectedOrderId)) {
+      PlanerViews._selectedOrderId = null;
+      document.getElementById('order-split')?.classList.remove('has-selection', 'preview-collapsed');
+    }
+
     const el = document.getElementById('orders-list');
     if (!el) return;
 
@@ -138,6 +143,8 @@ const PlanerViews = {
     };
 
     const cols = PlanerViews._getVisibleCols();
+    const previewColspan = 10 + (cols.has('latest_date') ? 1 : 0) + (cols.has('notes_planer') ? 1 : 0);
+    const previewCollapsed = document.getElementById('order-split')?.classList.contains('preview-collapsed');
 
     el.innerHTML = orders.length ? `<table>
       <thead><tr>
@@ -179,7 +186,17 @@ const PlanerViews = {
             <button class="btn btn-ghost btn-sm order-icon-btn" title="Bearbeiten" aria-label="Auftrag bearbeiten" onclick="event.stopPropagation();PlanerViews.openSplit(${o.id},true)">✎</button>
             <button class="btn btn-danger btn-sm order-icon-btn" title="Archivieren" aria-label="Auftrag archivieren" onclick="event.stopPropagation();PlanerViews.deleteOrder(${o.id})">✕</button>
           </td>
-        </tr>`;
+        </tr>${PlanerViews._selectedOrderId === o.id ? `
+        <tr class="order-preview-row">
+          <td colspan="${previewColspan}">
+            <div class="order-preview-bar">
+              <button class="btn btn-ghost order-preview-toggle" onclick="event.stopPropagation();PlanerViews.togglePreview()">
+                ${previewCollapsed ? '▼ Vorschau öffnen' : '▲ Vorschau einklappen'}
+              </button>
+            </div>
+            <div class="order-detail" id="order-preview"></div>
+          </td>
+        </tr>` : ''}`;
       }).join('')}
       </tbody></table>` : '<p class="text-muted text-sm">Keine Aufträge gefunden.</p>';
     requestAnimationFrame(() => {
@@ -187,28 +204,29 @@ const PlanerViews = {
       if (scroller) scroller.scrollTop = Number(sessionStorage.getItem('planer_list_scroll') || 0);
       if (PlanerViews._selectedOrderId) document.querySelector(`#orders-list tr[data-order-id="${PlanerViews._selectedOrderId}"]`)?.classList.add('selected-order');
     });
+    if (PlanerViews._selectedOrderId && document.getElementById('order-preview')) {
+      if (PlanerViews._previewEdit) PlanerViews.renderOrderForm(PlanerViews._selectedOrderId, 'order-preview');
+      else PlanerViews.renderOrderDetail(PlanerViews._selectedOrderId, 'order-preview');
+    }
   },
 
   openSplit(orderId, edit) {
     PlanerViews._selectedOrderId = orderId;
+    PlanerViews._previewEdit = !!edit;
     const split = document.getElementById('order-split');
     split?.classList.add('has-selection');
     split?.classList.remove('preview-collapsed');
-    const toggle = document.getElementById('preview-toggle');
-    if (toggle) { toggle.classList.remove('hidden'); toggle.textContent = '▴ Vorschau schliessen'; }
     const scroller = document.getElementById('order-list-scroll');
     if (scroller) sessionStorage.setItem('planer_list_scroll', String(scroller.scrollTop));
-    document.querySelectorAll('#orders-list tr').forEach(r => r.classList.toggle('selected-order', Number(r.dataset.orderId) === orderId));
-    if (edit) PlanerViews.renderOrderForm(orderId, 'order-preview');
-    else PlanerViews.renderOrderDetail(orderId, 'order-preview');
+    PlanerViews.applyFilter();
   },
 
   togglePreview() {
     const split = document.getElementById('order-split');
-    const toggle = document.getElementById('preview-toggle');
+    const toggle = document.querySelector('.order-preview-toggle');
     if (!split || !toggle || !split.classList.contains('has-selection')) return;
     const collapsed = split.classList.toggle('preview-collapsed');
-    toggle.textContent = collapsed ? '▾ Vorschau öffnen' : '▴ Vorschau schliessen';
+    toggle.textContent = collapsed ? '▼ Vorschau öffnen' : '▲ Vorschau einklappen';
   },
 
   // ── Checkbox / Bulk Selection ────────────────────────────────────────────
