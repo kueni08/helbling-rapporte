@@ -210,10 +210,19 @@ const PlanerViews = {
       </tbody></table>` : '<p class="text-muted text-sm">Keine Aufträge gefunden.</p>';
     requestAnimationFrame(() => {
       const scroller = document.getElementById('order-list-scroll');
-      if (scroller) scroller.scrollTop = Number(sessionStorage.getItem('planer_list_scroll') || 0);
-      if (PlanerViews._selectedOrderId) document.querySelector(`#orders-list tr[data-order-id="${PlanerViews._selectedOrderId}"]`)?.classList.add('selected-order');
+      const selectedRow = PlanerViews._selectedOrderId
+        ? document.querySelector(`#orders-list tr[data-order-id="${PlanerViews._selectedOrderId}"]`)
+        : null;
+      selectedRow?.classList.add('selected-order');
+      if (scroller && selectedRow && PlanerViews._scrollSelectedToTop) {
+        scroller.scrollTo({ top: Math.max(0, selectedRow.offsetTop - 36), behavior: 'smooth' });
+        PlanerViews._scrollSelectedToTop = false;
+      } else if (scroller) {
+        scroller.scrollTop = Number(sessionStorage.getItem('planer_list_scroll') || 0);
+      }
     });
-    if (PlanerViews._selectedOrderId && document.getElementById('order-preview')) {
+    if (PlanerViews._selectedOrderId && document.getElementById('order-preview') &&
+        !document.getElementById('order-split')?.classList.contains('preview-collapsed')) {
       if (PlanerViews._previewEdit) PlanerViews.renderOrderForm(PlanerViews._selectedOrderId, 'order-preview');
       else PlanerViews.renderOrderDetail(PlanerViews._selectedOrderId, 'order-preview');
     }
@@ -222,6 +231,7 @@ const PlanerViews = {
   openSplit(orderId, edit) {
     PlanerViews._selectedOrderId = orderId;
     PlanerViews._previewEdit = !!edit;
+    PlanerViews._scrollSelectedToTop = true;
     const split = document.getElementById('order-split');
     split?.classList.add('has-selection');
     split?.classList.remove('preview-collapsed');
@@ -236,6 +246,11 @@ const PlanerViews = {
     if (!split || !toggle || !split.classList.contains('has-selection')) return;
     const collapsed = split.classList.toggle('preview-collapsed');
     toggle.textContent = collapsed ? '▼ Vorschau öffnen' : '▲ Vorschau einklappen';
+    if (!collapsed) {
+      const row = document.querySelector(`#orders-list tr[data-order-id="${PlanerViews._selectedOrderId}"]`);
+      const scroller = document.getElementById('order-list-scroll');
+      if (row && scroller) scroller.scrollTo({ top: Math.max(0, row.offsetTop - 36), behavior: 'smooth' });
+    }
   },
 
   // ── Checkbox / Bulk Selection ────────────────────────────────────────────
@@ -789,6 +804,10 @@ const PlanerViews = {
           ${PlanerViews.renderAttachmentsSection(order)}
         </div>
       </div>` : '<div class="card"><p class="text-muted text-sm">Anhänge können nach dem Erstellen des Auftrags hochgeladen werden.</p></div>'}
+      <div class="flex gap-2 mb-3" style="justify-content:flex-end">
+        <button class="btn btn-primary" onclick="PlanerViews.saveOrder(${orderId||'null'},false)">Speichern</button>
+        ${order ? `<button class="btn btn-success" onclick="PlanerViews.saveOrder(${orderId},true)">Speichern und weiter</button>` : ''}
+      </div>
     `;
     UI.trackDirty(main);
 
@@ -923,6 +942,14 @@ const PlanerViews = {
         const next = PlanerViews._filteredOrders[idx + 1];
         if (next) return PlanerViews.renderOrderForm(next.id, PlanerViews._formTarget || 'main-content');
         UI.toast('Letzter Auftrag der Liste erreicht', 'info');
+      }
+      if (PlanerViews._formTarget === 'order-preview') {
+        PlanerViews._allOrders = await API.getOrders();
+        PlanerViews._selectedOrderId = saved.id;
+        PlanerViews._previewEdit = false;
+        document.getElementById('order-split')?.classList.add('preview-collapsed');
+        PlanerViews.applyFilter();
+        return;
       }
       PlanerViews.renderOrderForm(saved.id, PlanerViews._formTarget || 'main-content');
     } catch(e) { UI.toast(e.message,'error'); }
