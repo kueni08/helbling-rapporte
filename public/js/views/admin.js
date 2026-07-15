@@ -406,24 +406,17 @@ const AdminViews = {
     const el = document.getElementById('settings-content');
     el.innerHTML = '<p class="text-muted text-sm">Lade…</p>';
 
-    let status = { active: false, inbox_dir: '–', inbox_files: [] };
+    let status = { inbox_files: [] };
     let imports = [];
     let monteure = [];
     let importDefaults = { default_monteur_id: null };
-    try {
-      [status, imports, monteure, importDefaults] = await Promise.all([
-        API.getLsStatus(), API.getLsImports(), API.getMonteure(), API.getImportDefaults()
-      ]);
-    } catch(e) {}
-
-    const statusBanner = !status.active ? `
-      <div class="card" style="border-left:4px solid #f59e0b;background:#fffbeb">
-        <p style="margin:0;font-size:0.875rem">
-          <strong>Einrichtung erforderlich:</strong> Trage <code>ANTHROPIC_API_KEY=sk-ant-...</code> in deine
-          <code>.env</code>-Datei ein und starte den Server neu.
-          Den API-Key erhältst du auf <a href="https://console.anthropic.com/" target="_blank" rel="noopener">console.anthropic.com</a>.
-        </p>
-      </div>` : '';
+    const results = await Promise.allSettled([
+      API.getLsStatus(), API.getLsImports(), API.getMonteure(), API.getImportDefaults()
+    ]);
+    if (results[0].status === 'fulfilled') status = results[0].value;
+    if (results[1].status === 'fulfilled') imports = results[1].value;
+    if (results[2].status === 'fulfilled') monteure = results[2].value;
+    if (results[3].status === 'fulfilled') importDefaults = results[3].value;
 
     const importRows = imports.length ? imports.map(i => {
       const statusMap = { success: 'badge-green', error: 'badge-red', processing: 'badge-blue', pending: 'badge-gray' };
@@ -453,7 +446,6 @@ const AdminViews = {
     ).join('');
 
     el.innerHTML = `
-      ${statusBanner}
       <div class="card">
         <div class="card-title">⚙️ Import-Einstellungen</div>
         <div class="form-grid" style="max-width:400px">
@@ -481,7 +473,7 @@ const AdminViews = {
         <div class="flex gap-2 mt-2 flex-wrap">
           <button class="btn btn-ghost btn-sm" onclick="AdminViews.renderLieferscheinImport()">↺ Aktualisieren</button>
         </div>
-        ${status.inbox_files.length ? `
+        ${(status.inbox_files||[]).length ? `
           <p class="text-sm mt-2"><strong>Inbox (${status.inbox_files.length} PDF${status.inbox_files.length>1?'s':''} ausstehend):</strong></p>
           <ul class="text-sm text-muted" style="margin:4px 0 0 16px">
             ${status.inbox_files.map(f => `<li>${UI.esc(f.name)}</li>`).join('')}
