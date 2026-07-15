@@ -125,7 +125,7 @@ const PlanerViews = {
 
     if (PlanerViews._selectedOrderId && !orders.some(o => o.id === PlanerViews._selectedOrderId)) {
       PlanerViews._selectedOrderId = null;
-      document.getElementById('order-split')?.classList.remove('has-selection', 'preview-collapsed');
+      document.getElementById('order-split')?.classList.remove('has-selection');
     }
 
     const el = document.getElementById('orders-list');
@@ -143,11 +143,11 @@ const PlanerViews = {
     };
 
     const cols = PlanerViews._getVisibleCols();
-    const previewColspan = 12 + (cols.has('latest_date') ? 1 : 0) + (cols.has('notes_planer') ? 1 : 0);
-    const previewCollapsed = document.getElementById('order-split')?.classList.contains('preview-collapsed');
+    const previewColspan = 13 + (cols.has('latest_date') ? 1 : 0) + (cols.has('notes_planer') ? 1 : 0);
 
     el.innerHTML = orders.length ? `<table>
       <thead><tr>
+        <th style="width:30px" aria-label="Auftrag auf- oder einklappen"></th>
         <th style="width:32px"><input type="checkbox" id="chk-all" title="Alle wählen" onchange="PlanerViews.toggleSelectAll(this.checked)"></th>
         ${sortTh('Nr.','order_number')}
         ${sortTh('Projekt','project_number')}
@@ -171,7 +171,10 @@ const PlanerViews = {
         const totalFiles = (o.attachment_count || 0) + (o.photo_count || 0);
         const attachBadge = totalFiles > 0 ? ` <span title="${totalFiles} Anhänge/Fotos" style="color:#555;font-size:11px;font-weight:600">📎${totalFiles}</span>` : '';
         const canCheck = o.status === 'abgeschlossen';
-        return `<tr style="${rowStyle}cursor:pointer" data-order-id="${o.id}" data-status="${o.status}" onclick="PlanerViews.openSplit(${o.id},false)">
+        return `<tr style="${rowStyle}" data-order-id="${o.id}" data-status="${o.status}">
+          <td style="text-align:center;padding-left:2px;padding-right:2px">
+            <button class="order-row-toggle" title="${PlanerViews._selectedOrderId === o.id ? 'Auftrag einklappen' : 'Auftrag aufklappen'}" aria-label="${PlanerViews._selectedOrderId === o.id ? 'Auftrag einklappen' : 'Auftrag aufklappen'}" onclick="event.stopPropagation();PlanerViews.toggleOrderPreview(${o.id})">${PlanerViews._selectedOrderId === o.id ? '▼' : '▶'}</button>
+          </td>
           <td style="text-align:center" onclick="event.stopPropagation()">${canCheck ? `<input type="checkbox" class="row-chk" value="${o.id}" onchange="PlanerViews._onRowCheckChange()">` : ''}</td>
           <td><code>${UI.esc(o.order_number)}</code>${attachBadge}${hasExtra ? ' <span title="Nicht auf LS aufgeführt" style="color:#d48a00;font-size:12px">⚠️</span>' : ''}</td>
           <td style="font-size:12px;color:var(--accent)">${UI.esc(o.project_number||'')}</td>
@@ -198,11 +201,6 @@ const PlanerViews = {
         </tr>${PlanerViews._selectedOrderId === o.id ? `
         <tr class="order-preview-row">
           <td colspan="${previewColspan}">
-            <div class="order-preview-bar">
-              <button class="btn btn-ghost order-preview-toggle" onclick="event.stopPropagation();PlanerViews.togglePreview()">
-                ${previewCollapsed ? '▼ Vorschau öffnen' : '▲ Vorschau einklappen'}
-              </button>
-            </div>
             <div class="order-detail" id="order-preview"></div>
           </td>
         </tr>` : ''}`;
@@ -221,36 +219,34 @@ const PlanerViews = {
         scroller.scrollTop = Number(sessionStorage.getItem('planer_list_scroll') || 0);
       }
     });
-    if (PlanerViews._selectedOrderId && document.getElementById('order-preview') &&
-        !document.getElementById('order-split')?.classList.contains('preview-collapsed')) {
+    if (PlanerViews._selectedOrderId && document.getElementById('order-preview')) {
       if (PlanerViews._previewEdit) PlanerViews.renderOrderForm(PlanerViews._selectedOrderId, 'order-preview');
       else PlanerViews.renderOrderDetail(PlanerViews._selectedOrderId, 'order-preview');
     }
   },
 
   openSplit(orderId, edit) {
+    if (!UI.guardDiscard()) return;
     PlanerViews._selectedOrderId = orderId;
     PlanerViews._previewEdit = !!edit;
     PlanerViews._scrollSelectedToTop = true;
     const split = document.getElementById('order-split');
     split?.classList.add('has-selection');
-    split?.classList.remove('preview-collapsed');
     const scroller = document.getElementById('order-list-scroll');
     if (scroller) sessionStorage.setItem('planer_list_scroll', String(scroller.scrollTop));
     PlanerViews.applyFilter();
   },
 
-  togglePreview() {
-    const split = document.getElementById('order-split');
-    const toggle = document.querySelector('.order-preview-toggle');
-    if (!split || !toggle || !split.classList.contains('has-selection')) return;
-    const collapsed = split.classList.toggle('preview-collapsed');
-    toggle.textContent = collapsed ? '▼ Vorschau öffnen' : '▲ Vorschau einklappen';
-    if (!collapsed) {
-      const row = document.querySelector(`#orders-list tr[data-order-id="${PlanerViews._selectedOrderId}"]`);
-      const scroller = document.getElementById('order-list-scroll');
-      if (row && scroller) scroller.scrollTo({ top: Math.max(0, row.offsetTop - 36), behavior: 'smooth' });
+  toggleOrderPreview(orderId) {
+    if (!UI.guardDiscard()) return;
+    if (PlanerViews._selectedOrderId === orderId) {
+      PlanerViews._selectedOrderId = null;
+      PlanerViews._previewEdit = false;
+      document.getElementById('order-split')?.classList.remove('has-selection');
+      PlanerViews.applyFilter();
+      return;
     }
+    PlanerViews.openSplit(orderId, false);
   },
 
   // ── Checkbox / Bulk Selection ────────────────────────────────────────────
@@ -940,14 +936,17 @@ const PlanerViews = {
       if (goNext) {
         const idx = PlanerViews._filteredOrders.findIndex(o => o.id === saved.id);
         const next = PlanerViews._filteredOrders[idx + 1];
-        if (next) return PlanerViews.renderOrderForm(next.id, PlanerViews._formTarget || 'main-content');
+        if (next) {
+          if (PlanerViews._formTarget === 'order-preview') return PlanerViews.openSplit(next.id, true);
+          return PlanerViews.renderOrderForm(next.id, PlanerViews._formTarget || 'main-content');
+        }
         UI.toast('Letzter Auftrag der Liste erreicht', 'info');
       }
       if (PlanerViews._formTarget === 'order-preview') {
         PlanerViews._allOrders = await API.getOrders();
-        PlanerViews._selectedOrderId = saved.id;
+        PlanerViews._selectedOrderId = null;
         PlanerViews._previewEdit = false;
-        document.getElementById('order-split')?.classList.add('preview-collapsed');
+        document.getElementById('order-split')?.classList.remove('has-selection');
         PlanerViews.applyFilter();
         return;
       }

@@ -713,11 +713,10 @@ thead th.sort-desc::after { content: ' ↓'; color: var(--accent); }
 .order-master { padding:0; }
 .order-master .table-wrap { max-height:calc(100vh - 240px); overflow:auto; }
 .order-preview-row > td { padding:0 !important; background:var(--bg3); border-bottom:2px solid var(--accent); }
-.order-preview-bar { display:flex; justify-content:flex-end; padding:8px 12px; border-top:2px solid var(--accent); }
-.order-preview-toggle { font-weight:600; min-width:170px; }
-.order-detail { min-width:0; display:none; width:100%; padding:0 12px 12px; }
+.order-detail { min-width:0; display:none; width:100%; padding:12px; border-top:2px solid var(--accent); }
 .order-split.has-selection .order-detail { display:block; animation:previewDrop .18s ease-out; }
-.order-split.preview-collapsed .order-detail { display:none; }
+.order-row-toggle { width:24px; height:24px; border:0; background:transparent; color:var(--accent); cursor:pointer; font-size:14px; line-height:1; border-radius:4px; }
+.order-row-toggle:hover { background:rgba(26,79,160,.12); }
 @keyframes previewDrop { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:translateY(0); } }
 #orders-list table { font-size:12px; }
 #orders-list th { white-space:nowrap; padding-left:7px; padding-right:7px; }
