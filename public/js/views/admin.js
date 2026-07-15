@@ -408,19 +408,13 @@ const AdminViews = {
 
     let status = { active: false, inbox_dir: '–', inbox_files: [] };
     let imports = [];
-    let driveStatus = { active: false, inbox_folder_id: null };
     let monteure = [];
     let importDefaults = { default_monteur_id: null };
     try {
-      [status, imports, driveStatus, monteure, importDefaults] = await Promise.all([
-        API.getLsStatus(), API.getLsImports(), API.getLsDriveStatus(),
-        API.getMonteure(), API.getImportDefaults()
+      [status, imports, monteure, importDefaults] = await Promise.all([
+        API.getLsStatus(), API.getLsImports(), API.getMonteure(), API.getImportDefaults()
       ]);
     } catch(e) {}
-
-    const statusBadge = status.active
-      ? '<span class="badge badge-green">Aktiv</span>'
-      : '<span class="badge badge-gray">Inaktiv – ANTHROPIC_API_KEY fehlt</span>';
 
     const statusBanner = !status.active ? `
       <div class="card" style="border-left:4px solid #f59e0b;background:#fffbeb">
@@ -431,38 +425,11 @@ const AdminViews = {
         </p>
       </div>` : '';
 
-    const driveBadge = driveStatus.active
-      ? '<span class="badge badge-green">Aktiv</span>'
-      : '<span class="badge badge-gray">Inaktiv</span>';
-
-    const driveInboxLink = driveStatus.inbox_folder_id
-      ? `<a href="https://drive.google.com/drive/folders/${driveStatus.inbox_folder_id}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm">📁 Ordner öffnen</a>`
-      : '';
-
-    const driveCard = `
-      <div class="card">
-        <div class="card-title">☁️ Google Drive Auto-Import ${driveBadge}</div>
-        ${driveStatus.active ? `
-          <p class="text-muted text-sm mb-1">
-            PDFs in den Google Drive Ordner <strong>"${UI.esc(driveStatus.inbox_subfolder)}"</strong> ablegen
-            → werden alle ${driveStatus.poll_interval_min} Minuten automatisch importiert.<br>
-            ${driveStatus.last_poll_at ? `Letzte Abfrage: ${driveStatus.last_poll_at.substring(0,16).replace('T',' ')} UTC` : ''}
-          </p>
-          <div class="flex gap-2 mt-2 flex-wrap">
-            ${driveInboxLink}
-          </div>` : `
-          <p class="text-muted text-sm">
-            Google Drive nicht konfiguriert. Stelle sicher, dass
-            <code>GOOGLE_SERVICE_ACCOUNT_JSON</code> und <code>GOOGLE_DRIVE_FOLDER_ID</code> gesetzt sind.
-          </p>`}
-      </div>`;
-
     const importRows = imports.length ? imports.map(i => {
       const statusMap = { success: 'badge-green', error: 'badge-red', processing: 'badge-blue', pending: 'badge-gray' };
       const statusLabel = { success: 'Erfolgreich', error: 'Fehler', processing: 'Verarbeitung…', pending: 'Ausstehend' };
-      const sourceIcon = i.drive_file_id ? '☁️' : '💻';
       return `<tr>
-        <td style="font-size:0.8rem">${sourceIcon} ${UI.esc(i.original_name)}</td>
+        <td style="font-size:0.8rem">${UI.esc(i.original_name)}</td>
         <td><span class="badge ${statusMap[i.status]||'badge-gray'}">${statusLabel[i.status]||i.status}</span></td>
         <td>${UI.esc(i.lieferschein_nr||'–')}</td>
         <td>${UI.esc(i.kunde||'–')}</td>
@@ -487,7 +454,6 @@ const AdminViews = {
 
     el.innerHTML = `
       ${statusBanner}
-      ${driveCard}
       <div class="card">
         <div class="card-title">⚙️ Import-Einstellungen</div>
         <div class="form-grid" style="max-width:400px">
@@ -502,11 +468,7 @@ const AdminViews = {
         <button class="btn btn-primary btn-sm mt-2" onclick="AdminViews.saveImportDefaults()">Speichern</button>
       </div>
       <div class="card">
-        <div class="card-title">📥 Lieferschein Auto-Import ${statusBadge}</div>
-        <p class="text-muted text-sm mb-1">
-          PDFs in diesen lokalen Ordner legen → automatisch als Auftrag importiert:<br>
-          <code style="font-size:0.85rem;word-break:break-all">${UI.esc(status.inbox_dir)}</code>
-        </p>
+        <div class="card-title">📥 Lieferscheine importieren</div>
         <div class="ls-drop-zone mt-2" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="event.preventDefault();this.classList.remove('drag-over');AdminViews.uploadLieferschein({files:event.dataTransfer.files,value:''})">
           <div>
             <label class="btn btn-ghost btn-sm" style="cursor:pointer">
@@ -526,7 +488,7 @@ const AdminViews = {
           </ul>` : ''}
       </div>
       <div class="card">
-        <div class="card-title">Import-Verlauf <span style="font-weight:normal;font-size:0.8rem;color:#6b7280">(☁️ = Google Drive, 💻 = manuell)</span></div>
+        <div class="card-title">Import-Verlauf</div>
         <div class="table-wrap">
           <table>
             <thead><tr>
