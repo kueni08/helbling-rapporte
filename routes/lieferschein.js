@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const { getDb } = require('../lib/database');
 const { requireRole } = require('../middleware/auth');
-const { getInboxDir, processFile } = require('../lib/lieferschein-watcher');
+const { getInboxDir, processFile, confirmImport } = require('../lib/lieferschein-watcher');
 
 const upload = multer({
   storage: multer.diskStorage({
@@ -13,7 +13,7 @@ const upload = multer({
       // Originalname behalten, Konflikte mit Zeitstempel vermeiden
       const ext = path.extname(file.originalname).toLowerCase();
       const base = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9_-]/g, '_');
-      cb(null, `${base}_${Date.now()}${ext}`);
+      cb(null, `pending_${base}_${Date.now()}_${Math.random().toString(36).slice(2,7)}${ext}`);
     },
   }),
   limits: { fileSize: 50 * 1024 * 1024 },
@@ -54,15 +54,20 @@ router.get('/imports', requireRole('admin', 'planer'), (req, res) => {
 });
 
 // POST /api/lieferschein/upload  – Manueller Upload (löst direkt Verarbeitung aus)
-router.post('/upload', requireRole('admin', 'planer'), upload.single('file'), async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'Keine Datei' });
-  // Direkt verarbeiten (nicht auf Watcher warten)
+router.post('/upload', requireRole('admin', 'planer'), upload.array('files', 20), async (req, res) => {
+  if (!req.files?.length) return res.status(400).json({ error: 'Keine Datei' });
   try {
-    await processFile(req.file.path);
-    res.json({ ok: true, message: `${req.file.originalname} wird verarbeitet` });
+    const previews = [];
+    for (const file of req.files) previews.push(await processFile(file.path, file.originalname, null, { previewOnly: true }));
+    res.json({ ok: true, previews });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+router.post('/confirm/:id', requireRole('admin', 'planer'), (req, res) => {
+  try { res.json({ ok: true, ...confirmImport(parseInt(req.params.id), req.body?.allow_duplicate === true) }); }
+  catch (e) { res.status(/Duplikat/.test(e.message) ? 409 : 400).json({ error: e.message }); }
 });
 
 // POST /api/lieferschein/retry/:id  – Fehlgeschlagenen Import erneut versuchen

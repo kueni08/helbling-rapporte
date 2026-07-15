@@ -364,6 +364,18 @@ const AdminViews = {
             <label>Absender-Adresse (From) – optional, Standard = Benutzername</label>
             <input type="email" id="smtp-from" value="${UI.esc(cfg.from||'')}" placeholder="rapporte@firma.ch">
           </div>
+          <div class="field span-2">
+            <label>Empfänger Abschlussrapporte</label>
+            <input type="text" id="smtp-completion-to" value="${UI.esc(cfg.completion_to||'')}" placeholder="rapporte@firma.ch (mehrere mit Semikolon)">
+          </div>
+          <div class="field span-2">
+            <label>CC – optional</label>
+            <input type="text" id="smtp-completion-cc" value="${UI.esc(cfg.completion_cc||'')}" placeholder="cc@firma.ch">
+          </div>
+          <div class="field span-2">
+            <label>Antwortadresse – optional</label>
+            <input type="email" id="smtp-reply-to" value="${UI.esc(cfg.reply_to||'')}" placeholder="antwort@firma.ch">
+          </div>
         </div>
         <div class="flex gap-2 mt-3">
           <button class="btn btn-primary" onclick="AdminViews.saveSmtpSettings()">Speichern</button>
@@ -378,6 +390,9 @@ const AdminViews = {
       user: document.getElementById('smtp-user').value.trim(),
       pass: document.getElementById('smtp-pass').value,
       from: document.getElementById('smtp-from').value.trim(),
+      completion_to: document.getElementById('smtp-completion-to').value.trim(),
+      completion_cc: document.getElementById('smtp-completion-cc').value.trim(),
+      reply_to: document.getElementById('smtp-reply-to').value.trim(),
     };
     try {
       await API.saveSmtp(d);
@@ -496,7 +511,7 @@ const AdminViews = {
           <div>
             <label class="btn btn-ghost btn-sm" style="cursor:pointer">
               📂 PDF manuell hochladen
-              <input type="file" accept=".pdf" style="display:none" onchange="AdminViews.uploadLieferschein(this)">
+              <input type="file" accept=".pdf" multiple style="display:none" onchange="AdminViews.uploadLieferschein(this)">
             </label>
           </div>
           <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('lieferschein')">↺ Aktualisieren</button>
@@ -530,17 +545,42 @@ const AdminViews = {
   },
 
   async uploadLieferschein(input) {
-    const file = input.files[0];
-    if (!file) return;
+    const files = [...input.files];
+    if (!files.length) return;
     const form = new FormData();
-    form.append('file', file);
+    files.forEach(file => form.append('files', file));
     try {
       UI.toast('PDF wird verarbeitet…', 'info', 3000);
-      await API.uploadLieferschein(form);
+      const result = await API.uploadLieferschein(form);
+      AdminViews.showLsPreviews(result.previews || []);
       UI.toast('Verarbeitung gestartet – Seite lädt in 3s neu', 'success', 3000);
-      setTimeout(() => AdminViews.showSettingsTab('lieferschein'), 3500);
     } catch (e) { UI.toast(e.message, 'error'); }
     input.value = '';
+  },
+
+  showLsPreviews(previews) {
+    const rows = previews.map(p => {
+      const d = p.data || {};
+      const warning = p.duplicate ? `<div style="color:#b45309;font-weight:600">⚠ Bereits vorhanden: ${UI.esc(p.duplicate.order_number || 'Auftrag')}</div>` : '';
+      return `<div class="card" id="ls-preview-${p.id}" style="margin-bottom:10px">
+        <strong>${UI.esc(p.original_name)}</strong>${warning}
+        <div class="text-sm text-muted">LS: ${UI.esc(d.lieferschein_nr || '–')} · Projekt: ${UI.esc(d.projekt_nr || '–')} · Kunde: ${UI.esc(d.kunde?.name || '–')} · Artikel: ${(d.artikel || []).length}</div>
+        <div class="flex gap-2 mt-2">
+          <button class="btn btn-primary btn-sm" ${p.duplicate ? 'disabled' : ''} onclick="AdminViews.confirmLs(${p.id},false)">Auftrag erstellen</button>
+          ${p.duplicate ? `<button class="btn btn-danger btn-sm" onclick="AdminViews.confirmLs(${p.id},true)">Trotzdem importieren</button>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+    UI.modal('Lieferscheine prüfen und freigeben', `<div style="max-height:65vh;overflow:auto">${rows}</div>`,
+      `<button class="btn btn-ghost" onclick="UI.closeModal();AdminViews.showSettingsTab('lieferschein')">Schliessen</button>`);
+  },
+
+  async confirmLs(id, allowDuplicate) {
+    try {
+      const result = await API.confirmLsImport(id, allowDuplicate);
+      document.getElementById(`ls-preview-${id}`)?.remove();
+      UI.toast(`Auftrag ${result.orderNumber} erstellt`, 'success');
+    } catch(e) { UI.toast(e.message, 'error'); }
   },
 
   async retryLsImport(id) {

@@ -6,6 +6,10 @@ db/rapporte.db-shm
 db/rapporte.db-wal
 db/sessions.db
 uploads/
+rapporte.db
+*_b64.txt
+wal_b64.txt
+caddy.exe
 *.log
 .DS_Store
 Thumbs.db

@@ -147,18 +147,29 @@ router.get('/smtp', requireRole('admin'), (req, res) => {
     user: get('smtp_user') || process.env.SMTP_USER || '',
     pass: (get('smtp_pass') || process.env.SMTP_PASS) ? '***' : '',
     from: get('smtp_from') || '',
+    completion_to: get('completion_email_to') || process.env.COMPLETION_EMAIL_TO || '',
+    completion_cc: get('completion_email_cc') || process.env.COMPLETION_EMAIL_CC || '',
+    reply_to: get('completion_email_reply_to') || process.env.COMPLETION_EMAIL_REPLY_TO || '',
   });
 });
 
 router.put('/smtp', requireRole('admin'), (req, res) => {
   const db = getDb();
   const upsert = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
-  const { host, port, user, pass, from } = req.body;
+  const { host, port, user, pass, from, completion_to, completion_cc, reply_to } = req.body;
+  const addresses = [completion_to, completion_cc, reply_to].filter(Boolean)
+    .flatMap(v => String(v).split(/[;,]/)).map(v => v.trim()).filter(Boolean);
+  if (addresses.some(v => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v))) {
+    return res.status(400).json({ error: 'Ungültige E-Mail-Adresse' });
+  }
   if (host !== undefined) upsert.run('smtp_host', host);
   if (port !== undefined) upsert.run('smtp_port', String(port));
   if (user !== undefined) upsert.run('smtp_user', user);
   if (pass && pass !== '***') upsert.run('smtp_pass', pass);
   if (from !== undefined) upsert.run('smtp_from', from);
+  if (completion_to !== undefined) upsert.run('completion_email_to', completion_to);
+  if (completion_cc !== undefined) upsert.run('completion_email_cc', completion_cc);
+  if (reply_to !== undefined) upsert.run('completion_email_reply_to', reply_to);
   res.json({ ok: true });
 });
 
