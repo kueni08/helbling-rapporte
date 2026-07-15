@@ -1,4 +1,4 @@
-const CACHE = 'hr-v4';
+const CACHE = 'hr-v5';
 const STATIC = ['/css/app.css', '/js/api.js', '/js/ui.js', '/js/app.js',
   '/js/order-fields.js', '/js/views/admin.js', '/js/views/planer.js', '/js/views/monteur.js',
   '/js/views/tagesuebersicht.js', '/icons/icon.svg'];
