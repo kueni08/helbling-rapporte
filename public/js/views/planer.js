@@ -39,12 +39,9 @@ const PlanerViews = {
       <div class="page-header">
         <h2>📋 Aufträge</h2>
         <div class="flex gap-2 flex-wrap">
-          <button class="btn btn-ghost" onclick="window.location='/api/orders/import-template'">📄 Vorlage</button>
-          <button class="btn btn-ghost" onclick="PlanerViews.openImport()">📥 Excel Import</button>
-          <button class="btn btn-ghost" onclick="window.location='/api/orders/export'">📤 Excel Export</button>
           <button class="btn btn-ghost" onclick="PlanerViews.openDownloadModal()">📦 Download</button>
-          <button class="btn btn-ghost" onclick="PlanerViews.openColSettings()">📊 Spalten</button>
           <button class="btn btn-ghost" onclick="PlanerViews.printOrders()">🖨️ Drucken</button>
+          <button id="preview-toggle" class="btn btn-ghost hidden" onclick="PlanerViews.togglePreview()">▾ Vorschau einklappen</button>
           <button id="btn-bulk-abgerechnet" class="btn btn-ghost" style="display:none" onclick="PlanerViews.bulkSetAbgerechnet()">✅ Verrechnet setzen</button>
           <button class="btn btn-primary" onclick="PlanerViews.renderOrderForm()">+ Neuer Auftrag</button>
         </div>
@@ -78,8 +75,8 @@ const PlanerViews = {
 
   _getVisibleCols() {
     if (!this._visibleCols) {
-      try { this._visibleCols = new Set(JSON.parse(localStorage.getItem('planer_cols') || '["sort_order"]')); }
-      catch { this._visibleCols = new Set(['sort_order']); }
+      try { this._visibleCols = new Set(JSON.parse(localStorage.getItem('planer_cols_v2') || '[]')); }
+      catch { this._visibleCols = new Set(); }
     }
     return this._visibleCols;
   },
@@ -146,15 +143,12 @@ const PlanerViews = {
       <thead><tr>
         <th style="width:32px"><input type="checkbox" id="chk-all" title="Alle wählen" onchange="PlanerViews.toggleSelectAll(this.checked)"></th>
         ${sortTh('Nr.','order_number')}
-        ${cols.has('project_number') ? sortTh('Projekt','project_number') : ''}
+        ${sortTh('Projekt','project_number')}
         ${sortTh('Kunde','customer_name')}
         ${sortTh('Montageadresse','installation_address')}
-        ${sortTh('Datum','planned_date')}
         ${cols.has('latest_date') ? sortTh('Spätestens','latest_date') : ''}
-        ${sortTh('Techniker','assigned_name')}
         ${cols.has('sort_order') ? `<th title="Reihenfolge – klicken zum Bearbeiten">Reihenf.</th>` : ''}
         ${cols.has('notes_planer') ? `<th>Bemerkungen</th>` : ''}
-        ${sortTh('Status','status')}
         <th class="order-actions-col" aria-label="Aktionen"></th>
       </tr></thead>
       <tbody>
@@ -168,19 +162,12 @@ const PlanerViews = {
         return `<tr style="${rowStyle}cursor:pointer" data-order-id="${o.id}" data-status="${o.status}" onclick="PlanerViews.openSplit(${o.id},false)">
           <td style="text-align:center" onclick="event.stopPropagation()">${canCheck ? `<input type="checkbox" class="row-chk" value="${o.id}" onchange="PlanerViews._onRowCheckChange()">` : ''}</td>
           <td><code>${UI.esc(o.order_number)}</code>${attachBadge}${hasExtra ? ' <span title="Nicht auf LS aufgeführt" style="color:#d48a00;font-size:12px">⚠️</span>' : ''}</td>
-          ${cols.has('project_number') ? `<td style="font-size:12px;color:var(--accent)">${UI.esc(o.project_number||'')}</td>` : ''}
+          <td style="font-size:12px;color:var(--accent)">${UI.esc(o.project_number||'')}</td>
           <td class="inline-edit-cell" onclick="PlanerViews.inlineEdit(event,${o.id},'customer_name','${UI.esc(o.customer_name||o.cust_name||'')}')">${UI.esc(o.customer_name || o.cust_name || '–')}</td>
           <td>${UI.esc(o.installation_address || '–')}</td>
-          <td class="inline-edit-cell" onclick="PlanerViews.inlineEdit(event,${o.id},'planned_date','${UI.esc(o.planned_date||'')}','date')">${UI.fmtDate(o.planned_date)}</td>
           ${cols.has('latest_date') ? `<td>${UI.fmtDate(o.latest_date)}</td>` : ''}
-          <td>${UI.esc(o.assigned_name || '–')}</td>
           ${cols.has('sort_order') ? `<td class="inline-edit-cell" style="text-align:center" onclick="PlanerViews.inlineEdit(event,${o.id},'sort_order','${o.sort_order||0}','number')" title="Klicken zum Bearbeiten">${o.sort_order||0}</td>` : ''}
           ${cols.has('notes_planer') ? `<td style="font-size:12px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${UI.esc(o.notes_planer||'')}">${UI.esc((o.notes_planer||'').substring(0,60))}${(o.notes_planer||'').length>60?'…':''}</td>` : ''}
-          <td class="inline-edit-cell" onclick="PlanerViews.inlineEditStatus(event,${o.id},'${o.status}')">${UI.statusBadge(o.status)}${
-            o.zylinder_status === 'bestellt'        ? ' <span class="badge badge-red"   style="font-size:10px;padding:2px 6px;margin-left:4px">🔴 Zyl. nicht geliefert</span>'
-          : o.zylinder_status === 'vorhanden'       ? ' <span class="badge badge-green" style="font-size:10px;padding:2px 6px;margin-left:4px">✅ Zyl. vorhanden</span>'
-          : o.zylinder_status === 'nicht_notwendig' ? ' <span class="badge badge-gray"  style="font-size:10px;padding:2px 6px;margin-left:4px">Kein Zylinder</span>'
-          : ''}</td>
           <td class="text-right order-actions-col" style="white-space:nowrap">
             <button class="btn btn-ghost btn-sm order-icon-btn" title="Ansicht" aria-label="Auftrag ansehen" onclick="event.stopPropagation();PlanerViews.openSplit(${o.id},false)">👁</button>
             <button class="btn btn-ghost btn-sm order-icon-btn" title="Bearbeiten" aria-label="Auftrag bearbeiten" onclick="event.stopPropagation();PlanerViews.openSplit(${o.id},true)">✎</button>
@@ -198,12 +185,24 @@ const PlanerViews = {
 
   openSplit(orderId, edit) {
     PlanerViews._selectedOrderId = orderId;
-    document.getElementById('order-split')?.classList.add('has-selection');
+    const split = document.getElementById('order-split');
+    split?.classList.add('has-selection');
+    split?.classList.remove('preview-collapsed');
+    const toggle = document.getElementById('preview-toggle');
+    if (toggle) { toggle.classList.remove('hidden'); toggle.textContent = '▾ Vorschau einklappen'; }
     const scroller = document.getElementById('order-list-scroll');
     if (scroller) sessionStorage.setItem('planer_list_scroll', String(scroller.scrollTop));
     document.querySelectorAll('#orders-list tr').forEach(r => r.classList.toggle('selected-order', Number(r.dataset.orderId) === orderId));
     if (edit) PlanerViews.renderOrderForm(orderId, 'order-preview');
     else PlanerViews.renderOrderDetail(orderId, 'order-preview');
+  },
+
+  togglePreview() {
+    const split = document.getElementById('order-split');
+    const toggle = document.getElementById('preview-toggle');
+    if (!split || !toggle || !split.classList.contains('has-selection')) return;
+    const collapsed = split.classList.toggle('preview-collapsed');
+    toggle.textContent = collapsed ? '▸ Vorschau einblenden' : '▾ Vorschau einklappen';
   },
 
   // ── Checkbox / Bulk Selection ────────────────────────────────────────────
@@ -366,7 +365,7 @@ const PlanerViews = {
     if (document.getElementById('col-notes')?.checked) cols.add('notes_planer');
     if (document.getElementById('col-latest')?.checked) cols.add('latest_date');
     PlanerViews._visibleCols = cols;
-    try { localStorage.setItem('planer_cols', JSON.stringify([...cols])); } catch {}
+    try { localStorage.setItem('planer_cols_v2', JSON.stringify([...cols])); } catch {}
     UI.closeModal();
     PlanerViews.applyFilter();
   },

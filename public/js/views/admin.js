@@ -99,6 +99,7 @@ const AdminViews = {
     const el = document.getElementById('main-content');
     el.innerHTML = `<div class="page-header"><h2>⚙️ Einstellungen</h2></div>
       <div id="settings-tabs" class="flex gap-2 mb-3 flex-wrap">
+        <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('orders')">📋 Aufträge</button>
         <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('options')">Auswahlfelder</button>
         <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('articles')">Artikel</button>
         <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('customers')">Kunden</button>
@@ -113,9 +114,10 @@ const AdminViews = {
   },
 
   async showSettingsTab(tab) {
-    const tabs = ['options','articles','customers','email','prompt','cleanup','backup','database'];
+    const tabs = ['orders','options','articles','customers','email','prompt','cleanup','backup','database'];
     document.querySelectorAll('#settings-tabs .btn').forEach(b => b.classList.remove('btn-primary'));
     document.querySelectorAll('#settings-tabs .btn')[tabs.indexOf(tab)]?.classList.add('btn-primary');
+    if (tab === 'orders')       await AdminViews.renderOrderTools();
     if (tab === 'options')      await AdminViews.renderOptions();
     if (tab === 'articles')     await AdminViews.renderArticles();
     if (tab === 'customers')    await AdminViews.renderCustomers();
@@ -574,6 +576,20 @@ const AdminViews = {
     }).join('');
     UI.modal('Lieferscheine prüfen und freigeben', `<div style="max-height:65vh;overflow:auto">${rows}</div>`,
       `<button class="btn btn-ghost" onclick="UI.closeModal();AdminViews.renderLieferscheinImport()">Schliessen</button>`);
+  },
+
+  async renderOrderTools() {
+    document.getElementById('settings-content').innerHTML = `
+      <div class="card">
+        <div class="card-title">Auftragsdaten</div>
+        <p class="text-muted text-sm mb-3">Vorlagen, Excel-Datenaustausch und die optionalen Spalten der Auftragsliste.</p>
+        <div class="flex gap-2 flex-wrap">
+          <button class="btn btn-ghost" onclick="window.location='/api/orders/import-template'">📄 Vorlage herunterladen</button>
+          <button class="btn btn-ghost" onclick="PlanerViews.openImport()">📥 Excel importieren</button>
+          <button class="btn btn-ghost" onclick="window.location='/api/orders/export'">📤 Excel exportieren</button>
+          <button class="btn btn-ghost" onclick="PlanerViews.openColSettings()">📊 Optionale Spalten</button>
+        </div>
+      </div>`;
   },
 
   async confirmLs(id, allowDuplicate) {
