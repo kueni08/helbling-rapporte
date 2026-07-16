@@ -62,6 +62,13 @@ const API = {
   createCustomer:     (d)          => API.post('/api/settings/customers', d),
   updateCustomer:     (id, d)      => API.put(`/api/settings/customers/${id}`, d),
 
+  // Kundenportal (Planer/Admin)
+  getPortalUsers:       (customerId) => API.get(`/api/customer-portal-admin/users${customerId ? `?customer_id=${customerId}` : ''}`),
+  createPortalUser:     (d)          => API.post('/api/customer-portal-admin/users', d),
+  updatePortalUser:     (id, d)      => API.put(`/api/customer-portal-admin/users/${id}`, d),
+  resetPortalPassword:  (id)         => API.post(`/api/customer-portal-admin/users/${id}/reset-password`, {}),
+  updatePortalOrder:    (id, d)      => API.put(`/api/customer-portal-admin/orders/${id}`, d),
+
   // Files
   uploadAttachments: (orderId, form) => API.upload(`/api/files/${orderId}/attachments`, form),
   uploadPhotos:      (orderId, form) => API.upload(`/api/files/${orderId}/photos`, form),

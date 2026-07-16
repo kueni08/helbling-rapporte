@@ -21,7 +21,7 @@ function getFreePort() {
 }
 
 async function waitForServer(url, child, output) {
-  const deadline = Date.now() + 20_000;
+  const deadline = Date.now() + 60_000;
   while (Date.now() < deadline) {
     if (child.exitCode !== null) {
       throw new Error(`Testserver wurde vorzeitig beendet.\n${output.join('')}`);

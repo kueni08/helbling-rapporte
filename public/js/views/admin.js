@@ -103,6 +103,7 @@ const AdminViews = {
         <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('options')">Auswahlfelder</button>
         <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('articles')">Artikel</button>
         <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('customers')">Kunden</button>
+        <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('portal')">Kundenportal</button>
         <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('email')">✉️ E-Mail</button>
         <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('prompt')">🤖 KI-Prompt</button>
         <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('cleanup')">🗑️ Dateien</button>
@@ -114,13 +115,14 @@ const AdminViews = {
   },
 
   async showSettingsTab(tab) {
-    const tabs = ['orders','options','articles','customers','email','prompt','cleanup','backup','database'];
+    const tabs = ['orders','options','articles','customers','portal','email','prompt','cleanup','backup','database'];
     document.querySelectorAll('#settings-tabs .btn').forEach(b => b.classList.remove('btn-primary'));
     document.querySelectorAll('#settings-tabs .btn')[tabs.indexOf(tab)]?.classList.add('btn-primary');
     if (tab === 'orders')       await AdminViews.renderOrderTools();
     if (tab === 'options')      await AdminViews.renderOptions();
     if (tab === 'articles')     await AdminViews.renderArticles();
     if (tab === 'customers')    await AdminViews.renderCustomers();
+    if (tab === 'portal')       await AdminViews.renderPortalUsers();
     if (tab === 'email')        await AdminViews.renderEmailSettings();
     if (tab === 'prompt')       await AdminViews.renderPromptAssistant();
     if (tab === 'cleanup')      await AdminViews.renderFileCleanup();
@@ -329,6 +331,63 @@ const AdminViews = {
       UI.closeModal(); UI.toast('Kunde gespeichert', 'success');
       await AdminViews.showSettingsTab('customers');
     } catch (e) { UI.toast(e.message, 'error'); }
+  },
+
+  async renderPortalUsers() {
+    const [users, customers] = await Promise.all([API.getPortalUsers(), API.getCustomers()]);
+    document.getElementById('settings-content').innerHTML = `
+      <div class="card">
+        <div class="card-title">Kundenportal-Zugänge
+          <button class="btn btn-primary btn-sm" onclick="AdminViews.openPortalUserModal()">+ Zugang erstellen</button>
+        </div>
+        <p class="text-muted text-sm mb-3">Jeder Zugang ist genau einem Kunden zugeordnet. Ein neues oder zurückgesetztes Passwort wird nur einmal angezeigt.</p>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Kunde</th><th>Name</th><th>Benutzername</th><th>Kontakt</th><th>Status</th><th></th></tr></thead>
+          <tbody>${users.map(u => `<tr>
+            <td>${UI.esc(u.customer_name)}</td><td>${UI.esc(u.full_name)}</td><td><code>${UI.esc(u.username)}</code></td>
+            <td>${UI.esc(u.email)}<div class="text-muted text-sm">${UI.esc(u.phone)}</div></td>
+            <td>${u.active ? '<span class="badge badge-green">Aktiv</span>' : '<span class="badge badge-gray">Inaktiv</span>'}${u.must_change_password ? ' <span class="badge badge-blue">Passwortwechsel offen</span>' : ''}</td>
+            <td class="text-right"><button class="btn btn-ghost btn-sm" onclick="AdminViews.togglePortalUser(${u.id},${u.active ? 'false' : 'true'})">${u.active ? 'Deaktivieren' : 'Aktivieren'}</button>
+              <button class="btn btn-ghost btn-sm" onclick="AdminViews.resetPortalUser(${u.id})">Passwort zurücksetzen</button></td>
+          </tr>`).join('')}</tbody>
+        </table></div>
+      </div>`;
+    AdminViews._portalCustomers = customers;
+    AdminViews._portalUsers = users;
+  },
+
+  openPortalUserModal() {
+    const customers = AdminViews._portalCustomers || [];
+    UI.modal('Kundenportal-Zugang erstellen', `<div class="form-grid">
+      <div class="field span-2"><label>Kunde <span class="req">*</span></label><select id="pu-customer"><option value="">Bitte wählen</option>${customers.map(c => `<option value="${c.id}">${UI.esc(c.name)}</option>`).join('')}</select></div>
+      <div class="field"><label>Vollständiger Name <span class="req">*</span></label><input id="pu-name"></div>
+      <div class="field"><label>Benutzername <span class="req">*</span></label><input id="pu-username" autocomplete="off"></div>
+      <div class="field"><label>E-Mail <span class="req">*</span></label><input id="pu-email" type="email"></div>
+      <div class="field"><label>Telefon <span class="req">*</span></label><input id="pu-phone" type="tel"></div>
+    </div>`, `<button class="btn btn-ghost" onclick="UI.closeModal()">Abbrechen</button><button class="btn btn-primary" onclick="AdminViews.createPortalUser()">Zugang erstellen</button>`);
+  },
+
+  async createPortalUser() {
+    const data = { customer_id: Number(document.getElementById('pu-customer').value), full_name: document.getElementById('pu-name').value.trim(), username: document.getElementById('pu-username').value.trim(), email: document.getElementById('pu-email').value.trim(), phone: document.getElementById('pu-phone').value.trim() };
+    try { const result = await API.createPortalUser(data); UI.closeModal(); await AdminViews.showPortalPassword(result, 'Zugang erstellt'); await AdminViews.renderPortalUsers(); }
+    catch (e) { UI.toast(e.message, 'error'); }
+  },
+
+  async togglePortalUser(id, active) {
+    const user = (AdminViews._portalUsers || []).find(u => u.id === id);
+    if (!user) return;
+    try { await API.updatePortalUser(id, { active, full_name: user.full_name, email: user.email, phone: user.phone }); await AdminViews.renderPortalUsers(); }
+    catch (e) { UI.toast(e.message, 'error'); }
+  },
+
+  async resetPortalUser(id) {
+    if (!await UI.confirm('Passwort wirklich zurücksetzen?')) return;
+    try { const result = await API.resetPortalPassword(id); await AdminViews.showPortalPassword(result, 'Passwort zurückgesetzt'); await AdminViews.renderPortalUsers(); }
+    catch (e) { UI.toast(e.message, 'error'); }
+  },
+
+  async showPortalPassword(result, title) {
+    UI.modal(title, `<p>Das temporäre Passwort wird nur jetzt angezeigt. Bitte sicher an den Kunden übermitteln.</p><div class="field"><label>Temporäres Passwort</label><input value="${UI.esc(result.temporary_password)}" readonly onclick="this.select()"></div><p class="text-muted text-sm">Beim ersten Login muss der Kunde ein eigenes Passwort setzen.</p>`, `<button class="btn btn-primary" onclick="UI.closeModal()">Schliessen</button>`);
   },
 
   // ── E-Mail / SMTP Einstellungen ──────────────────────────────────────────
