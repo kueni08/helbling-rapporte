@@ -293,6 +293,7 @@ const AdminViews = {
             <td>${UI.esc(c.contact_name||'–')}</td>
             <td>${UI.esc(c.contact_phone||'–')}</td>
             <td class="text-right">
+              <button class="btn btn-ghost btn-sm" onclick="AdminViews.openCustomerOrderImport(${c.id})">Excel-Aufträge</button>
               <button class="btn btn-ghost btn-sm" onclick="AdminViews.openCustomerModal(${c.id})">Bearb.</button>
             </td>
           </tr>`).join('')}
@@ -333,6 +334,49 @@ const AdminViews = {
     } catch (e) { UI.toast(e.message, 'error'); }
   },
 
+  async openCustomerOrderImport(customerId) {
+    const customer = (await API.getCustomers()).find(item => item.id === customerId);
+    if (!customer) return;
+    UI.modal(`Excel-Aufträge für ${UI.esc(customer.name)}`, `
+      <p class="text-muted text-sm mb-3">Die erste Tabelle wird eingelesen. Erkannte Spalten sind beispielsweise Projekt/Anlage, Objekt, Montageadresse oder Strasse/PLZ/Ort, Kontakt, Telefon, Termin, Zeitfenster und Bemerkungen.</p>
+      <div class="field"><label>Excel-Datei (.xlsx oder .xls)</label><input type="file" id="customer-order-excel" accept=".xlsx,.xls"></div>
+      <p class="text-muted text-sm mt-2">Vor dem Anlegen erscheint immer eine Vorschau. Bereits vorhandene Projekte oder identische Montageadressen werden als Duplikat markiert.</p>`,
+      `<button class="btn btn-ghost" onclick="UI.closeModal()">Abbrechen</button><button class="btn btn-primary" onclick="AdminViews.previewCustomerOrderImport(${customerId})">Vorschau laden</button>`);
+  },
+
+  async previewCustomerOrderImport(customerId) {
+    const file = document.getElementById('customer-order-excel')?.files[0];
+    if (!file) { UI.toast('Bitte Excel-Datei auswählen', 'error'); return; }
+    const form = new FormData(); form.append('file', file);
+    try {
+      const result = await API.previewCustomerOrderImport(customerId, form);
+      AdminViews._customerImportRows = result.rows;
+      UI.closeModal();
+      const selectedCount = result.rows.filter(row => !row.duplicate).length;
+      UI.modal(`Importvorschau · ${UI.esc(result.customer.name)}`, `
+        <p class="text-muted text-sm mb-3">Tabelle: ${UI.esc(result.sheet)} · ${result.rows.length} Zeilen erkannt. Unvollständige Aufträge können importiert und später im Portal ergänzt werden.</p>
+        <div class="table-wrap" style="max-height:55vh"><table><thead><tr><th></th><th>Zeile</th><th>Projekt/Anlage</th><th>Objekt</th><th>Montageadresse</th><th>Kontakt</th><th>Termin</th><th>Hinweis</th></tr></thead>
+          <tbody>${result.rows.map((row, index) => `<tr style="${row.duplicate ? 'opacity:.55' : ''}">
+            <td><input type="checkbox" class="customer-import-check" value="${index}" ${row.duplicate ? 'disabled' : 'checked'}></td>
+            <td>${row.row_number}</td><td>${UI.esc(row.project_number||'–')}</td><td>${UI.esc(row.object_name||'–')}</td>
+            <td>${UI.esc(row.installation_address||'–')}</td><td>${UI.esc(row.contact_name||'–')}${row.contact_phone ? `<div class="text-muted text-sm">${UI.esc(row.contact_phone)}</div>` : ''}</td>
+            <td>${UI.fmtDate(row.planned_date)}</td><td>${row.duplicate ? '<span class="badge badge-gray">Duplikat</span>' : (row.warnings.length ? `<span class="badge badge-blue">Fehlt: ${UI.esc(row.warnings.join(', '))}</span>` : '<span class="badge badge-green">Bereit</span>')}</td>
+          </tr>`).join('')}</tbody></table></div>`,
+        `<button class="btn btn-ghost" onclick="UI.closeModal();AdminViews.openCustomerOrderImport(${customerId})">Andere Datei</button><button class="btn btn-primary" onclick="AdminViews.confirmCustomerOrderImport(${customerId})">${selectedCount} Aufträge anlegen</button>`);
+    } catch (e) { UI.toast(e.message, 'error'); }
+  },
+
+  async confirmCustomerOrderImport(customerId) {
+    const indexes = [...document.querySelectorAll('.customer-import-check:checked')].map(input => Number(input.value));
+    const rows = indexes.map(index => AdminViews._customerImportRows[index]);
+    if (!rows.length) { UI.toast('Keine Aufträge ausgewählt', 'error'); return; }
+    try {
+      const result = await API.confirmCustomerOrderImport(customerId, rows);
+      UI.closeModal();
+      UI.toast(`${result.imported} Aufträge angelegt${result.skipped_duplicates ? `, ${result.skipped_duplicates} Duplikate übersprungen` : ''}`, 'success', 6000);
+    } catch (e) { UI.toast(e.message, 'error'); }
+  },
+
   async renderPortalUsers() {
     const [users, customers] = await Promise.all([API.getPortalUsers(), API.getCustomers()]);
     document.getElementById('settings-content').innerHTML = `
@@ -340,12 +384,12 @@ const AdminViews = {
         <div class="card-title">Kundenportal-Zugänge
           <button class="btn btn-primary btn-sm" onclick="AdminViews.openPortalUserModal()">+ Zugang erstellen</button>
         </div>
-        <p class="text-muted text-sm mb-3">Jeder Zugang ist genau einem Kunden zugeordnet. Ein neues oder zurückgesetztes Passwort wird nur einmal angezeigt.</p>
+        <p class="text-muted text-sm mb-3">Jeder Zugang ist genau einem Kunden zugeordnet. Die E-Mail-Adresse ist der Login; das Einmalpasswort wird automatisch per E-Mail versendet.</p>
         <div class="table-wrap"><table>
-          <thead><tr><th>Kunde</th><th>Name</th><th>Benutzername</th><th>Kontakt</th><th>Status</th><th></th></tr></thead>
+          <thead><tr><th>Kunde</th><th>Name</th><th>Login-E-Mail</th><th>Telefon</th><th>Status</th><th></th></tr></thead>
           <tbody>${users.map(u => `<tr>
-            <td>${UI.esc(u.customer_name)}</td><td>${UI.esc(u.full_name)}</td><td><code>${UI.esc(u.username)}</code></td>
-            <td>${UI.esc(u.email)}<div class="text-muted text-sm">${UI.esc(u.phone)}</div></td>
+            <td>${UI.esc(u.customer_name)}</td><td>${UI.esc(u.full_name)}</td><td>${UI.esc(u.email)}</td>
+            <td>${UI.esc(u.phone)}</td>
             <td>${u.active ? '<span class="badge badge-green">Aktiv</span>' : '<span class="badge badge-gray">Inaktiv</span>'}${u.must_change_password ? ' <span class="badge badge-blue">Passwortwechsel offen</span>' : ''}</td>
             <td class="text-right"><button class="btn btn-ghost btn-sm" onclick="AdminViews.togglePortalUser(${u.id},${u.active ? 'false' : 'true'})">${u.active ? 'Deaktivieren' : 'Aktivieren'}</button>
               <button class="btn btn-ghost btn-sm" onclick="AdminViews.resetPortalUser(${u.id})">Passwort zurücksetzen</button></td>
@@ -361,15 +405,14 @@ const AdminViews = {
     UI.modal('Kundenportal-Zugang erstellen', `<div class="form-grid">
       <div class="field span-2"><label>Kunde <span class="req">*</span></label><select id="pu-customer"><option value="">Bitte wählen</option>${customers.map(c => `<option value="${c.id}">${UI.esc(c.name)}</option>`).join('')}</select></div>
       <div class="field"><label>Vollständiger Name <span class="req">*</span></label><input id="pu-name"></div>
-      <div class="field"><label>Benutzername <span class="req">*</span></label><input id="pu-username" autocomplete="off"></div>
       <div class="field"><label>E-Mail <span class="req">*</span></label><input id="pu-email" type="email"></div>
       <div class="field"><label>Telefon <span class="req">*</span></label><input id="pu-phone" type="tel"></div>
     </div>`, `<button class="btn btn-ghost" onclick="UI.closeModal()">Abbrechen</button><button class="btn btn-primary" onclick="AdminViews.createPortalUser()">Zugang erstellen</button>`);
   },
 
   async createPortalUser() {
-    const data = { customer_id: Number(document.getElementById('pu-customer').value), full_name: document.getElementById('pu-name').value.trim(), username: document.getElementById('pu-username').value.trim(), email: document.getElementById('pu-email').value.trim(), phone: document.getElementById('pu-phone').value.trim() };
-    try { const result = await API.createPortalUser(data); UI.closeModal(); await AdminViews.showPortalPassword(result, 'Zugang erstellt'); await AdminViews.renderPortalUsers(); }
+    const data = { customer_id: Number(document.getElementById('pu-customer').value), full_name: document.getElementById('pu-name').value.trim(), email: document.getElementById('pu-email').value.trim(), phone: document.getElementById('pu-phone').value.trim() };
+    try { const result = await API.createPortalUser(data); UI.closeModal(); AdminViews.showPortalEmailSent(result, 'Zugang erstellt'); await AdminViews.renderPortalUsers(); }
     catch (e) { UI.toast(e.message, 'error'); }
   },
 
@@ -382,12 +425,12 @@ const AdminViews = {
 
   async resetPortalUser(id) {
     if (!await UI.confirm('Passwort wirklich zurücksetzen?')) return;
-    try { const result = await API.resetPortalPassword(id); await AdminViews.showPortalPassword(result, 'Passwort zurückgesetzt'); await AdminViews.renderPortalUsers(); }
+    try { const result = await API.resetPortalPassword(id); AdminViews.showPortalEmailSent(result, 'Passwort zurückgesetzt'); await AdminViews.renderPortalUsers(); }
     catch (e) { UI.toast(e.message, 'error'); }
   },
 
-  async showPortalPassword(result, title) {
-    UI.modal(title, `<p>Das temporäre Passwort wird nur jetzt angezeigt. Bitte sicher an den Kunden übermitteln.</p><div class="field"><label>Temporäres Passwort</label><input value="${UI.esc(result.temporary_password)}" readonly onclick="this.select()"></div><p class="text-muted text-sm">Beim ersten Login muss der Kunde ein eigenes Passwort setzen.</p>`, `<button class="btn btn-primary" onclick="UI.closeModal()">Schliessen</button>`);
+  showPortalEmailSent(result, title) {
+    UI.modal(title, `<p>Das Einmalpasswort wurde direkt an <strong>${UI.esc(result.email)}</strong> gesendet.</p><p class="text-muted text-sm">Die E-Mail-Adresse ist der Login. Beim ersten Anmelden muss der Kunde ein eigenes Passwort setzen.</p>`, `<button class="btn btn-primary" onclick="UI.closeModal()">Schliessen</button>`);
   },
 
   // ── E-Mail / SMTP Einstellungen ──────────────────────────────────────────

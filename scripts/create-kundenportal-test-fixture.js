@@ -12,7 +12,7 @@ if (process.env.NODE_ENV !== 'test' || !/(test|acceptance|abnahme)/i.test(dbPath
 const { initDatabase, getDb } = require('../lib/database');
 initDatabase();
 const db = getDb();
-const username = process.env.PORTAL_TEST_USERNAME || 'privera.abnahme';
+const email = process.env.PORTAL_TEST_EMAIL || 'privera.abnahme@example.test';
 const password = `He!${crypto.randomBytes(12).toString('base64url')}7a`;
 
 let customer = db.prepare('SELECT * FROM customers WHERE name=?').get('Privera AG');
@@ -22,11 +22,11 @@ if (!customer) {
   customer = db.prepare('SELECT * FROM customers WHERE id=?').get(id);
 }
 
-db.prepare('DELETE FROM customer_portal_users WHERE username=?').run(username);
+db.prepare('DELETE FROM customer_portal_users WHERE email=?').run(email);
 const portalUserId = db.prepare(`INSERT INTO customer_portal_users
   (customer_id,username,password_hash,full_name,email,phone,active,must_change_password)
-  VALUES (?,?,?,?,?,?,1,1)`).run(customer.id, username, bcrypt.hashSync(password, 12), 'Petra Privera',
-  'portal-abnahme@example.test', '044 555 11 22').lastInsertRowid;
+  VALUES (?,?,?,?,?,?,1,1)`).run(customer.id, email, bcrypt.hashSync(password, 12), 'Petra Privera',
+  email, '044 555 11 22').lastInsertRowid;
 
 db.prepare("DELETE FROM orders WHERE order_number IN ('TEST-KP-0001','TEST-KP-0002')").run();
 const insert = db.prepare(`INSERT INTO orders
@@ -42,4 +42,4 @@ insert.run('TEST-KP-0002', customer.id, customer.name, customer.address, 'Petra 
   'TEST-ANLAGE-02', 'Testobjekt St. Gallen', 'Marktgasse 2', '9000', 'St. Gallen', 'Testobjekt St. Gallen, Marktgasse 2, 9000 St. Gallen',
   'Anna Beispiel', '078 222 33 44', 'Eindeutiger Testauftrag für Rückfrage');
 
-console.log(JSON.stringify({ customer: customer.name, username, temporary_password: password, orders: ['TEST-KP-0001', 'TEST-KP-0002'] }));
+console.log(JSON.stringify({ customer: customer.name, email, temporary_password: password, orders: ['TEST-KP-0001', 'TEST-KP-0002'] }));

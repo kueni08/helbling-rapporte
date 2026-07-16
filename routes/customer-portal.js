@@ -131,15 +131,15 @@ function editableOrderOr404(req, res) {
 }
 
 router.post('/login', async (req, res) => {
-  const username = clean(req.body.username, 100)?.toLowerCase();
+  const email = clean(req.body.email, 200)?.toLowerCase();
   const password = String(req.body.password || '');
-  if (!username || !password) return res.status(400).json({ error: 'Benutzername und Passwort erforderlich' });
-  const key = `${req.ip}:${username}`;
+  if (!email || !password) return res.status(400).json({ error: 'E-Mail-Adresse und Passwort erforderlich' });
+  const key = `${req.ip}:${email}`;
   const recent = (loginAttempts.get(key) || []).filter(ts => Date.now() - ts < LOGIN_WINDOW_MS);
   if (recent.length >= 5) return res.status(429).json({ error: 'Zu viele Anmeldeversuche. Bitte später erneut versuchen.' });
 
   const db = getDb();
-  const user = db.prepare('SELECT * FROM customer_portal_users WHERE username=? COLLATE NOCASE').get(username);
+  const user = db.prepare('SELECT * FROM customer_portal_users WHERE email=? COLLATE NOCASE').get(email);
   const locked = user?.locked_until && new Date(`${user.locked_until}Z`).getTime() > Date.now();
   const valid = user && user.active && !locked && await bcrypt.compare(password, user.password_hash);
   if (!valid) {

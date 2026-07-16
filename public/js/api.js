@@ -68,6 +68,8 @@ const API = {
   updatePortalUser:     (id, d)      => API.put(`/api/customer-portal-admin/users/${id}`, d),
   resetPortalPassword:  (id)         => API.post(`/api/customer-portal-admin/users/${id}/reset-password`, {}),
   updatePortalOrder:    (id, d)      => API.put(`/api/customer-portal-admin/orders/${id}`, d),
+  previewCustomerOrderImport: (customerId, form) => API.upload(`/api/customer-portal-admin/customers/${customerId}/order-import/preview`, form),
+  confirmCustomerOrderImport: (customerId, rows) => API.post(`/api/customer-portal-admin/customers/${customerId}/order-import/confirm`, { rows }),
 
   // Files
   uploadAttachments: (orderId, form) => API.upload(`/api/files/${orderId}/attachments`, form),

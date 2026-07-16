@@ -43,7 +43,7 @@ const Portal = {
     event.preventDefault();
     const form = event.currentTarget; const error = document.getElementById('login-error'); error.classList.add('hidden');
     try {
-      const result = await this.request('/api/kundenportal/login', { method: 'POST', body: JSON.stringify({ username: form.username.value, password: form.password.value }) });
+      const result = await this.request('/api/kundenportal/login', { method: 'POST', body: JSON.stringify({ email: form.email.value, password: form.password.value }) });
       this.csrf = result.csrfToken; await this.loadMe(); form.reset();
     } catch (e) { error.textContent = e.message; error.classList.remove('hidden'); }
   },

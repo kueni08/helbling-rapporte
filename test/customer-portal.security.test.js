@@ -10,6 +10,7 @@ const { spawn } = require('node:child_process');
 const Database = require('better-sqlite3');
 const bcrypt = require('bcryptjs');
 const sharp = require('sharp');
+const XLSX = require('xlsx');
 
 function freePort() {
   return new Promise((resolve, reject) => {
@@ -43,7 +44,7 @@ test('Kundenportal: Authentifizierung, Mandantentrennung, Freigabe, Dateien und 
     env: { ...process.env, NODE_ENV: 'test', DISABLE_WATCHERS: '1', PORT: String(port), DB_PATH: dbPath,
       UPLOADS_DIR: uploads, SESSIONS_DB_DIR: temp, SESSIONS_DB_NAME: 'internal-sessions.db',
       CUSTOMER_PORTAL_SESSIONS_DB_NAME: 'portal-sessions.db', SESSION_SECRET: 'isolated-internal-secret',
-      CUSTOMER_PORTAL_SESSION_SECRET: 'isolated-portal-secret', ANTHROPIC_API_KEY: '' },
+      CUSTOMER_PORTAL_SESSION_SECRET: 'isolated-portal-secret', PORTAL_MAIL_TRANSPORT: 'json', ANTHROPIC_API_KEY: '' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   child.stdout.on('data', data => output.push(data.toString())); child.stderr.on('data', data => output.push(data.toString()));
@@ -66,9 +67,9 @@ test('Kundenportal: Authentifizierung, Mandantentrennung, Freigabe, Dateien und 
   db.prepare(`INSERT INTO customer_portal_users (customer_id,username,password_hash,full_name,email,phone,active,must_change_password) VALUES (?,?,?,?,?,?,0,0)`)
     .run(customerA, 'inaktiv.test', bcrypt.hashSync(passwordA, 4), 'Inaktiv Test', 'inaktiv@example.test', '044 555 00 00');
 
-  assert.equal((await jsonFetch(`${base}/api/kundenportal/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: 'privera.test', password: 'falsch' }) })).response.status, 401);
-  assert.equal((await jsonFetch(`${base}/api/kundenportal/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: 'inaktiv.test', password: passwordA }) })).response.status, 401);
-  const loginA = await jsonFetch(`${base}/api/kundenportal/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: 'privera.test', password: passwordA }) });
+  assert.equal((await jsonFetch(`${base}/api/kundenportal/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'patricia@example.test', password: 'falsch' }) })).response.status, 401);
+  assert.equal((await jsonFetch(`${base}/api/kundenportal/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'inaktiv@example.test', password: passwordA }) })).response.status, 401);
+  const loginA = await jsonFetch(`${base}/api/kundenportal/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'patricia@example.test', password: passwordA }) });
   assert.equal(loginA.response.status, 200); const cookieA = cookie(loginA.response); const csrfA = loginA.data.csrfToken;
 
   const created = await jsonFetch(`${base}/api/kundenportal/orders`, { method: 'POST', headers: { cookie: cookieA, 'x-csrf-token': csrfA, 'content-type': 'application/json' }, body: '{}' });
@@ -114,8 +115,24 @@ test('Kundenportal: Authentifizierung, Mandantentrennung, Freigabe, Dateien und 
     on_site_contact_phone: '079 123 45 67', on_site_contact_email: 'max@example.test', planned_date: '2026-08-01', work_types: ['montage']
   }) });
   assert.equal(internalOrder.response.status, 201); assert.equal(internalOrder.data.customer_id, customerA); assert.equal(internalOrder.data.on_site_contact_email, 'max@example.test');
-  const adminCreated = await jsonFetch(`${base}/api/customer-portal-admin/users`, { method: 'POST', headers: { cookie: adminCookie, 'content-type': 'application/json' }, body: JSON.stringify({ customer_id: customerA, username: 'privera.zwei', full_name: 'Privera Zwei', email: 'zwei@example.test', phone: '044 555 22 22' }) });
-  assert.equal(adminCreated.response.status, 201); assert.ok(adminCreated.data.temporary_password); assert.equal(adminCreated.data.must_change_password, true);
+  const adminCreated = await jsonFetch(`${base}/api/customer-portal-admin/users`, { method: 'POST', headers: { cookie: adminCookie, 'content-type': 'application/json' }, body: JSON.stringify({ customer_id: customerA, full_name: 'Privera Zwei', email: 'zwei@example.test', phone: '044 555 22 22' }) });
+  assert.equal(adminCreated.response.status, 201); assert.equal(adminCreated.data.email_sent, true); assert.equal(adminCreated.data.email, 'zwei@example.test'); assert.equal(adminCreated.data.temporary_password, undefined); assert.equal(adminCreated.data.must_change_password, true);
+  const reset = await jsonFetch(`${base}/api/customer-portal-admin/users/${adminCreated.data.id}/reset-password`, { method: 'POST', headers: { cookie: adminCookie, 'content-type': 'application/json' }, body: '{}' });
+  assert.equal(reset.response.status, 200); assert.equal(reset.data.email_sent, true); assert.equal(reset.data.temporary_password, undefined);
+
+  const workbook = XLSX.utils.book_new();
+  const sheet = XLSX.utils.json_to_sheet([
+    { 'Anlagen-/Projektnummer': 'PR-100', Objekt: 'Bereits vorhanden', Montageadresse: 'Talacker 1, 8001 Zürich', Kontaktperson: 'Max Muster', Telefon: '079 111 22 33' },
+    { 'Anlagen-/Projektnummer': 'EXCEL-200', Objekt: 'Excel Objekt', Strasse: 'Bahnhofstrasse 9', PLZ: '8001', Ort: 'Zürich', Kontaktperson: 'Erika Excel', Telefon: '078 555 66 77', Montagetermin: '15.09.2026', 'Kommunizierte Zeit': '08:00 - 10:00' },
+  ]);
+  XLSX.utils.book_append_sheet(workbook, sheet, 'Montageliste');
+  const excelForm = new FormData(); excelForm.append('file', new Blob([XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), 'montageliste.xlsx');
+  const preview = await jsonFetch(`${base}/api/customer-portal-admin/customers/${customerA}/order-import/preview`, { method: 'POST', headers: { cookie: adminCookie }, body: excelForm });
+  assert.equal(preview.response.status, 200); assert.equal(preview.data.rows.length, 2); assert.equal(preview.data.rows[0].duplicate, true); assert.equal(preview.data.rows[1].duplicate, false); assert.equal(preview.data.rows[1].postal_code, '8001'); assert.equal(preview.data.rows[1].planned_date, '2026-09-15');
+  const confirmedImport = await jsonFetch(`${base}/api/customer-portal-admin/customers/${customerA}/order-import/confirm`, { method: 'POST', headers: { cookie: adminCookie, 'content-type': 'application/json' }, body: JSON.stringify({ rows: [preview.data.rows[1]] }) });
+  assert.equal(confirmedImport.response.status, 201); assert.equal(confirmedImport.data.imported, 1);
+  const importedOrder = db.prepare("SELECT * FROM orders WHERE customer_id=? AND project_number='EXCEL-200'").get(customerA);
+  assert.ok(importedOrder); assert.equal(importedOrder.customer_portal_visible, 1); assert.equal(importedOrder.installation_postal_code, '8001');
   const adminControl = await jsonFetch(`${base}/api/customer-portal-admin/orders/${orderA}`, { method: 'PUT', headers: { cookie: adminCookie, 'content-type': 'application/json' }, body: JSON.stringify({ visible: true, portal_status: 'rueckfrage', locked: false }) });
   assert.equal(adminControl.response.status, 200); assert.equal(adminControl.data.portal_status, 'rueckfrage'); assert.equal(adminControl.data.locked, false);
 });
