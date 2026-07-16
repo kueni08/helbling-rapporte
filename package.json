@@ -5,7 +5,9 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "test": "node --test --test-concurrency=1 test",
+    "test:anfrage": "node --test test/customer-inquiry.smoke.test.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
@@ -16,13 +18,14 @@
     "connect-sqlite3": "^0.9.13",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
-    "express": "^4.19.2",
+    "express": "^4.22.2",
     "express-session": "^1.18.0",
     "googleapis": "^171.4.0",
-    "multer": "^1.4.5-lts.1",
+    "multer": "^2.0.2",
     "nodemailer": "^6.9.13",
     "pdf-parse": "^2.4.5",
     "puppeteer-core": "^24.39.1",
+    "sharp": "^0.33.5",
     "uuid": "^9.0.1",
     "xlsx": "^0.18.5"
   },

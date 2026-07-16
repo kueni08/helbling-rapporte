@@ -99,11 +99,12 @@ const AdminViews = {
     const el = document.getElementById('main-content');
     el.innerHTML = `<div class="page-header"><h2>⚙️ Einstellungen</h2></div>
       <div id="settings-tabs" class="flex gap-2 mb-3 flex-wrap">
+        <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('orders')">📋 Aufträge</button>
         <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('options')">Auswahlfelder</button>
         <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('articles')">Artikel</button>
         <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('customers')">Kunden</button>
+        <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('portal')">Kundenportal</button>
         <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('email')">✉️ E-Mail</button>
-        <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('lieferschein')">📥 LS-Import</button>
         <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('prompt')">🤖 KI-Prompt</button>
         <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('cleanup')">🗑️ Dateien</button>
         <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('backup')">💾 Backup</button>
@@ -114,14 +115,15 @@ const AdminViews = {
   },
 
   async showSettingsTab(tab) {
-    const tabs = ['options','articles','customers','email','lieferschein','prompt','cleanup','backup','database'];
+    const tabs = ['orders','options','articles','customers','portal','email','prompt','cleanup','backup','database'];
     document.querySelectorAll('#settings-tabs .btn').forEach(b => b.classList.remove('btn-primary'));
     document.querySelectorAll('#settings-tabs .btn')[tabs.indexOf(tab)]?.classList.add('btn-primary');
+    if (tab === 'orders')       await AdminViews.renderOrderTools();
     if (tab === 'options')      await AdminViews.renderOptions();
     if (tab === 'articles')     await AdminViews.renderArticles();
     if (tab === 'customers')    await AdminViews.renderCustomers();
+    if (tab === 'portal')       await AdminViews.renderPortalUsers();
     if (tab === 'email')        await AdminViews.renderEmailSettings();
-    if (tab === 'lieferschein') await AdminViews.renderLieferscheinImport();
     if (tab === 'prompt')       await AdminViews.renderPromptAssistant();
     if (tab === 'cleanup')      await AdminViews.renderFileCleanup();
     if (tab === 'backup')       await AdminViews.renderBackup();
@@ -291,6 +293,7 @@ const AdminViews = {
             <td>${UI.esc(c.contact_name||'–')}</td>
             <td>${UI.esc(c.contact_phone||'–')}</td>
             <td class="text-right">
+              <button class="btn btn-ghost btn-sm" onclick="AdminViews.openCustomerOrderImport(${c.id})">Excel-Aufträge</button>
               <button class="btn btn-ghost btn-sm" onclick="AdminViews.openCustomerModal(${c.id})">Bearb.</button>
             </td>
           </tr>`).join('')}
@@ -331,6 +334,105 @@ const AdminViews = {
     } catch (e) { UI.toast(e.message, 'error'); }
   },
 
+  async openCustomerOrderImport(customerId) {
+    const customer = (await API.getCustomers()).find(item => item.id === customerId);
+    if (!customer) return;
+    UI.modal(`Excel-Aufträge für ${UI.esc(customer.name)}`, `
+      <p class="text-muted text-sm mb-3">Die erste Tabelle wird eingelesen. Erkannte Spalten sind beispielsweise Projekt/Anlage, Objekt, Montageadresse oder Strasse/PLZ/Ort, Kontakt, Telefon, Termin, Zeitfenster und Bemerkungen.</p>
+      <div class="field"><label>Excel-Datei (.xlsx oder .xls)</label><input type="file" id="customer-order-excel" accept=".xlsx,.xls"></div>
+      <p class="text-muted text-sm mt-2">Vor dem Anlegen erscheint immer eine Vorschau. Bereits vorhandene Projekte oder identische Montageadressen werden als Duplikat markiert.</p>`,
+      `<button class="btn btn-ghost" onclick="UI.closeModal()">Abbrechen</button><button class="btn btn-primary" onclick="AdminViews.previewCustomerOrderImport(${customerId})">Vorschau laden</button>`);
+  },
+
+  async previewCustomerOrderImport(customerId) {
+    const file = document.getElementById('customer-order-excel')?.files[0];
+    if (!file) { UI.toast('Bitte Excel-Datei auswählen', 'error'); return; }
+    const form = new FormData(); form.append('file', file);
+    try {
+      const result = await API.previewCustomerOrderImport(customerId, form);
+      AdminViews._customerImportRows = result.rows;
+      UI.closeModal();
+      const selectedCount = result.rows.filter(row => !row.duplicate).length;
+      UI.modal(`Importvorschau · ${UI.esc(result.customer.name)}`, `
+        <p class="text-muted text-sm mb-3">Tabelle: ${UI.esc(result.sheet)} · ${result.rows.length} Zeilen erkannt. Unvollständige Aufträge können importiert und später im Portal ergänzt werden.</p>
+        <div class="table-wrap" style="max-height:55vh"><table><thead><tr><th></th><th>Zeile</th><th>Projekt/Anlage</th><th>Objekt</th><th>Montageadresse</th><th>Kontakt</th><th>Termin</th><th>Hinweis</th></tr></thead>
+          <tbody>${result.rows.map((row, index) => `<tr style="${row.duplicate ? 'opacity:.55' : ''}">
+            <td><input type="checkbox" class="customer-import-check" value="${index}" ${row.duplicate ? 'disabled' : 'checked'}></td>
+            <td>${row.row_number}</td><td>${UI.esc(row.project_number||'–')}</td><td>${UI.esc(row.object_name||'–')}</td>
+            <td>${UI.esc(row.installation_address||'–')}</td><td>${UI.esc(row.contact_name||'–')}${row.contact_phone ? `<div class="text-muted text-sm">${UI.esc(row.contact_phone)}</div>` : ''}</td>
+            <td>${UI.fmtDate(row.planned_date)}</td><td>${row.duplicate ? '<span class="badge badge-gray">Duplikat</span>' : (row.warnings.length ? `<span class="badge badge-blue">Fehlt: ${UI.esc(row.warnings.join(', '))}</span>` : '<span class="badge badge-green">Bereit</span>')}</td>
+          </tr>`).join('')}</tbody></table></div>`,
+        `<button class="btn btn-ghost" onclick="UI.closeModal();AdminViews.openCustomerOrderImport(${customerId})">Andere Datei</button><button class="btn btn-primary" onclick="AdminViews.confirmCustomerOrderImport(${customerId})">${selectedCount} Aufträge anlegen</button>`);
+    } catch (e) { UI.toast(e.message, 'error'); }
+  },
+
+  async confirmCustomerOrderImport(customerId) {
+    const indexes = [...document.querySelectorAll('.customer-import-check:checked')].map(input => Number(input.value));
+    const rows = indexes.map(index => AdminViews._customerImportRows[index]);
+    if (!rows.length) { UI.toast('Keine Aufträge ausgewählt', 'error'); return; }
+    try {
+      const result = await API.confirmCustomerOrderImport(customerId, rows);
+      UI.closeModal();
+      UI.toast(`${result.imported} Aufträge angelegt${result.skipped_duplicates ? `, ${result.skipped_duplicates} Duplikate übersprungen` : ''}`, 'success', 6000);
+    } catch (e) { UI.toast(e.message, 'error'); }
+  },
+
+  async renderPortalUsers() {
+    const [users, customers] = await Promise.all([API.getPortalUsers(), API.getCustomers()]);
+    document.getElementById('settings-content').innerHTML = `
+      <div class="card">
+        <div class="card-title">Kundenportal-Zugänge
+          <button class="btn btn-primary btn-sm" onclick="AdminViews.openPortalUserModal()">+ Zugang erstellen</button>
+        </div>
+        <p class="text-muted text-sm mb-3">Jeder Zugang ist genau einem Kunden zugeordnet. Die E-Mail-Adresse ist der Login; das Einmalpasswort wird automatisch per E-Mail versendet.</p>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Kunde</th><th>Name</th><th>Login-E-Mail</th><th>Telefon</th><th>Status</th><th></th></tr></thead>
+          <tbody>${users.map(u => `<tr>
+            <td>${UI.esc(u.customer_name)}</td><td>${UI.esc(u.full_name)}</td><td>${UI.esc(u.email)}</td>
+            <td>${UI.esc(u.phone)}</td>
+            <td>${u.active ? '<span class="badge badge-green">Aktiv</span>' : '<span class="badge badge-gray">Inaktiv</span>'}${u.must_change_password ? ' <span class="badge badge-blue">Passwortwechsel offen</span>' : ''}</td>
+            <td class="text-right"><button class="btn btn-ghost btn-sm" onclick="AdminViews.togglePortalUser(${u.id},${u.active ? 'false' : 'true'})">${u.active ? 'Deaktivieren' : 'Aktivieren'}</button>
+              <button class="btn btn-ghost btn-sm" onclick="AdminViews.resetPortalUser(${u.id})">Passwort zurücksetzen</button></td>
+          </tr>`).join('')}</tbody>
+        </table></div>
+      </div>`;
+    AdminViews._portalCustomers = customers;
+    AdminViews._portalUsers = users;
+  },
+
+  openPortalUserModal() {
+    const customers = AdminViews._portalCustomers || [];
+    UI.modal('Kundenportal-Zugang erstellen', `<div class="form-grid">
+      <div class="field span-2"><label>Kunde <span class="req">*</span></label><select id="pu-customer"><option value="">Bitte wählen</option>${customers.map(c => `<option value="${c.id}">${UI.esc(c.name)}</option>`).join('')}</select></div>
+      <div class="field"><label>Vollständiger Name <span class="req">*</span></label><input id="pu-name"></div>
+      <div class="field"><label>E-Mail <span class="req">*</span></label><input id="pu-email" type="email"></div>
+      <div class="field"><label>Telefon <span class="req">*</span></label><input id="pu-phone" type="tel"></div>
+    </div>`, `<button class="btn btn-ghost" onclick="UI.closeModal()">Abbrechen</button><button class="btn btn-primary" onclick="AdminViews.createPortalUser()">Zugang erstellen</button>`);
+  },
+
+  async createPortalUser() {
+    const data = { customer_id: Number(document.getElementById('pu-customer').value), full_name: document.getElementById('pu-name').value.trim(), email: document.getElementById('pu-email').value.trim(), phone: document.getElementById('pu-phone').value.trim() };
+    try { const result = await API.createPortalUser(data); UI.closeModal(); AdminViews.showPortalEmailSent(result, 'Zugang erstellt'); await AdminViews.renderPortalUsers(); }
+    catch (e) { UI.toast(e.message, 'error'); }
+  },
+
+  async togglePortalUser(id, active) {
+    const user = (AdminViews._portalUsers || []).find(u => u.id === id);
+    if (!user) return;
+    try { await API.updatePortalUser(id, { active, full_name: user.full_name, email: user.email, phone: user.phone }); await AdminViews.renderPortalUsers(); }
+    catch (e) { UI.toast(e.message, 'error'); }
+  },
+
+  async resetPortalUser(id) {
+    if (!await UI.confirm('Passwort wirklich zurücksetzen?')) return;
+    try { const result = await API.resetPortalPassword(id); AdminViews.showPortalEmailSent(result, 'Passwort zurückgesetzt'); await AdminViews.renderPortalUsers(); }
+    catch (e) { UI.toast(e.message, 'error'); }
+  },
+
+  showPortalEmailSent(result, title) {
+    UI.modal(title, `<p>Das Einmalpasswort wurde direkt an <strong>${UI.esc(result.email)}</strong> gesendet.</p><p class="text-muted text-sm">Die E-Mail-Adresse ist der Login. Beim ersten Anmelden muss der Kunde ein eigenes Passwort setzen.</p>`, `<button class="btn btn-primary" onclick="UI.closeModal()">Schliessen</button>`);
+  },
+
   // ── E-Mail / SMTP Einstellungen ──────────────────────────────────────────
   async renderEmailSettings() {
     let cfg = {};
@@ -364,6 +466,18 @@ const AdminViews = {
             <label>Absender-Adresse (From) – optional, Standard = Benutzername</label>
             <input type="email" id="smtp-from" value="${UI.esc(cfg.from||'')}" placeholder="rapporte@firma.ch">
           </div>
+          <div class="field span-2">
+            <label>Empfänger Abschlussrapporte</label>
+            <input type="text" id="smtp-completion-to" value="${UI.esc(cfg.completion_to||'')}" placeholder="rapporte@firma.ch (mehrere mit Semikolon)">
+          </div>
+          <div class="field span-2">
+            <label>CC – optional</label>
+            <input type="text" id="smtp-completion-cc" value="${UI.esc(cfg.completion_cc||'')}" placeholder="cc@firma.ch">
+          </div>
+          <div class="field span-2">
+            <label>Antwortadresse – optional</label>
+            <input type="email" id="smtp-reply-to" value="${UI.esc(cfg.reply_to||'')}" placeholder="antwort@firma.ch">
+          </div>
         </div>
         <div class="flex gap-2 mt-3">
           <button class="btn btn-primary" onclick="AdminViews.saveSmtpSettings()">Speichern</button>
@@ -378,6 +492,9 @@ const AdminViews = {
       user: document.getElementById('smtp-user').value.trim(),
       pass: document.getElementById('smtp-pass').value,
       from: document.getElementById('smtp-from').value.trim(),
+      completion_to: document.getElementById('smtp-completion-to').value.trim(),
+      completion_cc: document.getElementById('smtp-completion-cc').value.trim(),
+      reply_to: document.getElementById('smtp-reply-to').value.trim(),
     };
     try {
       await API.saveSmtp(d);
@@ -391,63 +508,23 @@ const AdminViews = {
     const el = document.getElementById('settings-content');
     el.innerHTML = '<p class="text-muted text-sm">Lade…</p>';
 
-    let status = { active: false, inbox_dir: '–', inbox_files: [] };
+    let status = { inbox_files: [] };
     let imports = [];
-    let driveStatus = { active: false, inbox_folder_id: null };
     let monteure = [];
     let importDefaults = { default_monteur_id: null };
-    try {
-      [status, imports, driveStatus, monteure, importDefaults] = await Promise.all([
-        API.getLsStatus(), API.getLsImports(), API.getLsDriveStatus(),
-        API.getMonteure(), API.getImportDefaults()
-      ]);
-    } catch(e) {}
-
-    const statusBadge = status.active
-      ? '<span class="badge badge-green">Aktiv</span>'
-      : '<span class="badge badge-gray">Inaktiv – ANTHROPIC_API_KEY fehlt</span>';
-
-    const statusBanner = !status.active ? `
-      <div class="card" style="border-left:4px solid #f59e0b;background:#fffbeb">
-        <p style="margin:0;font-size:0.875rem">
-          <strong>Einrichtung erforderlich:</strong> Trage <code>ANTHROPIC_API_KEY=sk-ant-...</code> in deine
-          <code>.env</code>-Datei ein und starte den Server neu.
-          Den API-Key erhältst du auf <a href="https://console.anthropic.com/" target="_blank" rel="noopener">console.anthropic.com</a>.
-        </p>
-      </div>` : '';
-
-    const driveBadge = driveStatus.active
-      ? '<span class="badge badge-green">Aktiv</span>'
-      : '<span class="badge badge-gray">Inaktiv</span>';
-
-    const driveInboxLink = driveStatus.inbox_folder_id
-      ? `<a href="https://drive.google.com/drive/folders/${driveStatus.inbox_folder_id}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm">📁 Ordner öffnen</a>`
-      : '';
-
-    const driveCard = `
-      <div class="card">
-        <div class="card-title">☁️ Google Drive Auto-Import ${driveBadge}</div>
-        ${driveStatus.active ? `
-          <p class="text-muted text-sm mb-1">
-            PDFs in den Google Drive Ordner <strong>"${UI.esc(driveStatus.inbox_subfolder)}"</strong> ablegen
-            → werden alle ${driveStatus.poll_interval_min} Minuten automatisch importiert.<br>
-            ${driveStatus.last_poll_at ? `Letzte Abfrage: ${driveStatus.last_poll_at.substring(0,16).replace('T',' ')} UTC` : ''}
-          </p>
-          <div class="flex gap-2 mt-2 flex-wrap">
-            ${driveInboxLink}
-          </div>` : `
-          <p class="text-muted text-sm">
-            Google Drive nicht konfiguriert. Stelle sicher, dass
-            <code>GOOGLE_SERVICE_ACCOUNT_JSON</code> und <code>GOOGLE_DRIVE_FOLDER_ID</code> gesetzt sind.
-          </p>`}
-      </div>`;
+    const results = await Promise.allSettled([
+      API.getLsStatus(), API.getLsImports(), API.getMonteure(), API.getImportDefaults()
+    ]);
+    if (results[0].status === 'fulfilled') status = results[0].value;
+    if (results[1].status === 'fulfilled') imports = results[1].value;
+    if (results[2].status === 'fulfilled') monteure = results[2].value;
+    if (results[3].status === 'fulfilled') importDefaults = results[3].value;
 
     const importRows = imports.length ? imports.map(i => {
       const statusMap = { success: 'badge-green', error: 'badge-red', processing: 'badge-blue', pending: 'badge-gray' };
       const statusLabel = { success: 'Erfolgreich', error: 'Fehler', processing: 'Verarbeitung…', pending: 'Ausstehend' };
-      const sourceIcon = i.drive_file_id ? '☁️' : '💻';
       return `<tr>
-        <td style="font-size:0.8rem">${sourceIcon} ${UI.esc(i.original_name)}</td>
+        <td style="font-size:0.8rem">${UI.esc(i.original_name)}</td>
         <td><span class="badge ${statusMap[i.status]||'badge-gray'}">${statusLabel[i.status]||i.status}</span></td>
         <td>${UI.esc(i.lieferschein_nr||'–')}</td>
         <td>${UI.esc(i.kunde||'–')}</td>
@@ -471,8 +548,6 @@ const AdminViews = {
     ).join('');
 
     el.innerHTML = `
-      ${statusBanner}
-      ${driveCard}
       <div class="card">
         <div class="card-title">⚙️ Import-Einstellungen</div>
         <div class="form-grid" style="max-width:400px">
@@ -487,28 +562,27 @@ const AdminViews = {
         <button class="btn btn-primary btn-sm mt-2" onclick="AdminViews.saveImportDefaults()">Speichern</button>
       </div>
       <div class="card">
-        <div class="card-title">📥 Lieferschein Auto-Import ${statusBadge}</div>
-        <p class="text-muted text-sm mb-1">
-          PDFs in diesen lokalen Ordner legen → automatisch als Auftrag importiert:<br>
-          <code style="font-size:0.85rem;word-break:break-all">${UI.esc(status.inbox_dir)}</code>
-        </p>
-        <div class="flex gap-2 mt-2 flex-wrap">
+        <div class="card-title">📥 Lieferscheine importieren</div>
+        <div class="ls-drop-zone mt-2" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="event.preventDefault();this.classList.remove('drag-over');AdminViews.uploadLieferschein({files:event.dataTransfer.files,value:''})">
           <div>
             <label class="btn btn-ghost btn-sm" style="cursor:pointer">
-              📂 PDF manuell hochladen
-              <input type="file" accept=".pdf" style="display:none" onchange="AdminViews.uploadLieferschein(this)">
+              📂 PDFs auswählen oder hierher ziehen
+              <input type="file" accept=".pdf" multiple style="display:none" onchange="AdminViews.uploadLieferschein(this)">
             </label>
           </div>
-          <button class="btn btn-ghost btn-sm" onclick="AdminViews.showSettingsTab('lieferschein')">↺ Aktualisieren</button>
+          <span class="text-sm text-muted">Mehrere Lieferscheine gleichzeitig möglich</span>
         </div>
-        ${status.inbox_files.length ? `
+        <div class="flex gap-2 mt-2 flex-wrap">
+          <button class="btn btn-ghost btn-sm" onclick="AdminViews.renderLieferscheinImport()">↺ Aktualisieren</button>
+        </div>
+        ${(status.inbox_files||[]).length ? `
           <p class="text-sm mt-2"><strong>Inbox (${status.inbox_files.length} PDF${status.inbox_files.length>1?'s':''} ausstehend):</strong></p>
           <ul class="text-sm text-muted" style="margin:4px 0 0 16px">
             ${status.inbox_files.map(f => `<li>${UI.esc(f.name)}</li>`).join('')}
           </ul>` : ''}
       </div>
       <div class="card">
-        <div class="card-title">Import-Verlauf <span style="font-weight:normal;font-size:0.8rem;color:#6b7280">(☁️ = Google Drive, 💻 = manuell)</span></div>
+        <div class="card-title">Import-Verlauf</div>
         <div class="table-wrap">
           <table>
             <thead><tr>
@@ -530,17 +604,56 @@ const AdminViews = {
   },
 
   async uploadLieferschein(input) {
-    const file = input.files[0];
-    if (!file) return;
+    const files = [...input.files];
+    if (!files.length) return;
     const form = new FormData();
-    form.append('file', file);
+    files.forEach(file => form.append('files', file));
     try {
       UI.toast('PDF wird verarbeitet…', 'info', 3000);
-      await API.uploadLieferschein(form);
+      const result = await API.uploadLieferschein(form);
+      AdminViews.showLsPreviews(result.previews || []);
       UI.toast('Verarbeitung gestartet – Seite lädt in 3s neu', 'success', 3000);
-      setTimeout(() => AdminViews.showSettingsTab('lieferschein'), 3500);
     } catch (e) { UI.toast(e.message, 'error'); }
     input.value = '';
+  },
+
+  showLsPreviews(previews) {
+    const rows = previews.map(p => {
+      const d = p.data || {};
+      const warning = p.duplicate ? `<div style="color:#b45309;font-weight:600">⚠ Bereits vorhanden: ${UI.esc(p.duplicate.order_number || 'Auftrag')}</div>` : '';
+      return `<div class="card" id="ls-preview-${p.id}" style="margin-bottom:10px">
+        <strong>${UI.esc(p.original_name)}</strong>${warning}
+        <div class="text-sm text-muted">LS: ${UI.esc(d.lieferschein_nr || '–')} · Projekt: ${UI.esc(d.projekt_nr || '–')} · Kunde: ${UI.esc(d.kunde?.name || '–')} · Artikel: ${(d.artikel || []).length}</div>
+        <div class="flex gap-2 mt-2">
+          <button class="btn btn-primary btn-sm" ${p.duplicate ? 'disabled' : ''} onclick="AdminViews.confirmLs(${p.id},false)">Auftrag erstellen</button>
+          ${p.duplicate ? `<button class="btn btn-danger btn-sm" onclick="AdminViews.confirmLs(${p.id},true)">Trotzdem importieren</button>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+    UI.modal('Lieferscheine prüfen und freigeben', `<div style="max-height:65vh;overflow:auto">${rows}</div>`,
+      `<button class="btn btn-ghost" onclick="UI.closeModal();AdminViews.renderLieferscheinImport()">Schliessen</button>`);
+  },
+
+  async renderOrderTools() {
+    document.getElementById('settings-content').innerHTML = `
+      <div class="card">
+        <div class="card-title">Auftragsdaten</div>
+        <p class="text-muted text-sm mb-3">Vorlagen, Excel-Datenaustausch und die optionalen Spalten der Auftragsliste.</p>
+        <div class="flex gap-2 flex-wrap">
+          <button class="btn btn-ghost" onclick="window.location='/api/orders/import-template'">📄 Vorlage herunterladen</button>
+          <button class="btn btn-ghost" onclick="PlanerViews.openImport()">📥 Excel importieren</button>
+          <button class="btn btn-ghost" onclick="window.location='/api/orders/export'">📤 Excel exportieren</button>
+          <button class="btn btn-ghost" onclick="PlanerViews.openColSettings()">📊 Optionale Spalten</button>
+        </div>
+      </div>`;
+  },
+
+  async confirmLs(id, allowDuplicate) {
+    try {
+      const result = await API.confirmLsImport(id, allowDuplicate);
+      document.getElementById(`ls-preview-${id}`)?.remove();
+      UI.toast(`Auftrag ${result.orderNumber} erstellt`, 'success');
+    } catch(e) { UI.toast(e.message, 'error'); }
   },
 
   async retryLsImport(id) {
@@ -548,13 +661,13 @@ const AdminViews = {
       UI.toast('Retry gestartet…', 'info', 2000);
       await API.retryLsImport(id);
       UI.toast('Erneuter Versuch gestartet', 'success');
-      setTimeout(() => AdminViews.showSettingsTab('lieferschein'), 2000);
+      setTimeout(() => AdminViews.renderLieferscheinImport(), 2000);
     } catch(e) { UI.toast(e.message, 'error'); }
   },
 
   async deleteLsImport(id) {
     if (!await UI.confirm('Import-Eintrag löschen?')) return;
-    try { await API.deleteLsImport(id); await AdminViews.showSettingsTab('lieferschein'); }
+    try { await API.deleteLsImport(id); await AdminViews.renderLieferscheinImport(); }
     catch(e) { UI.toast(e.message, 'error'); }
   },
 

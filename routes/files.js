@@ -94,7 +94,7 @@ router.get('/:orderId/zip', requireLogin, (req, res) => {
   if (!order) return res.status(404).json({ error: 'Auftrag nicht gefunden' });
 
   // Role check for monteur
-  if (req.session.role === 'monteur' && order.assigned_to !== req.session.userId) {
+  if (req.session.userRole === 'monteur' && order.assigned_to !== req.session.userId) {
     return res.status(403).json({ error: 'Keine Berechtigung' });
   }
 

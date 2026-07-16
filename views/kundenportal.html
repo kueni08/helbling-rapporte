@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#1C1B78">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Helbling Portal">
+  <link rel="manifest" href="/kundenportal-manifest.webmanifest">
+  <link rel="icon" href="/icons/icon.svg">
+  <link rel="apple-touch-icon" href="/icons/kundenportal-192.png">
+  <link rel="stylesheet" href="/css/kundenportal.css">
+  <title>Helbling Kundenportal</title>
+</head>
+<body>
+  <header class="portal-header">
+    <div class="brand"><img src="/icons/icon.svg" alt="Helbling"><div><strong>Helbling &amp; Co. AG</strong><span>Kundenportal</span></div></div>
+    <button id="logout-btn" class="link-btn hidden" type="button">Abmelden</button>
+  </header>
+
+  <main>
+    <section id="login-view" class="auth-card">
+      <h1>Willkommen</h1>
+      <p>Montageaufträge erfassen und ergänzen.</p>
+      <form id="login-form">
+        <label>E-Mail-Adresse<input name="email" type="email" autocomplete="username" required></label>
+        <label>Passwort<input name="password" type="password" autocomplete="current-password" required></label>
+        <div class="message error hidden" id="login-error"></div>
+        <button class="primary" type="submit">Anmelden</button>
+      </form>
+    </section>
+
+    <section id="password-view" class="auth-card hidden">
+      <h1>Neues Passwort festlegen</h1>
+      <p>Beim ersten Login muss das temporäre Passwort ersetzt werden.</p>
+      <form id="password-form">
+        <label>Neues Passwort<input name="password" type="password" minlength="12" autocomplete="new-password" required></label>
+        <label>Passwort wiederholen<input name="confirm" type="password" minlength="12" autocomplete="new-password" required></label>
+        <small>Mindestens 12 Zeichen, Gross-/Kleinbuchstaben und eine Zahl.</small>
+        <div class="message error hidden" id="password-error"></div>
+        <button class="primary" type="submit">Passwort speichern</button>
+      </form>
+    </section>
+
+    <section id="portal-view" class="hidden">
+      <div class="portal-title">
+        <div><h1>Ihre Montageaufträge</h1><p id="customer-name"></p></div>
+        <button id="new-order-btn" class="primary" type="button">+ Neuer Auftrag</button>
+      </div>
+      <div id="install-tip" class="install-tip hidden"><span>Als App auf dem Startbildschirm installieren.</span><button id="install-btn" type="button">Installieren</button></div>
+      <div id="orders-list" class="order-list"></div>
+    </section>
+  </main>
+
+  <template id="order-template">
+    <article class="order-card">
+      <button class="order-summary" type="button">
+        <span><strong class="order-object">Neuer Auftrag</strong><small class="order-meta"></small></span>
+        <span class="order-state"></span><span class="chevron">⌄</span>
+      </button>
+      <div class="order-body hidden">
+        <div class="readonly-note hidden"></div>
+        <form class="order-form">
+          <fieldset><legend>Objekt und Adresse</legend>
+            <label>Anlagen-/Projektnummer *<input name="project_number" maxlength="100"></label>
+            <label>Objektbezeichnung *<input name="object_name" maxlength="200"></label>
+            <label>Strasse / Nr. *<input name="street" maxlength="200"></label>
+            <div class="two"><label>PLZ *<input name="postal_code" inputmode="numeric" maxlength="10"></label><label>Ort *<input name="city" maxlength="100"></label></div>
+          </fieldset>
+          <fieldset><legend>Kontaktperson vor Ort</legend>
+            <label>Name *<input name="contact_name" maxlength="150"></label>
+            <label>Telefon *<input name="contact_phone" type="tel" maxlength="50"></label>
+            <label>E-Mail<input name="contact_email" type="email" maxlength="200"></label>
+          </fieldset>
+          <fieldset><legend>Terminwunsch <small>(optional)</small></legend>
+            <label>Auswahl<select name="term_option"><option value="">Keine Angabe</option><option value="naechste_4_wochen">Innerhalb der nächsten 4 Wochen</option><option value="ab_datum">Ausführung ab Datum</option><option value="express">Express innerhalb einer Woche</option></select></label>
+            <label class="term-from hidden">Ausführung ab<input name="term_from" type="date"></label>
+          </fieldset>
+          <fieldset><legend>Situation vor Ort</legend>
+            <label>Strombezug vorhanden<select name="power_available"><option value="">Keine Angabe</option><option value="1">Ja</option><option value="0">Nein</option></select></label>
+            <label>Ergänzung Strom<input name="power_notes" maxlength="500"></label>
+            <label>Parkierung beim Standort<select name="parking_available"><option value="">Keine Angabe</option><option value="1">Ja</option><option value="0">Nein</option></select></label>
+            <label class="check"><input name="parking_permit_required" type="checkbox"> Parkbewilligung erforderlich</label>
+            <label class="check"><input name="access_permit_required" type="checkbox"> Zufahrtsbewilligung erforderlich</label>
+            <label>Eingeschränkte Arbeitszeiten<input name="restricted_hours" maxlength="500"></label>
+            <label>Weitere bauseitige Boxen<input name="additional_boxes" type="number" min="0" step="1"></label>
+          </fieldset>
+          <fieldset><legend>Untergrund / Fassade</legend>
+            <div class="facades"><label class="check"><input type="checkbox" value="mauerwerk_beton"> Mauerwerk / Beton</label><label class="check"><input type="checkbox" value="isolation_verputz"> Isolation / Verputz</label><label class="check"><input type="checkbox" value="blechfassade"> Blechfassade</label><label class="check"><input type="checkbox" value="unbekannt"> Unbekannt</label></div>
+          </fieldset>
+          <fieldset><legend>Bemerkungen</legend><label>Ihre Hinweise<textarea name="notes" rows="4" maxlength="2000"></textarea></label></fieldset>
+          <fieldset><legend>Montageposition *</legend>
+            <p>Mindestens ein Foto ist für die Freigabe erforderlich.</p>
+            <label class="camera-button">📷 Foto aufnehmen oder auswählen<input class="photo-input" type="file" accept="image/*" capture="environment" multiple></label>
+            <div class="photo-preview"></div>
+            <label class="document-button">📎 Lageplan / PDF ergänzen<input class="attachment-input" type="file" accept="application/pdf" multiple></label>
+            <div class="attachment-list"></div>
+          </fieldset>
+          <div class="save-state" aria-live="polite">Alle Änderungen gespeichert</div>
+          <div class="message error release-error hidden"></div>
+          <button class="release primary" type="button">Für Helbling freigeben</button>
+        </form>
+      </div>
+    </article>
+  </template>
+  <script src="/js/kundenportal.js" defer></script>
+</body>
+</html>

@@ -36,7 +36,7 @@ body {
 
 /* Sidebar */
 #sidebar {
-  width: 220px;
+  width: 168px;
   min-height: 100vh;
   background: var(--bg2);
   border-right: 1px solid var(--border);
@@ -55,7 +55,7 @@ body {
 nav { flex: 1; padding: 12px 0; }
 nav a {
   display: flex; align-items: center; gap: 10px;
-  padding: 10px 16px;
+  padding: 9px 10px;
   color: var(--text2); text-decoration: none;
   font-size: 13px; font-weight: 500;
   border-radius: 0;
@@ -80,7 +80,7 @@ nav .nav-section { padding: 12px 16px 4px; font-size: 10px; text-transform: uppe
 #main-content {
   flex: 1;
   overflow-y: auto;
-  padding: 24px;
+  padding: 20px;
   min-width: 0;
 }
 
@@ -708,3 +708,25 @@ thead th.sort-desc::after { content: ' ↓'; color: var(--accent); }
   from { transform: translateY(-12px); opacity: 0; }
   to   { transform: translateY(0);     opacity: 1; }
 }
+
+.order-split { display:block; }
+.order-master { padding:0; }
+.order-master .table-wrap { max-height:calc(100vh - 240px); overflow:auto; }
+.order-preview-row > td { padding:0 !important; background:var(--bg3); border-bottom:2px solid var(--accent); }
+.order-detail { min-width:0; display:none; width:100%; padding:12px; border-top:2px solid var(--accent); }
+.order-split.has-selection .order-detail { display:block; animation:previewDrop .18s ease-out; }
+.order-row-toggle { width:24px; height:24px; border:0; background:transparent; color:var(--accent); cursor:pointer; font-size:14px; line-height:1; border-radius:4px; }
+.order-row-toggle:hover { background:rgba(26,79,160,.12); }
+@keyframes previewDrop { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:translateY(0); } }
+#orders-list table { font-size:12px; }
+#orders-list th { white-space:nowrap; padding-left:7px; padding-right:7px; }
+#orders-list td { padding-left:7px; padding-right:7px; }
+#orders-list tr.selected-order { outline:2px solid var(--accent); outline-offset:-2px; background:rgba(26,79,160,.08) !important; }
+.order-actions-col { position:sticky; right:0; z-index:3; background:var(--bg2); box-shadow:-6px 0 10px rgba(15,17,23,.08); }
+.order-actions-col { width:76px; min-width:76px; padding-left:4px; padding-right:4px; }
+.order-icon-btn { width:30px; min-width:30px; padding:4px; font-size:15px; line-height:1.1; }
+thead .order-actions-col { z-index:4; }
+#orders-list tr:hover .order-actions-col, #orders-list tr.selected-order .order-actions-col { background:#eef4fb; }
+@media (max-width:1100px) { .order-master { position:static; } }
+.ls-drop-zone { border:2px dashed var(--border); border-radius:10px; padding:24px; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:8px; transition:.15s; }
+.ls-drop-zone.drag-over { border-color:var(--accent); background:rgba(26,79,160,.08); }

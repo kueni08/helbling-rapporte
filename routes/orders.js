@@ -6,6 +6,8 @@ const { getDb } = require('../lib/database');
 const { requireLogin, requireRole } = require('../middleware/auth');
 const { v4: uuidv4 } = require('uuid');
 const { sendCompletionEmail } = require('../lib/mailer');
+const { FIELD_DEFINITIONS, allowedFields } = require('../lib/order-fields');
+const { cleanAddress, parseSwissAddress, syncOrderAddressParts } = require('../lib/address');
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -18,25 +20,13 @@ function genOrderNumber(db) {
 
 // Strip HTML tags from address fields (e.g. <br> → ", ") and normalize newlines
 function stripHtml(s) {
-  return String(s || '')
-    .replace(/<br\s*\/?>/gi, ', ')
-    .replace(/<[^>]+>/g, '')
-    .replace(/\r\n|\r|\n/g, ', ')
-    .replace(/,\s*,/g, ', ')
-    .replace(/,\s*$/, '')
-    .replace(/^\s*,\s*/, '')
-    .replace(/\s{2,}/g, ' ')
-    .trim();
+  return cleanAddress(s);
 }
 
 // Parse Swiss address "Strasse NR, PLZ ORT" → { strasse, plz, ort }
 function parseAddress(raw) {
-  const addr = stripHtml(raw);
-  if (!addr) return { strasse: '', plz: '', ort: '' };
-  // Look for 4-digit Swiss PLZ
-  const m = addr.match(/(.+?),?\s*(\d{4})\s+([A-ZÄÖÜa-zäöü][^\n,]+)/);
-  if (m) return { strasse: m[1].trim(), plz: m[2], ort: m[3].replace(/,.*$/, '').trim() };
-  return { strasse: addr, plz: '', ort: '' };
+  const parsed = parseSwissAddress(raw);
+  return { strasse: parsed.street, plz: parsed.postalCode, ort: parsed.city };
 }
 
 function parseJSON(v, fallback) {
@@ -62,7 +52,7 @@ function formatOrder(o) {
 // GET /api/orders/tagesuebersicht?date=YYYY-MM-DD[&technicianId=ID]
 router.get('/tagesuebersicht', requireLogin, (req, res) => {
   const db = getDb();
-  const { role, userId } = req.session;
+  const { userRole: role, userId } = req.session;
   const date = req.query.date || new Date().toISOString().split('T')[0];
   let rows;
   if (role === 'monteur') {
@@ -124,7 +114,7 @@ router.get('/tagesuebersicht', requireLogin, (req, res) => {
 // GET /api/orders/tagesuebersicht/export  – Excel
 router.get('/tagesuebersicht/export', requireLogin, (req, res) => {
   const db = getDb();
-  const { role, userId } = req.session;
+  const { userRole: role, userId } = req.session;
   const date = req.query.date || new Date().toISOString().split('T')[0];
   let rows;
   if (role === 'monteur') {
@@ -271,7 +261,7 @@ router.get('/import-template', requireRole('admin', 'planer'), (req, res) => {
 // GET /api/orders
 router.get('/', requireLogin, (req, res) => {
   const db = getDb();
-  const { role, userId } = req.session;
+  const { userRole: role, userId } = req.session;
   let orders;
   if (role === 'monteur') {
     orders = db.prepare(`
@@ -315,7 +305,7 @@ router.get('/:id', requireLogin, (req, res) => {
   if (!o) return res.status(404).json({ error: 'Auftrag nicht gefunden' });
 
   // Role check for monteur
-  if (req.session.role === 'monteur' && o.assigned_to !== req.session.userId) {
+  if (req.session.userRole === 'monteur' && o.assigned_to !== req.session.userId) {
     return res.status(403).json({ error: 'Keine Berechtigung' });
   }
 
@@ -334,10 +324,10 @@ router.post('/', requireRole('admin', 'planer'), (req, res) => {
   const result = db.prepare(`
     INSERT INTO orders (
       order_number, status, customer_id, customer_name, customer_address,
-      installation_address, orderer, on_site_contact, on_site_contact_phone, arrival_time,
+      installation_address, orderer, on_site_contact, on_site_contact_phone, on_site_contact_email, arrival_time,
       planned_date, latest_date, work_types, notes_planer,
       assigned_to, created_by, sort_order, project_number, zylinder_status
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
   `).run(
     orderNumber,
     b.status || 'geplant',
@@ -348,6 +338,7 @@ router.post('/', requireRole('admin', 'planer'), (req, res) => {
     b.orderer || null,
     b.on_site_contact || null,
     b.on_site_contact_phone || null,
+    b.on_site_contact_email || null,
     b.arrival_time || null,
     b.planned_date || null,
     b.latest_date || null,
@@ -360,6 +351,7 @@ router.post('/', requireRole('admin', 'planer'), (req, res) => {
     b.zylinder_status || null
   );
 
+  syncOrderAddressParts(db, result.lastInsertRowid, b.installation_address);
   res.status(201).json(formatOrder(db.prepare('SELECT * FROM orders WHERE id = ?').get(result.lastInsertRowid)));
 });
 
@@ -369,8 +361,11 @@ router.put('/:id', requireLogin, (req, res) => {
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
   if (!order) return res.status(404).json({ error: 'Auftrag nicht gefunden' });
 
-  const { role, userId } = req.session;
+  const { userRole: role, userId } = req.session;
   const b = req.body;
+  const permitted = allowedFields(role);
+  const forbidden = Object.keys(b).filter(key => FIELD_DEFINITIONS[key] && !permitted.has(key));
+  if (forbidden.length) return res.status(403).json({ error: `Keine Berechtigung für: ${forbidden.join(', ')}` });
 
   // Monteur can only update their own orders and only monteur fields
   if (role === 'monteur') {
@@ -416,7 +411,7 @@ router.put('/:id', requireLogin, (req, res) => {
     db.prepare(`
       UPDATE orders SET
         status = ?, customer_id = ?, customer_name = ?, customer_address = ?,
-        installation_address = ?, orderer = ?, on_site_contact = ?, on_site_contact_phone = ?,
+        installation_address = ?, orderer = ?, on_site_contact = ?, on_site_contact_phone = ?, on_site_contact_email = ?,
         arrival_time = ?, planned_date = ?, latest_date = ?, earliest_delivery_date = ?, zylinder_status = ?,
         work_types = ?, notes_planer = ?, assigned_to = ?, sort_order = ?,
         project_number = ?, ls_number = ?,
@@ -439,6 +434,7 @@ router.put('/:id', requireLogin, (req, res) => {
       b.orderer ?? order.orderer,
       b.on_site_contact ?? order.on_site_contact,
       b.on_site_contact_phone !== undefined ? b.on_site_contact_phone || null : order.on_site_contact_phone,
+      b.on_site_contact_email !== undefined ? b.on_site_contact_email || null : order.on_site_contact_email,
       b.arrival_time ?? order.arrival_time,
       b.planned_date ?? order.planned_date,
       b.latest_date ?? order.latest_date,
@@ -467,13 +463,23 @@ router.put('/:id', requireLogin, (req, res) => {
       b.travel_km != null ? parseInt(b.travel_km) || null : order.travel_km,
       b.technician_name ?? order.technician_name,
       b.technician_block ?? order.technician_block,
-      b.signature_data ?? order.signature_data,
+      order.signature_data,
       b.agb_accepted !== undefined ? (b.agb_accepted ? 1 : 0) : order.agb_accepted,
       req.params.id
     );
+    if (b.installation_address !== undefined) syncOrderAddressParts(db, req.params.id, b.installation_address);
   }
 
   const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
+  const changes = {};
+  for (const [key, value] of Object.entries(b)) {
+    if (!FIELD_DEFINITIONS[key]) continue;
+    const before = order[key];
+    const after = updatedOrder[key];
+    if (String(before ?? '') !== String(after ?? '')) changes[key] = { label: FIELD_DEFINITIONS[key].label, before, after };
+  }
+  if (Object.keys(changes).length) db.prepare(`INSERT INTO order_change_log (order_id,user_id,user_role,changes_json) VALUES (?,?,?,?)`)
+    .run(req.params.id, userId, role, JSON.stringify(changes));
   res.json(formatOrder(updatedOrder));
 
   // Abschluss-Mail automatisch versenden wenn Status neu auf "abgeschlossen" gesetzt
@@ -518,12 +524,28 @@ router.patch('/:id/notes', requireLogin, (req, res) => {
   const db = getDb();
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
   if (!order) return res.status(404).json({ error: 'Auftrag nicht gefunden' });
-  if (req.session.role === 'monteur' && order.assigned_to !== req.session.userId) {
+  if (req.session.userRole === 'monteur' && order.assigned_to !== req.session.userId) {
     return res.status(403).json({ error: 'Keine Berechtigung' });
   }
   db.prepare("UPDATE orders SET notes_monteur = ?, updated_at = datetime('now') WHERE id = ?")
     .run(req.body.notes_monteur || null, req.params.id);
   res.json({ ok: true });
+});
+
+router.delete('/:id/signature', requireRole('admin', 'planer'), (req, res) => {
+  const db = getDb();
+  const order = db.prepare('SELECT signature_data FROM orders WHERE id=?').get(req.params.id);
+  if (!order) return res.status(404).json({ error: 'Auftrag nicht gefunden' });
+  db.prepare("UPDATE orders SET signature_data=NULL, agb_accepted=0, updated_at=datetime('now') WHERE id=?").run(req.params.id);
+  db.prepare(`INSERT INTO order_change_log (order_id,user_id,user_role,action,changes_json) VALUES (?,?,?,?,?)`)
+    .run(req.params.id, req.session.userId, req.session.userRole, 'signature_deleted', JSON.stringify({ signature_data: { label: 'Kundenunterschrift', before: '[vorhanden]', after: null } }));
+  res.json({ ok: true });
+});
+
+router.get('/:id/history', requireRole('admin', 'planer'), (req, res) => {
+  const rows = getDb().prepare(`SELECT l.*, u.full_name AS user_name FROM order_change_log l LEFT JOIN users u ON u.id=l.user_id
+    WHERE l.order_id=? ORDER BY l.created_at DESC, l.id DESC`).all(req.params.id);
+  res.json(rows.map(r => ({ ...r, changes: JSON.parse(r.changes_json || '{}') })));
 });
 
 // DELETE /api/orders/:id (admin + planer)
@@ -697,6 +719,7 @@ router.post('/import', requireRole('admin', 'planer'), upload.single('file'), (r
             orderData.assigned_to,
             orderData.sort_order
           );
+          syncOrderAddressParts(db, result.lastInsertRowid, orderData.installation_address);
           inserted.push({ id: result.lastInsertRowid, order_number: orderNumber, project_number: orderData.project_number, customer_name: orderData.customer_name, items: orderData.items.length });
         });
 
@@ -724,6 +747,7 @@ router.post('/import', requireRole('admin', 'planer'), upload.single('file'), (r
             planned_date, notes_planer, req.session.userId, JSON.stringify(work_types),
             project_number || null, assigned_to, sort_order);
 
+          syncOrderAddressParts(db, result.lastInsertRowid, installation_address);
           inserted.push({ id: result.lastInsertRowid, order_number: orderNumber, customer_name });
         });
       }

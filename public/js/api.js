@@ -45,6 +45,8 @@ const API = {
   bulkUpdateStatus: (ids, status) => API.patch('/api/orders/bulk-status', { ids, status }),
   importOrders:        (form) => API.upload('/api/orders/import', form),
   orderCustomerForm:   (id)   => API.post(`/api/orders/${id}/customer-form`),
+  deleteSignature:     (id)   => API.delete(`/api/orders/${id}/signature`),
+  getOrderHistory:     (id)   => API.get(`/api/orders/${id}/history`),
 
   // Settings
   getOptions:         ()           => API.get('/api/settings/options'),
@@ -59,6 +61,15 @@ const API = {
   getCustomers:       ()           => API.get('/api/settings/customers'),
   createCustomer:     (d)          => API.post('/api/settings/customers', d),
   updateCustomer:     (id, d)      => API.put(`/api/settings/customers/${id}`, d),
+
+  // Kundenportal (Planer/Admin)
+  getPortalUsers:       (customerId) => API.get(`/api/customer-portal-admin/users${customerId ? `?customer_id=${customerId}` : ''}`),
+  createPortalUser:     (d)          => API.post('/api/customer-portal-admin/users', d),
+  updatePortalUser:     (id, d)      => API.put(`/api/customer-portal-admin/users/${id}`, d),
+  resetPortalPassword:  (id)         => API.post(`/api/customer-portal-admin/users/${id}/reset-password`, {}),
+  updatePortalOrder:    (id, d)      => API.put(`/api/customer-portal-admin/orders/${id}`, d),
+  previewCustomerOrderImport: (customerId, form) => API.upload(`/api/customer-portal-admin/customers/${customerId}/order-import/preview`, form),
+  confirmCustomerOrderImport: (customerId, rows) => API.post(`/api/customer-portal-admin/customers/${customerId}/order-import/confirm`, { rows }),
 
   // Files
   uploadAttachments: (orderId, form) => API.upload(`/api/files/${orderId}/attachments`, form),
@@ -104,6 +115,7 @@ const API = {
   getLsImports:        ()         => API.get('/api/lieferschein/imports'),
   getLsDriveStatus:    ()         => API.get('/api/lieferschein/drive-status'),
   uploadLieferschein:  (form)     => API.upload('/api/lieferschein/upload', form),
+  confirmLsImport:     (id, allow_duplicate=false) => API.post(`/api/lieferschein/confirm/${id}`, { allow_duplicate }),
   retryLsImport:       (id)       => API.post(`/api/lieferschein/retry/${id}`),
   deleteLsImport:      (id)       => API.delete(`/api/lieferschein/imports/${id}`),
 };

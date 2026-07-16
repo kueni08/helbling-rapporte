@@ -19,6 +19,7 @@ const { initDatabase } = require('./lib/database');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+app.set('trust proxy', 1);
 
 // Ensure uploads directory exists
 const uploadsDir = process.env.UPLOADS_DIR || path.join(__dirname, 'uploads');
@@ -31,7 +32,10 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Sessions
 app.use(session({
-  store: new SQLiteStore({ db: 'sessions.db', dir: path.join(__dirname, 'db') }),
+  store: new SQLiteStore({
+    db: process.env.SESSIONS_DB_NAME || 'sessions.db',
+    dir: process.env.SESSIONS_DB_DIR || path.join(__dirname, 'db')
+  }),
   secret: process.env.SESSION_SECRET || 'helbling-secret-change-me',
   resave: false,
   saveUninitialized: false,
@@ -41,6 +45,24 @@ app.use(session({
     sameSite: 'lax'
   }
 }));
+
+const customerPortalSession = session({
+  name: 'helbling.kundenportal.sid',
+  store: new SQLiteStore({
+    db: process.env.CUSTOMER_PORTAL_SESSIONS_DB_NAME || 'customer-portal-sessions.db',
+    dir: process.env.SESSIONS_DB_DIR || path.join(__dirname, 'db')
+  }),
+  secret: process.env.CUSTOMER_PORTAL_SESSION_SECRET || process.env.SESSION_SECRET || 'change-customer-portal-session-secret',
+  resave: false,
+  saveUninitialized: false,
+  rolling: true,
+  cookie: {
+    maxAge: 1000 * 60 * 60 * 12,
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'test' ? false : 'auto'
+  }
+});
 
 // Routes
 app.use('/api/auth',     require('./routes/auth'));
@@ -53,6 +75,9 @@ app.use('/api/export',   require('./routes/export'));
 app.use('/api/anfrage',       require('./routes/anfrage'));      // public customer form submit
 app.use('/api/anfragen',      require('./routes/anfrage'));      // admin list/manage
 app.use('/api/lieferschein',  require('./routes/lieferschein')); // PDF auto-import
+app.use('/api/email-import',  require('./routes/email-import')); // provider-neutral, currently disabled
+app.use('/api/kundenportal', customerPortalSession, require('./routes/customer-portal'));
+app.use('/api/customer-portal-admin', require('./routes/customer-portal-admin'));
 
 // Public customer inquiry form (new submission + token-based edit)
 app.get('/anfrage', (req, res) => {
@@ -60,6 +85,11 @@ app.get('/anfrage', (req, res) => {
 });
 app.get('/anfrage/f/:token', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'anfrage.html'));
+});
+
+app.get(['/kundenportal', '/kundenportal/'], (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.sendFile(path.join(__dirname, 'views', 'kundenportal.html'));
 });
 
 // Serve the SPA for any non-API route
@@ -74,6 +104,8 @@ app.listen(PORT, () => {
   console.log(`   Standard-Login: admin / admin123`);
 
   // Lieferschein-Watcher starten (lokaler Ordner)
-  const { startWatcher } = require('./lib/lieferschein-watcher');
-  startWatcher();
+  if (process.env.DISABLE_WATCHERS !== '1') {
+    const { startWatcher } = require('./lib/lieferschein-watcher');
+    startWatcher();
+  }
 });
