@@ -31,7 +31,10 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Sessions
 app.use(session({
-  store: new SQLiteStore({ db: 'sessions.db', dir: path.join(__dirname, 'db') }),
+  store: new SQLiteStore({
+    db: process.env.SESSIONS_DB_NAME || 'sessions.db',
+    dir: process.env.SESSIONS_DB_DIR || path.join(__dirname, 'db')
+  }),
   secret: process.env.SESSION_SECRET || 'helbling-secret-change-me',
   resave: false,
   saveUninitialized: false,

@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Helbling Kundenportal - Demo</title>
+  <style>
+    :root{--he:#1C1B78;--ink:#171717;--muted:#666;--line:#d9dce7;--bg:#f4f5f9;--ok:#237a45;--warn:#8b5b00}
+    *{box-sizing:border-box} body{margin:0;background:var(--bg);font:15px Arial,sans-serif;color:var(--ink)}
+    button,input,select,textarea{font:inherit} button{cursor:pointer}
+    .demo{background:#fff4cc;border-bottom:1px solid #e8cc68;padding:9px 18px;text-align:center;font-size:13px;color:#5b4700}
+    header{background:#fff;border-bottom:1px solid var(--line);padding:16px 22px;display:flex;gap:24px;align-items:center;justify-content:space-between}
+    header img{width:min(650px,66vw);height:auto;display:block}.user{font-size:13px;text-align:right;white-space:nowrap}.user strong{display:block;color:var(--he)}
+    main{max-width:1420px;margin:0 auto;padding:20px;display:grid;grid-template-columns:340px minmax(0,1fr);gap:20px}
+    .panel,.card{background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 2px 8px #1c1b7810}
+    .panel{overflow:hidden;height:calc(100vh - 145px);position:sticky;top:20px}.panel-title{padding:18px;border-bottom:1px solid var(--line)}
+    h1,h2,h3{margin:0;color:var(--he)} h1{font-size:21px} h2{font-size:20px}.sub{color:var(--muted);font-size:13px;margin-top:5px}
+    .new{width:100%;margin-top:14px;background:var(--he);color:#fff;border:0;border-radius:8px;padding:11px;font-weight:bold}
+    .mobile-picker{display:none}.orders{overflow:auto;height:calc(100% - 118px)}.order{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);background:#fff;padding:10px 14px}
+    .order:hover,.order.active{background:#efeffa}.order.active{border-left:4px solid var(--he);padding-left:10px}.order strong{display:block;margin-bottom:2px}.meta{font-size:11px;color:var(--muted)}
+    .badge{display:inline-block;margin-top:5px;padding:3px 7px;border-radius:20px;background:#ececf8;color:var(--he);font-size:10px;font-weight:bold}.badge.ok{background:#e9f6ed;color:var(--ok)}
+    .content{min-width:0}.card{padding:20px;margin-bottom:16px}.heading{display:flex;gap:12px;align-items:flex-start;justify-content:space-between}.status{color:var(--warn);background:#fff5d9;border-radius:20px;padding:6px 10px;font-size:12px;font-weight:bold}
+    .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px}.full{grid-column:1/-1}.field label,.label{display:block;font-weight:bold;font-size:12px;margin-bottom:6px;color:#333}.field input,.field select,.field textarea{width:100%;border:1px solid #bfc3d3;border-radius:7px;padding:10px;background:#fff}.field textarea{min-height:90px;resize:vertical}
+    .checks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.check{border:1px solid var(--line);border-radius:8px;padding:10px;display:flex;gap:9px;align-items:flex-start;background:#fafaff}.check input{margin-top:2px;accent-color:var(--he)}
+    .upload{border:2px dashed #a9acd0;border-radius:10px;padding:22px;text-align:center;background:#f9f9ff}.upload strong{color:var(--he)}.upload input{display:block;margin:12px auto 0;max-width:100%}
+    #preview{display:none;margin-top:14px;max-width:360px;width:100%;border-radius:9px;border:1px solid var(--line)}
+    .actions{position:sticky;bottom:0;background:#ffffffee;backdrop-filter:blur(6px);border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;gap:12px;align-items:center;justify-content:flex-end}.autosave{margin-right:auto;color:var(--ok);font-size:12px}.primary{border-radius:8px;padding:11px 16px;font-weight:bold;border:1px solid var(--he);color:#fff;background:var(--he)}.required{color:#b42318}
+    .toast{position:fixed;right:20px;bottom:20px;background:#20202a;color:#fff;padding:12px 16px;border-radius:8px;display:none}
+    @media(max-width:800px){header{padding:12px;display:block}.user{display:none}header img{width:100%}main{display:block;padding:12px}.panel{height:auto;position:static;margin-bottom:12px}.panel-title{padding:14px}.panel-title h1{font-size:18px}.panel-title .sub{margin-bottom:10px}.new{margin-top:10px;padding:9px}.orders{display:none}.mobile-picker{display:block}.mobile-picker label{display:block;font-size:11px;font-weight:bold;color:var(--muted);margin-bottom:5px}.mobile-picker select{width:100%;border:1px solid #aeb2c7;border-radius:8px;background:#fff;padding:10px;color:var(--ink);font-weight:bold}.grid{grid-template-columns:1fr}.checks{grid-template-columns:1fr}.card{padding:16px}.actions{justify-content:stretch}.actions button{flex:1}.heading{display:block}.status{display:inline-block;margin-top:10px}}
+  </style>
+</head>
+<body>
+  <div class="demo"><strong>Interaktiver Entwurf:</strong> Es werden keine Daten übertragen oder dauerhaft gespeichert.</div>
+  <header>
+    <img src="/images/letterhead.png" alt="Helbling & Co. AG">
+    <div class="user"><strong>Privera AG</strong>Janis Keller · Abmelden</div>
+  </header>
+  <main>
+    <aside class="panel">
+      <div class="panel-title"><h1>Ihre Montageaufträge</h1><div class="sub">30 Objekte · 1 Angabe unvollständig</div><div class="mobile-picker"><label for="mobile-order-select">Objekt auswählen</label><select id="mobile-order-select" onchange="selectOrder(Number(this.value))"></select></div><button class="new" onclick="newOrder()">+ Neuen Auftrag erfassen</button></div>
+      <div class="orders" id="orders"></div>
+    </aside>
+    <section class="content">
+      <div class="card heading"><div><h2 id="title">Spitalstrasse 58</h2><div class="sub" id="subtitle">9472 Grabs · Anlage 2245</div></div><span class="status" id="status">Angaben ergänzen</span></div>
+      <form id="form" onsubmit="return false">
+        <div class="card"><h3>Objekt und Kontakt</h3><div class="grid" style="margin-top:16px">
+          <div class="field"><label>Anlagen-/Projektnummer <span class="required">*</span></label><input name="project" value="2245" required></div>
+          <div class="field"><label>Objektbezeichnung <span class="required">*</span></label><input name="object" value="Spitalstrasse 58" required></div>
+          <div class="field full"><label>Strasse und Hausnummer <span class="required">*</span></label><input name="street" value="Spitalstrasse 58" required></div>
+          <div class="field"><label>PLZ <span class="required">*</span></label><input name="zip" value="9472" required></div><div class="field"><label>Ort <span class="required">*</span></label><input name="city" value="Grabs" required></div>
+          <div class="field"><label>Kontaktperson vor Ort <span class="required">*</span></label><input name="contact" value="Janis Keller" required></div><div class="field"><label>Telefon <span class="required">*</span></label><input name="phone" value="071 272 31 97" required></div>
+        </div></div>
+        <div class="card"><h3>Termin und Bedingungen vor Ort</h3><div class="grid" style="margin-top:16px">
+          <div class="field"><label>Terminwunsch</label><select name="schedule"><option>Innerhalb der nächsten 4 Wochen</option><option>Ausführung ab Datum</option><option>Express innerhalb 1 Woche</option></select></div>
+          <div class="field"><label>Ausführung möglich ab</label><input type="date" name="earliest"></div>
+          <div class="full checks">
+            <label class="check"><input type="checkbox" checked><span>Strom ist am Montagestandort verfügbar</span></label>
+            <label class="check"><input type="checkbox" checked><span>Parkieren unmittelbar vor Montagestandort möglich</span></label>
+            <label class="check"><input type="checkbox"><span>Parkbewilligung erforderlich</span></label>
+            <label class="check"><input type="checkbox"><span>Zufahrtsbewilligung erforderlich</span></label>
+            <label class="check"><input type="checkbox"><span>Eingeschränkte Arbeitszeiten</span></label>
+            <label class="check"><input type="checkbox"><span>Weitere bauseitige Boxen montieren</span></label>
+          </div>
+        </div></div>
+        <div class="card"><h3>Untergrund / Fassade</h3><div class="checks" style="margin-top:16px" id="facades">
+          <label class="check"><input type="checkbox" value="Mauerwerk/Beton" checked><span>Mauerwerk/Beton</span></label>
+          <label class="check"><input type="checkbox" value="Isolation/Verputz"><span>Isolation/Verputz</span></label>
+          <label class="check"><input type="checkbox" value="Blechfassade"><span>Blechfassade</span></label>
+          <label class="check"><input type="checkbox" value="unbekannt" id="unknown"><span>Unbekannt</span></label>
+        </div></div>
+        <div class="card"><h3>Montageposition</h3><p class="sub">Bitte direkt vor Ort fotografieren. Vor dem Einreichen ist mindestens ein Foto erforderlich.</p>
+          <div class="upload"><strong>Foto aufnehmen oder auswählen</strong><input id="photo" type="file" accept="image/*" capture="environment"><img id="preview" alt="Vorschau Montageposition"></div>
+          <div class="field" style="margin-top:16px"><label>Bemerkungen</label><textarea name="notes" placeholder="Zugang, Strombezug, besondere Arbeitszeiten usw.">Strom kann in der Garage bezogen werden.</textarea></div>
+        </div>
+        <div class="actions"><span class="autosave" id="autosave">✓ Automatisch gespeichert</span><button type="button" class="primary" onclick="releaseOrder()">Für Helbling freigeben</button></div>
+      </form>
+    </section>
+  </main>
+  <div class="toast" id="toast"></div>
+  <script>
+    const mobileOrderSelect=document.getElementById('mobile-order-select');
+    const orderTitle=document.getElementById('title');
+    const orderSubtitle=document.getElementById('subtitle');
+    const orderStatus=document.getElementById('status');
+    const orderForm=document.getElementById('form');
+    const previewImage=document.getElementById('preview');
+    const photoInput=document.getElementById('photo');
+    const toastElement=document.getElementById('toast');
+    const autosaveElement=document.getElementById('autosave');
+    const data=[
+      {title:'Spitalstrasse 58',sub:'9472 Grabs · Anlage 2245',state:'Angaben ergänzen',ok:false},
+      {title:'Spitalstrasse 60',sub:'9472 Grabs · Anlage 2246',state:'Eingereicht',ok:true},
+      {title:'Spitalstrasse 62',sub:'9472 Grabs · Anlage 2247',state:'Termin geplant: 12.08.2026',ok:true}
+    ];
+    for(let i=3;i<30;i++) data.push({title:`Objekt ${String(i+1).padStart(2,'0')} · Spitalstrasse ${64+i-3}`,sub:`9472 Grabs · Anlage ${2245+i}`,state:i%5===0?'Termin geplant':'Eingereicht',ok:true});
+    let active=0;
+    function render(){orders.innerHTML=data.map((o,i)=>`<button class="order ${i===active?'active':''}" onclick="selectOrder(${i})"><strong>${o.title}</strong><span class="meta">${o.sub}</span><br><span class="badge ${o.ok?'ok':''}">${o.state}</span></button>`).join('');mobileOrderSelect.innerHTML=data.map((o,i)=>`<option value="${i}" ${i===active?'selected':''}>${o.title} · ${o.state}</option>`).join('')}
+    function selectOrder(i){active=i;const o=data[i];orderTitle.textContent=o.title;orderSubtitle.textContent=o.sub;orderStatus.textContent=o.state;const street=o.title.includes('·')?o.title.split('·').pop().trim():o.title;const project=o.sub.match(/Anlage\s+(\d+)/)?.[1]||'';orderForm.elements.namedItem('project').value=project;orderForm.elements.namedItem('object').value=o.title;orderForm.elements.namedItem('street').value=street;orderForm.elements.namedItem('zip').value='9472';orderForm.elements.namedItem('city').value='Grabs';render()}
+    function newOrder(){data.unshift({title:'Neuer Auftrag',sub:'Adresse noch erfassen',state:'Kundenerfassung unvollständig',ok:false});active=0;orderForm.reset();[...orderForm.querySelectorAll('[required]')].forEach(x=>x.value='');photoInput.value='';orderTitle.textContent='Neuer Auftrag';orderSubtitle.textContent='Wird automatisch gespeichert';orderStatus.textContent='Kundenerfassung unvollständig';previewImage.style.display='none';render();show('Neuer Auftrag angelegt und für Helbling sichtbar')}
+    function show(message){toastElement.textContent=message;toastElement.style.display='block';setTimeout(()=>toastElement.style.display='none',2600)}
+    function releaseOrder(){const missing=[...orderForm.querySelectorAll('[required]')].filter(x=>!x.value.trim());if(missing.length){show(`Pflichtangaben fehlen: ${missing.map(x=>x.closest('.field').querySelector('label').textContent.replace('*','').trim()).join(', ')}`);missing[0].focus();return}if(!photoInput.files.length){show('Pflichtangabe fehlt: Foto der Montageposition');return}data[active].state='Für Helbling freigegeben';data[active].ok=true;orderStatus.textContent=data[active].state;render();show('Auftrag für Helbling freigegeben')}
+    photoInput.addEventListener('change',()=>{const file=photoInput.files[0];if(!file)return;previewImage.src=URL.createObjectURL(file);previewImage.style.display='block'})
+    unknown.addEventListener('change',()=>{if(unknown.checked)document.querySelectorAll('#facades input:not(#unknown)').forEach(x=>x.checked=false)})
+    document.querySelectorAll('#facades input:not(#unknown)').forEach(x=>x.addEventListener('change',()=>{if(x.checked)unknown.checked=false}))
+    let autosaveTimer;orderForm.addEventListener('input',()=>{autosaveElement.textContent='Wird gespeichert…';autosaveElement.style.color='var(--muted)';clearTimeout(autosaveTimer);autosaveTimer=setTimeout(()=>{autosaveElement.textContent='✓ Automatisch gespeichert';autosaveElement.style.color='var(--ok)'},500)});
+    render();
+  </script>
+</body>
+</html>
