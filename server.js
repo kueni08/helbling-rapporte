@@ -5,16 +5,6 @@ const BetterSqliteSessionStore = require('./lib/session-store');
 const path = require('path');
 const fs = require('fs');
 
-// Fly.io: Service Account JSON aus Env-Var in Datei schreiben
-if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
-  const credDir = path.join(__dirname, 'credentials');
-  fs.mkdirSync(credDir, { recursive: true });
-  fs.writeFileSync(
-    path.join(credDir, 'service-account.json'),
-    Buffer.from(process.env.GOOGLE_SERVICE_ACCOUNT_JSON, 'base64').toString('utf8')
-  );
-}
-
 const { initDatabase, getDb } = require('./lib/database');
 
 const app = express();
@@ -136,10 +126,4 @@ assertProductionConfig();
 initDatabase();
 app.listen(PORT, HOST, () => {
   console.log(`\n✅ Helbling Rapporte läuft auf http://${HOST}:${PORT}`);
-
-  // Lieferschein-Watcher starten (lokaler Ordner)
-  if (process.env.DISABLE_WATCHERS !== '1') {
-    const { startWatcher } = require('./lib/lieferschein-watcher');
-    startWatcher();
-  }
 });

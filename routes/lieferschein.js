@@ -65,8 +65,25 @@ router.post('/upload', requireRole('admin', 'planer'), upload.array('files', 20)
   }
 });
 
+// GET /api/lieferschein/preview/:id – PDF eines ausstehenden Imports anzeigen
+router.get('/preview/:id', requireRole('admin', 'planer'), (req, res) => {
+  const imp = getDb().prepare("SELECT filename FROM lieferschein_imports WHERE id=? AND status='pending'").get(req.params.id);
+  if (!imp) return res.status(404).send('Ausstehender Import nicht gefunden');
+  const filePath = path.join(getInboxDir(), path.basename(imp.filename));
+  if (!fs.existsSync(filePath)) return res.status(404).send('PDF-Datei nicht gefunden');
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Content-Disposition', 'inline');
+  res.type('application/pdf');
+  res.sendFile(filePath);
+});
+
 router.post('/confirm/:id', requireRole('admin', 'planer'), (req, res) => {
-  try { res.json({ ok: true, ...confirmImport(parseInt(req.params.id), req.body?.allow_duplicate === true) }); }
+  try {
+    res.json({
+      ok: true,
+      ...confirmImport(parseInt(req.params.id), req.body?.allow_duplicate === true, req.body?.data),
+    });
+  }
   catch (e) { res.status(/Duplikat/.test(e.message) ? 409 : 400).json({ error: e.message }); }
 });
 
@@ -100,12 +117,6 @@ router.post('/retry/:id', requireRole('admin', 'planer'), async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
-});
-
-// GET /api/lieferschein/drive-status  – Google Drive Poller Status
-router.get('/drive-status', requireRole('admin', 'planer'), (req, res) => {
-  const { getPollerStatus } = require('../lib/drive-poller');
-  res.json(getPollerStatus());
 });
 
 // DELETE /api/lieferschein/imports/:id  – Import-Eintrag löschen

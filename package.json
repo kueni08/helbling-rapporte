@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "test": "node --test --test-concurrency=1 test/customer-inquiry.smoke.test.js test/customer-portal.security.test.js test/pwa-assets.test.js test/session-store.test.js test/staff-security.test.js",
+    "test": "node --test --test-concurrency=1 test/customer-inquiry.smoke.test.js test/customer-portal.security.test.js test/lieferschein-editable-preview.test.js test/pwa-assets.test.js test/session-store.test.js test/staff-security.test.js",
     "test:anfrage": "node --test test/customer-inquiry.smoke.test.js"
   },
   "dependencies": {

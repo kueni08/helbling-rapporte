@@ -609,29 +609,93 @@ const AdminViews = {
     const form = new FormData();
     files.forEach(file => form.append('files', file));
     try {
-      UI.toast('PDF wird verarbeitet…', 'info', 3000);
+      UI.toast('PDF wird analysiert…', 'info', 3000);
       const result = await API.uploadLieferschein(form);
       AdminViews.showLsPreviews(result.previews || []);
-      UI.toast('Verarbeitung gestartet – Seite lädt in 3s neu', 'success', 3000);
+      UI.toast('Analyse abgeschlossen – bitte Angaben kontrollieren', 'success', 4000);
     } catch (e) { UI.toast(e.message, 'error'); }
     input.value = '';
+  },
+
+  lsArticleRow(previewId, article = {}) {
+    return `<tr>
+      <td><input data-article-field="artikel_nr" type="text" value="${UI.esc(article.artikel_nr || '')}" aria-label="Artikelnummer"></td>
+      <td><input data-article-field="beschreibung" type="text" value="${UI.esc(article.beschreibung || '')}" aria-label="Beschreibung"></td>
+      <td><input data-article-field="menge" type="number" min="0.01" step="0.01" value="${Number(article.menge) || 1}" aria-label="Menge"></td>
+      <td><input data-article-field="einheit" type="text" value="${UI.esc(article.einheit || 'Stk.')}" aria-label="Einheit"></td>
+      <td class="text-center"><input data-article-field="ist_schluessebox_montage" type="checkbox" ${article.ist_schluessebox_montage ? 'checked' : ''} aria-label="Montage"></td>
+      <td><input data-article-field="durchmesser" type="text" value="${UI.esc(article.durchmesser || '')}" aria-label="Durchmesser"></td>
+      <td class="text-center"><input data-article-field="ist_fremdfabrikat" type="checkbox" ${article.ist_fremdfabrikat ? 'checked' : ''} aria-label="Fremdfabrikat"></td>
+      <td><button type="button" class="btn btn-danger btn-sm" onclick="this.closest('tr').remove()" aria-label="Artikel entfernen">✕</button></td>
+    </tr>`;
+  },
+
+  addLsArticle(previewId) {
+    document.querySelector(`#ls-preview-${previewId} tbody[data-ls-articles]`)
+      ?.insertAdjacentHTML('beforeend', AdminViews.lsArticleRow(previewId));
   },
 
   showLsPreviews(previews) {
     const rows = previews.map(p => {
       const d = p.data || {};
+      const customer = d.kunde || {};
+      const field = (name, label, value, type = 'text') => `<div class="field">
+        <label>${label}</label>
+        <input type="${type}" data-ls-field="${name}" value="${UI.esc(value || '')}">
+      </div>`;
       const warning = p.duplicate ? `<div style="color:#b45309;font-weight:600">⚠ Bereits vorhanden: ${UI.esc(p.duplicate.order_number || 'Auftrag')}</div>` : '';
       return `<div class="card" id="ls-preview-${p.id}" style="margin-bottom:10px">
-        <strong>${UI.esc(p.original_name)}</strong>${warning}
-        <div class="text-sm text-muted">LS: ${UI.esc(d.lieferschein_nr || '–')} · Projekt: ${UI.esc(d.projekt_nr || '–')} · Kunde: ${UI.esc(d.kunde?.name || '–')} · Artikel: ${(d.artikel || []).length}</div>
+        <div class="mb-2"><strong>${UI.esc(p.original_name)}</strong>${warning}</div>
+        <div class="ls-preview-grid">
+          <div class="ls-pdf-preview">
+            <iframe src="/api/lieferschein/preview/${p.id}" title="PDF-Vorschau ${UI.esc(p.original_name)}"></iframe>
+          </div>
+          <div class="ls-preview-fields">
+            <div class="card-title">Erkannte Angaben direkt korrigieren</div>
+            <div class="form-grid">
+              ${field('lieferschein_nr', 'Lieferschein-Nr.', d.lieferschein_nr)}
+              ${field('projekt_nr', 'Projekt-Nr.', d.projekt_nr)}
+              ${field('montagetermin', 'Montagetermin', d.montagetermin, 'date')}
+              ${field('bestell_nr', 'Bestell-Nr.', d.bestell_nr)}
+              ${field('iz', 'Besteller / IZ', d.iz)}
+              ${field('uz', 'Unser Zeichen / UZ', d.uz)}
+            </div>
+            <div class="card-title mt-3">Kunde</div>
+            <div class="form-grid">
+              ${field('kunde.name', 'Firma / Kunde', customer.name)}
+              ${field('kunde.kunden_nr', 'Kunden-Nr.', customer.kunden_nr)}
+              ${field('kunde.strasse', 'Strasse', customer.strasse)}
+              ${field('kunde.plz', 'PLZ', customer.plz)}
+              ${field('kunde.ort', 'Ort', customer.ort)}
+              ${field('kunde.land', 'Land', customer.land)}
+              ${field('kunde.kontakt', 'Kontakt beim Kunden', customer.kontakt)}
+            </div>
+            <div class="card-title mt-3">Montageort</div>
+            <div class="form-grid">
+              ${field('montage_objekt', 'Objekt', d.montage_objekt)}
+              ${field('montage_strasse', 'Strasse', d.montage_strasse)}
+              ${field('montage_plz', 'PLZ', d.montage_plz)}
+              ${field('montage_ort', 'Ort', d.montage_ort)}
+              ${field('kontaktperson_vor_ort', 'Kontakt vor Ort', d.kontaktperson_vor_ort)}
+              ${field('kontaktperson_vor_ort_telefon', 'Telefon vor Ort', d.kontaktperson_vor_ort_telefon, 'tel')}
+            </div>
+          </div>
+        </div>
+        <div class="card-title mt-3">Artikel und Arbeiten</div>
+        <div class="table-wrap ls-article-editor"><table>
+          <thead><tr><th>Art.-Nr.</th><th>Beschreibung</th><th>Menge</th><th>Einheit</th><th>Montage</th><th>Ø</th><th>Fremd</th><th></th></tr></thead>
+          <tbody data-ls-articles>${(d.artikel || []).map(a => AdminViews.lsArticleRow(p.id, a)).join('')}</tbody>
+        </table></div>
+        <button type="button" class="btn btn-ghost btn-sm mt-2" onclick="AdminViews.addLsArticle(${p.id})">+ Artikelzeile</button>
         <div class="flex gap-2 mt-2">
-          <button class="btn btn-primary btn-sm" ${p.duplicate ? 'disabled' : ''} onclick="AdminViews.confirmLs(${p.id},false)">Auftrag erstellen</button>
-          ${p.duplicate ? `<button class="btn btn-danger btn-sm" onclick="AdminViews.confirmLs(${p.id},true)">Trotzdem importieren</button>` : ''}
+          <button class="btn btn-primary" onclick="AdminViews.confirmLs(${p.id},false)">Geprüfte Angaben übernehmen</button>
+          ${p.duplicate ? `<button class="btn btn-danger" onclick="AdminViews.confirmLs(${p.id},true)">Als Duplikat trotzdem übernehmen</button>` : ''}
         </div>
       </div>`;
     }).join('');
-    UI.modal('Lieferscheine prüfen und freigeben', `<div style="max-height:65vh;overflow:auto">${rows}</div>`,
+    UI.modal('Lieferscheine prüfen und freigeben', `<div>${rows}</div>`,
       `<button class="btn btn-ghost" onclick="UI.closeModal();AdminViews.renderLieferscheinImport()">Schliessen</button>`);
+    document.querySelector('#active-modal .modal')?.classList.add('modal-wide');
   },
 
   async renderOrderTools() {
@@ -649,8 +713,24 @@ const AdminViews = {
   },
 
   async confirmLs(id, allowDuplicate) {
+    const card = document.getElementById(`ls-preview-${id}`);
+    if (!card) return;
+    const data = { kunde: {}, artikel: [] };
+    card.querySelectorAll('[data-ls-field]').forEach(input => {
+      const parts = input.dataset.lsField.split('.');
+      if (parts[0] === 'kunde') data.kunde[parts[1]] = input.value.trim();
+      else data[parts[0]] = input.value.trim();
+    });
+    card.querySelectorAll('tbody[data-ls-articles] tr').forEach(row => {
+      const article = {};
+      row.querySelectorAll('[data-article-field]').forEach(input => {
+        const key = input.dataset.articleField;
+        article[key] = input.type === 'checkbox' ? input.checked : input.value.trim();
+      });
+      data.artikel.push(article);
+    });
     try {
-      const result = await API.confirmLsImport(id, allowDuplicate);
+      const result = await API.confirmLsImport(id, allowDuplicate, data);
       document.getElementById(`ls-preview-${id}`)?.remove();
       UI.toast(`Auftrag ${result.orderNumber} erstellt`, 'success');
     } catch(e) { UI.toast(e.message, 'error'); }
