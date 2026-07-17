@@ -537,6 +537,7 @@ const AdminViews = {
         </td>
         <td style="font-size:0.75rem">${(i.created_at||'').substring(0,16).replace('T',' ')}</td>
         <td class="text-right" style="white-space:nowrap">
+          ${i.status === 'pending' ? `<button class="btn btn-primary btn-sm" onclick="AdminViews.openLsPreview(${i.id})">Prüfen / bearbeiten</button>` : ''}
           ${i.status === 'error' ? `<button class="btn btn-ghost btn-sm" onclick="AdminViews.retryLsImport(${i.id})">↺ Retry</button>` : ''}
           <button class="btn btn-danger btn-sm" onclick="AdminViews.deleteLsImport(${i.id})">✕</button>
         </td>
@@ -633,6 +634,18 @@ const AdminViews = {
   addLsArticle(previewId) {
     document.querySelector(`#ls-preview-${previewId} tbody[data-ls-articles]`)
       ?.insertAdjacentHTML('beforeend', AdminViews.lsArticleRow(previewId));
+  },
+
+  async openLsPreview(id) {
+    try {
+      const imports = await API.getLsImports();
+      const item = imports.find(entry => entry.id === id && entry.status === 'pending');
+      if (!item) { UI.toast('Ausstehende Vorschau nicht gefunden', 'error'); return; }
+      let data = {};
+      try { data = JSON.parse(item.raw_json || '{}'); }
+      catch { UI.toast('Erkannte Daten konnten nicht gelesen werden', 'error'); return; }
+      AdminViews.showLsPreviews([{ id: item.id, original_name: item.original_name, data, duplicate: null }]);
+    } catch (e) { UI.toast(e.message, 'error'); }
   },
 
   showLsPreviews(previews) {
