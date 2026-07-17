@@ -36,3 +36,9 @@ test('Interne App und Kundenportal sind getrennte PWAs mit originalem HE-Icon', 
   assert.match(internalWorker, /CACHE_PREFIX = 'helbling-rapporte-'/);
   assert.match(portalWorker, /CACHE_PREFIX = 'helbling-kundenportal-'/);
 });
+
+test('Caddy verhindert Clickjacking und setzt eine minimale CSP', () => {
+  const caddy = read('deploy/infomaniak/Caddyfile');
+  assert.match(caddy, /X-Frame-Options "DENY"/);
+  assert.match(caddy, /Content-Security-Policy "frame-ancestors 'none'; base-uri 'self'; object-src 'none'"/);
+});

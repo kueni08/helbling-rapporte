@@ -8,6 +8,8 @@ const { createRateLimit } = require('../middleware/rate-limit');
 
 const MAX_FAILED_LOGINS = 5;
 const LOCK_MINUTES = 15;
+const LOGIN_WINDOW_MS = LOCK_MINUTES * 60 * 1000;
+const failedLoginAttempts = new Map();
 const loginRateLimit = createRateLimit({ windowMs: 15 * 60 * 1000, max: 30, message: 'Zu viele Anmeldeversuche. Bitte später erneut versuchen.' });
 const dummyPasswordHash = bcrypt.hashSync('kein-gueltiges-passwort', 10);
 
@@ -25,10 +27,25 @@ router.post('/login', loginRateLimit, (req, res, next) => {
   const password = String(req.body?.password || '');
   if (!username || !password) return res.status(400).json({ error: 'Benutzername und Passwort erforderlich' });
 
+  const attemptKey = `${req.ip}:${username.toLowerCase()}`;
+  const now = Date.now();
+  const recent = (failedLoginAttempts.get(attemptKey) || []).filter(timestamp => now - timestamp < LOGIN_WINDOW_MS);
+  if (recent.length >= MAX_FAILED_LOGINS) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((LOGIN_WINDOW_MS - (now - recent[0])) / 1000))));
+    return res.status(429).json({ error: 'Zu viele Anmeldeversuche. Bitte später erneut versuchen.' });
+  }
+
   const db = getDb();
   const user = db.prepare('SELECT * FROM users WHERE username=? COLLATE NOCASE AND active=1').get(username);
   const passwordMatches = bcrypt.compareSync(password, user?.password_hash || dummyPasswordHash);
   if (!user || isLocked(user) || !passwordMatches) {
+    recent.push(now);
+    failedLoginAttempts.set(attemptKey, recent);
+    if (failedLoginAttempts.size > 10_000) {
+      for (const [key, timestamps] of failedLoginAttempts) {
+        if (!timestamps.some(timestamp => now - timestamp < LOGIN_WINDOW_MS)) failedLoginAttempts.delete(key);
+      }
+    }
     if (user && !isLocked(user)) {
       const failures = Number(user.failed_login_count || 0) + 1;
       const lockedUntil = failures >= MAX_FAILED_LOGINS ? new Date(Date.now() + LOCK_MINUTES * 60 * 1000).toISOString() : null;
@@ -42,6 +59,7 @@ router.post('/login', loginRateLimit, (req, res, next) => {
     req.session.userId = user.id;
     req.session.userRole = user.role;
     req.session.fullName = user.full_name;
+    failedLoginAttempts.delete(attemptKey);
     db.prepare("UPDATE users SET failed_login_count=0,locked_until=NULL,last_login_at=datetime('now') WHERE id=?").run(user.id);
     req.session.save(saveError => {
       if (saveError) return next(saveError);

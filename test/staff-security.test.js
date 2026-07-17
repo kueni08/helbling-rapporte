@@ -52,12 +52,15 @@ test('Mitarbeiter-Login, Sessions und Auftragsdateien sind produktionsnah abgesi
   const db = new Database(dbPath);
   const monteurPassword = 'MonteurTest7Pass!';
   const planerPassword = 'PlanerTest8Pass!';
+  const cleanAdminPassword = 'AdminTest9Pass!';
   const monteurA = db.prepare("INSERT INTO users (username,password_hash,full_name,role) VALUES (?,?,?,'monteur')")
     .run('monteur.a', bcrypt.hashSync(monteurPassword, 4), 'Monteur A').lastInsertRowid;
   const monteurB = db.prepare("INSERT INTO users (username,password_hash,full_name,role) VALUES (?,?,?,'monteur')")
     .run('monteur.b', bcrypt.hashSync(monteurPassword, 4), 'Monteur B').lastInsertRowid;
   db.prepare("INSERT INTO users (username,password_hash,full_name,role) VALUES (?,?,?,'planer')")
     .run('planer.test', bcrypt.hashSync(planerPassword, 4), 'Planer Test');
+  db.prepare("INSERT INTO users (username,password_hash,full_name,role) VALUES (?,?,?,'admin')")
+    .run('admin.clean', bcrypt.hashSync(cleanAdminPassword, 4), 'Admin Clean');
   const orderA = db.prepare("INSERT INTO orders (order_number,status,assigned_to,work_types,items_table) VALUES (?,'geplant',?,'[]','[]')")
     .run('SEC-A', monteurA).lastInsertRowid;
   const orderB = db.prepare("INSERT INTO orders (order_number,status,assigned_to,work_types,items_table) VALUES (?,'geplant',?,'[]','[]')")
@@ -91,16 +94,23 @@ test('Mitarbeiter-Login, Sessions und Auftragsdateien sind produktionsnah abgesi
   });
 
   for (let attempt = 0; attempt < 5; attempt += 1) {
+    assert.equal((await login('nicht-vorhanden', 'falsch')).response.status, 401);
+  }
+  const unknownLimited = await login('nicht-vorhanden', 'falsch');
+  assert.equal(unknownLimited.response.status, 429, 'Auch unbekannte Benutzernamen müssen nach fünf Fehlversuchen limitiert sein');
+  assert.ok(Number(unknownLimited.response.headers.get('retry-after')) > 0);
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
     assert.equal((await login('admin', 'falsch')).response.status, 401);
   }
-  assert.equal((await login('admin', 'admin123')).response.status, 401, 'Konto muss nach fünf Fehlversuchen gesperrt sein');
+  assert.equal((await login('admin', 'admin123')).response.status, 429, 'Login muss nach fünf Fehlversuchen sichtbar limitiert sein');
 
   const liveDb = new Database(dbPath);
   assert.ok(liveDb.prepare("SELECT locked_until FROM users WHERE username='admin'").get().locked_until);
   liveDb.prepare("UPDATE users SET failed_login_count=0,locked_until=NULL WHERE username='admin'").run();
   liveDb.close();
 
-  const adminLogin = await login('admin', 'admin123', 'helbling.staff.sid=vorhersehbar');
+  const adminLogin = await login('admin.clean', cleanAdminPassword, 'helbling.staff.sid=vorhersehbar');
   assert.equal(adminLogin.response.status, 200);
   const setCookie = adminLogin.response.headers.get('set-cookie') || '';
   assert.match(setCookie, /^helbling\.staff\.sid=/);
