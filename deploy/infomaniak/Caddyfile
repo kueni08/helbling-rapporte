@@ -1,8 +1,4 @@
-{
-	email {$ACME_EMAIL}
-}
-
-{$APP_DOMAIN:rapporte.helbling.net} {
+{$APP_DOMAIN:rapporte.helbling.net}, {$TEST_APP_DOMAIN:test-rapporte.helbling.net} {
 	encode zstd gzip
 	request_body {
 		max_size 50MB
