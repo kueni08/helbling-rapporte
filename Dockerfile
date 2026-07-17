@@ -17,7 +17,8 @@ WORKDIR /app
 
 # Install dependencies (separate layer for caching)
 COPY package*.json ./
-RUN npm install
+COPY vendor ./vendor
+RUN npm ci --omit=dev
 
 # Copy application source
 COPY . .

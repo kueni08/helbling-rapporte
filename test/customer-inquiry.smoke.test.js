@@ -87,12 +87,30 @@ test('Kundenanfrage: Absenden, Foto, Token-Bearbeitung und Admin-Liste', async t
   assert.equal(created.ok, true);
   assert.match(created.token, /^[a-f0-9]{32}$/);
 
+  const invalidFileForm = new FormData();
+  for (const [key, value] of [['vorname','Datei'],['nachname','Test'],['email','datei@example.test'],['telefon','079 111 22 33'],['strasse','Testweg 1'],['plz','8000'],['ort','Zürich']]) invalidFileForm.set(key, value);
+  invalidFileForm.append('attachments', new Blob(['nicht erlaubt']), 'schadcode.exe');
+  assert.equal((await fetch(`${baseUrl}/api/anfrage`, { method: 'POST', body: invalidFileForm })).status, 415);
+
+  for (let index = 0; index < 3; index += 1) {
+    const limitedForm = new FormData();
+    for (const [key, value] of [['vorname','Rate'],['nachname',`Test${index}`],['email',`rate${index}@example.test`],['telefon','079 111 22 33'],['strasse','Testweg 1'],['plz','8000'],['ort','Zürich']]) limitedForm.set(key, value);
+    assert.equal((await fetch(`${baseUrl}/api/anfrage`, { method: 'POST', body: limitedForm })).status, 201);
+  }
+  const blockedForm = new FormData();
+  for (const [key, value] of [['vorname','Rate'],['nachname','Blockiert'],['email','blockiert@example.test'],['telefon','079 111 22 33'],['strasse','Testweg 1'],['plz','8000'],['ort','Zürich']]) blockedForm.set(key, value);
+  assert.equal((await fetch(`${baseUrl}/api/anfrage`, { method: 'POST', body: blockedForm })).status, 429);
+
   const tokenResponse = await fetch(`${baseUrl}/api/anfrage/token/${created.token}`);
   assert.equal(tokenResponse.status, 200);
   const inquiry = await tokenResponse.json();
   assert.equal(inquiry.firma, 'Privera AG');
   assert.equal(inquiry.attachments.length, 1);
   assert.equal(inquiry.attachments[0].original_name, 'montageposition.png');
+
+  const oversized = new FormData();
+  oversized.append('attachments', new Blob([Buffer.alloc(10 * 1024 * 1024 + 1)]), 'zu-gross.pdf');
+  assert.equal((await fetch(`${baseUrl}/api/anfrage/token/${created.token}`, { method: 'PUT', body: oversized })).status, 413);
 
   const update = new FormData();
   update.set('vorname', 'Janis');

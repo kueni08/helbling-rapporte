@@ -16,7 +16,7 @@ Der Heimserver bleibt bis zur ausdrücklich freigegebenen Umschaltung unverände
 
 ## Bereitstellung
 
-1. Ubuntu LTS aktualisieren und Node.js LTS, Caddy, Chromium, SQLite und rsync installieren.
+1. Ubuntu LTS aktualisieren und Node.js 22 LTS, Caddy, Chromium, SQLite und rsync installieren.
 2. Dienstkonto `helbling-rapporte` ohne interaktive Anmeldung anlegen.
 3. Anwendung aus dem freigegebenen Git-Commit nach `/opt/helbling-rapporte/releases/<commit>` kopieren und `npm ci --omit=dev` ausführen.
 4. Symlink `/opt/helbling-rapporte/current` atomar auf den geprüften Release setzen.

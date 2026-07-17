@@ -23,11 +23,20 @@ if (!customer) {
   customer = db.prepare('SELECT * FROM customers WHERE id=?').get(id);
 }
 
-db.prepare('DELETE FROM customer_portal_users WHERE email=?').run(email);
-const portalUserId = db.prepare(`INSERT INTO customer_portal_users
-  (customer_id,username,password_hash,full_name,email,phone,active,must_change_password)
-  VALUES (?,?,?,?,?,?,1,1)`).run(customer.id, email, bcrypt.hashSync(password, 12), 'Petra Privera',
-  email, '044 555 11 22').lastInsertRowid;
+const existingPortalUser = db.prepare('SELECT id FROM customer_portal_users WHERE email=?').get(email);
+let portalUserId;
+if (existingPortalUser) {
+  portalUserId = existingPortalUser.id;
+  db.prepare(`UPDATE customer_portal_users SET
+    customer_id=?,username=?,password_hash=?,full_name=?,phone=?,active=1,must_change_password=1,
+    failed_login_count=0,locked_until=NULL,updated_at=datetime('now') WHERE id=?`)
+    .run(customer.id, email, bcrypt.hashSync(password, 12), 'Petra Privera', '044 555 11 22', portalUserId);
+} else {
+  portalUserId = db.prepare(`INSERT INTO customer_portal_users
+    (customer_id,username,password_hash,full_name,email,phone,active,must_change_password)
+    VALUES (?,?,?,?,?,?,1,1)`).run(customer.id, email, bcrypt.hashSync(password, 12), 'Petra Privera',
+    email, '044 555 11 22').lastInsertRowid;
+}
 
 db.prepare("DELETE FROM orders WHERE order_number IN ('TEST-KP-0001','TEST-KP-0002')").run();
 const insert = db.prepare(`INSERT INTO orders
