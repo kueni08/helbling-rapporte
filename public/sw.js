@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'helbling-rapporte-';
-const CACHE = `${CACHE_PREFIX}v14`;
+const CACHE = `${CACHE_PREFIX}v15`;
 const STATIC = [
   '/', '/manifest.json', '/css/app.css', '/js/api.js', '/js/ui.js', '/js/app.js', '/js/pwa.js',
   '/js/order-fields.js', '/js/views/admin.js', '/js/views/planer.js', '/js/views/monteur.js',
