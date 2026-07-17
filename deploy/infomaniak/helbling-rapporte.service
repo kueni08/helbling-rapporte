@@ -1,0 +1,26 @@
+[Unit]
+Description=Helbling Rapporte
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=helbling-rapporte
+Group=helbling-rapporte
+WorkingDirectory=/opt/helbling-rapporte/current
+EnvironmentFile=/etc/helbling-rapporte/app.env
+ExecStart=/usr/bin/node server.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+KillSignal=SIGTERM
+UMask=0027
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/srv/helbling-rapporte/db /srv/helbling-rapporte/uploads
+
+[Install]
+WantedBy=multi-user.target

@@ -5,11 +5,39 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
+const { createRateLimit } = require('../middleware/rate-limit');
 
 // ── File Upload Setup ─────────────────────────────────────────────────────
 const uploadsDir = process.env.UPLOADS_DIR || path.join(__dirname, '..', 'uploads');
 const anfrageDir = path.join(uploadsDir, 'anfragen');
 if (!fs.existsSync(anfrageDir)) fs.mkdirSync(anfrageDir, { recursive: true });
+const submitRateLimit = createRateLimit({ windowMs: 60 * 60 * 1000, max: 5, message: 'Zu viele Anfragen. Bitte versuchen Sie es später erneut.' });
+const tokenWriteRateLimit = createRateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 20,
+  key: req => `${req.ip}:${req.params.token || ''}`,
+  message: 'Zu viele Änderungen. Bitte versuchen Sie es später erneut.'
+});
+
+function ensureUploadCapacity(req, res, next) {
+  try {
+    const stats = fs.statfsSync(anfrageDir);
+    const freeBytes = Number(stats.bavail) * Number(stats.bsize);
+    const minimum = Number(process.env.MIN_FREE_UPLOAD_BYTES || 512 * 1024 * 1024);
+    if (Number.isFinite(freeBytes) && freeBytes < minimum) {
+      return res.status(507).json({ error: 'Upload vorübergehend nicht möglich' });
+    }
+  } catch (error) {
+    console.warn('[Anfrage] Freier Speicher konnte nicht geprüft werden:', error.message);
+  }
+  next();
+}
+
+function cleanupUploadedFiles(files = []) {
+  for (const file of files) {
+    try { if (file?.path && fs.existsSync(file.path)) fs.unlinkSync(file.path); } catch {}
+  }
+}
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, anfrageDir),
@@ -20,11 +48,14 @@ const storage = multer.diskStorage({
 });
 const upload = multer({
   storage,
-  limits: { fileSize: 20 * 1024 * 1024 },
+  limits: { fileSize: 10 * 1024 * 1024, files: 5, fields: 30 },
   fileFilter: (req, file, cb) => {
     const allowed = ['.pdf','.jpg','.jpeg','.png','.gif','.webp','.xlsx','.xls','.doc','.docx'];
     const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, allowed.includes(ext));
+    if (allowed.includes(ext)) return cb(null, true);
+    const error = new Error('Dateityp nicht erlaubt');
+    error.status = 415;
+    cb(error);
   }
 });
 
@@ -37,12 +68,13 @@ function formatInquiry(row) {
 }
 
 // ── POST /api/anfrage  – öffentliche Einreichung ──────────────────────────
-router.post('/', upload.array('attachments', 10), (req, res) => {
+router.post('/', submitRateLimit, ensureUploadCapacity, upload.array('attachments', 5), (req, res) => {
   const b = req.body;
 
   const required = ['vorname', 'nachname', 'email', 'telefon', 'strasse', 'plz', 'ort'];
   for (const f of required) {
     if (!b[f] || !String(b[f]).trim()) {
+      cleanupUploadedFiles(req.files);
       return res.status(400).json({ error: `Pflichtfeld fehlt: ${f}` });
     }
   }
@@ -119,11 +151,11 @@ router.get('/token/:token', (req, res) => {
 });
 
 // ── PUT /api/anfrage/token/:token  – Kunde bearbeitet eigenes Formular ────
-router.put('/token/:token', upload.array('attachments', 10), (req, res) => {
+router.put('/token/:token', tokenWriteRateLimit, ensureUploadCapacity, upload.array('attachments', 5), (req, res) => {
   const db = getDb();
   const row = db.prepare('SELECT * FROM customer_inquiries WHERE token = ?').get(req.params.token);
-  if (!row) return res.status(404).json({ error: 'Formular nicht gefunden' });
-  if (row.status === 'erledigt') return res.status(400).json({ error: 'Formular bereits abgeschlossen' });
+  if (!row) { cleanupUploadedFiles(req.files); return res.status(404).json({ error: 'Formular nicht gefunden' }); }
+  if (row.status === 'erledigt') { cleanupUploadedFiles(req.files); return res.status(400).json({ error: 'Formular bereits abgeschlossen' }); }
 
   const b = req.body;
 
@@ -383,6 +415,16 @@ router.delete('/:id', requireRole('admin', 'planer'), (req, res) => {
   });
   db.prepare('DELETE FROM customer_inquiries WHERE id = ?').run(req.params.id);
   res.json({ ok: true });
+});
+
+router.use((error, req, res, next) => {
+  cleanupUploadedFiles(req.files);
+  if (error instanceof multer.MulterError) {
+    const status = error.code === 'LIMIT_FILE_SIZE' || error.code === 'LIMIT_FILE_COUNT' ? 413 : 400;
+    return res.status(status).json({ error: 'Upload überschreitet die erlaubte Grösse oder Anzahl' });
+  }
+  if (error?.status === 415) return res.status(415).json({ error: error.message });
+  next(error);
 });
 
 module.exports = router;

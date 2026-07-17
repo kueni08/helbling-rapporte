@@ -4,19 +4,21 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="theme-color" content="#0f1117" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="HE Rapporte">
+  <meta name="theme-color" content="#1C1B78">
   <title>Helbling Rapporte</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/app.css">
+  <link rel="stylesheet" href="/css/app.css?v=15">
   <link rel="manifest" href="/manifest.json">
+  <link rel="icon" type="image/png" href="/icons/he-192.png">
+  <link rel="apple-touch-icon" href="/icons/he-180.png">
 </head>
 <body>
 
 <!-- ── Login Page ──────────────────────────────────────────────────────── -->
 <div id="login-page">
   <div class="login-card">
+    <img class="login-logo" src="/icons/he-192.png" alt="Helbling &amp; Co. AG">
     <h1>Helbling Rapporte</h1>
     <p>Bitte melden Sie sich an</p>
     <form id="login-form">
@@ -31,6 +33,7 @@
       <button type="submit" class="btn btn-primary w-full">Anmelden</button>
       <p id="login-error" class="text-danger text-sm mt-2 hidden"></p>
     </form>
+    <button id="pwa-install-btn" data-pwa-install class="btn btn-ghost w-full mt-2 pwa-install" type="button" hidden>App installieren</button>
   </div>
 </div>
 
@@ -40,9 +43,10 @@
   <!-- Mobile header (phone only) -->
   <header id="mobile-header">
     <div class="mh-brand">
-      <span class="mh-logo-badge">HR</span>
+      <img class="mh-logo-badge" src="/icons/he-192.png" alt="HE">
       <span class="mh-page-title" id="mobile-title">Rapporte</span>
     </div>
+    <button class="mh-install-btn" data-pwa-install type="button" hidden>Installieren</button>
     <button class="mh-avatar" id="mobile-user-btn" title="Passwort ändern">
       <span id="mobile-user-initial">?</span>
     </button>
@@ -51,6 +55,7 @@
   <!-- Sidebar -->
   <aside id="sidebar">
     <div class="logo">
+      <img class="sidebar-logo" src="/icons/he-192.png" alt="Helbling &amp; Co. AG">
       <h1>Helbling<br>Rapporte</h1>
       <p>Montageverwaltung</p>
     </div>
@@ -58,6 +63,7 @@
     <div class="user-info">
       <div class="name" id="nav-username"></div>
       <div class="role" id="nav-role"></div>
+      <button class="btn btn-ghost btn-sm w-full mt-2 pwa-install" data-pwa-install type="button" hidden>App installieren</button>
       <a id="nav-logout">Abmelden</a>
     </div>
   </aside>
@@ -73,17 +79,14 @@
 <div id="modal-container"></div>
 
 <!-- ── Scripts ─────────────────────────────────────────────────────────── -->
-<script src="/js/api.js"></script>
-<script src="/js/ui.js"></script>
-<script src="/js/views/admin.js"></script>
-<script src="/js/views/planer.js"></script>
-<script src="/js/views/monteur.js"></script>
-<script src="/js/views/tagesuebersicht.js"></script>
-<script src="/js/app.js"></script>
-<script>
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js').catch(() => {});
-  }
-</script>
+<script src="/js/api.js?v=15"></script>
+<script src="/js/ui.js?v=15"></script>
+<script src="/js/order-fields.js?v=15"></script>
+<script src="/js/views/admin.js?v=15"></script>
+<script src="/js/views/planer.js?v=15"></script>
+<script src="/js/views/monteur.js?v=15"></script>
+<script src="/js/views/tagesuebersicht.js?v=15"></script>
+<script src="/js/app.js?v=15"></script>
+<script src="/js/pwa.js?v=15"></script>
 </body>
 </html>

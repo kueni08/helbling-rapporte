@@ -5,7 +5,7 @@ const fs = require('fs');
 const archiver = require('archiver');
 const { v4: uuidv4 } = require('uuid');
 const { getDb } = require('../lib/database');
-const { requireLogin, requireRole } = require('../middleware/auth');
+const { requireRole, requireOrderAccess } = require('../middleware/auth');
 const { buildHtmlReport } = require('../lib/mailer');
 
 const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(__dirname, '..', 'uploads');
@@ -41,7 +41,7 @@ const upload = multer({
 });
 
 // POST /api/files/:orderId/attachments
-router.post('/:orderId/attachments', requireLogin, upload.array('files', 20), (req, res) => {
+router.post('/:orderId/attachments', requireOrderAccess(), upload.array('files', 20), (req, res) => {
   const db = getDb();
   const order = db.prepare('SELECT id FROM orders WHERE id = ?').get(req.params.orderId);
   if (!order) return res.status(404).json({ error: 'Auftrag nicht gefunden' });
@@ -62,7 +62,7 @@ router.post('/:orderId/attachments', requireLogin, upload.array('files', 20), (r
 });
 
 // POST /api/files/:orderId/photos
-router.post('/:orderId/photos', requireLogin, upload.array('photos', 20), (req, res) => {
+router.post('/:orderId/photos', requireOrderAccess(), upload.array('photos', 20), (req, res) => {
   const db = getDb();
   const order = db.prepare('SELECT id FROM orders WHERE id = ?').get(req.params.orderId);
   if (!order) return res.status(404).json({ error: 'Auftrag nicht gefunden' });
@@ -83,7 +83,7 @@ router.post('/:orderId/photos', requireLogin, upload.array('photos', 20), (req, 
 
 // GET /api/files/:orderId/zip  – download all files + rapport as ZIP
 // MUST be before /:orderId/:filename to avoid route conflict
-router.get('/:orderId/zip', requireLogin, (req, res) => {
+router.get('/:orderId/zip', requireOrderAccess(), (req, res) => {
   const db = getDb();
   const orderId = parseInt(req.params.orderId);
   const order = db.prepare(`
@@ -94,7 +94,7 @@ router.get('/:orderId/zip', requireLogin, (req, res) => {
   if (!order) return res.status(404).json({ error: 'Auftrag nicht gefunden' });
 
   // Role check for monteur
-  if (req.session.role === 'monteur' && order.assigned_to !== req.session.userId) {
+  if (req.session.userRole === 'monteur' && order.assigned_to !== req.session.userId) {
     return res.status(403).json({ error: 'Keine Berechtigung' });
   }
 
@@ -154,7 +154,7 @@ router.get('/:orderId/zip', requireLogin, (req, res) => {
 });
 
 // GET /api/files/:orderId/:filename  – serve file
-router.get('/:orderId/:filename', requireLogin, (req, res) => {
+router.get('/:orderId/:filename', requireOrderAccess(), (req, res) => {
   const db = getDb();
   const filename = path.basename(req.params.filename); // path traversal protection
 
@@ -174,7 +174,7 @@ router.get('/:orderId/:filename', requireLogin, (req, res) => {
 });
 
 // DELETE /api/files/:orderId/attachments/:id
-router.delete('/:orderId/attachments/:id', requireLogin, (req, res) => {
+router.delete('/:orderId/attachments/:id', requireOrderAccess(), (req, res) => {
   const db = getDb();
   const att = db.prepare('SELECT * FROM order_attachments WHERE id = ? AND order_id = ?')
     .get(req.params.id, req.params.orderId);
@@ -191,7 +191,7 @@ router.delete('/:orderId/attachments/:id', requireLogin, (req, res) => {
 });
 
 // DELETE /api/files/:orderId/photos/:id
-router.delete('/:orderId/photos/:id', requireLogin, (req, res) => {
+router.delete('/:orderId/photos/:id', requireOrderAccess(), (req, res) => {
   const db = getDb();
   const photo = db.prepare('SELECT * FROM order_photos WHERE id = ? AND order_id = ?')
     .get(req.params.id, req.params.orderId);

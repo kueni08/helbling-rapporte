@@ -4,8 +4,15 @@ credentials/
 db/rapporte.db
 db/rapporte.db-shm
 db/rapporte.db-wal
+db/rapporte-before-*.db
+db/backups/
 db/sessions.db
+db/customer-portal-sessions.db
 uploads/
+rapporte.db
+*_b64.txt
+wal_b64.txt
+caddy.exe
 *.log
 .DS_Store
 Thumbs.db

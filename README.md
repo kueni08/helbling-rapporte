@@ -47,7 +47,7 @@ npm start
 
 Die Anwendung laeuft auf **http://localhost:3000**
 
-**Standard-Login:** `admin` / `admin123` *(bitte sofort aendern!)*
+**Lokale Entwicklung:** Eine leere Entwicklungs-/Testdatenbank erhält `admin` / `admin123`. In `NODE_ENV=production` wird kein Standardkonto erzeugt; der Start wird ohne vorhandenes Administratorkonto abgebrochen.
 
 ---
 

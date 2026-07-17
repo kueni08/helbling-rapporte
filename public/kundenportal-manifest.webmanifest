@@ -1,0 +1,17 @@
+{
+  "name": "Helbling Kundenportal",
+  "short_name": "Helbling Portal",
+  "description": "Montageaufträge sicher erfassen und ergänzen",
+  "id": "/kundenportal",
+  "start_url": "/kundenportal",
+  "scope": "/kundenportal",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1C1B78",
+  "lang": "de-CH",
+  "icons": [
+    { "src": "/icons/he-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/he-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/he-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

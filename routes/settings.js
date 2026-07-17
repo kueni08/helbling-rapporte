@@ -9,7 +9,6 @@ const multer = require('multer');
 const uploadMem = multer({ storage: multer.memoryStorage() });
 const Anthropic = require('@anthropic-ai/sdk');
 const { DEFAULT_EXTRACTION_PROMPT } = require('../lib/lieferschein-watcher');
-const drive = require('../lib/drive');
 const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(__dirname, '..', 'uploads');
 const DB_PATH = path.join(__dirname, '..', 'db', 'rapporte.db');
 
@@ -147,18 +146,29 @@ router.get('/smtp', requireRole('admin'), (req, res) => {
     user: get('smtp_user') || process.env.SMTP_USER || '',
     pass: (get('smtp_pass') || process.env.SMTP_PASS) ? '***' : '',
     from: get('smtp_from') || '',
+    completion_to: get('completion_email_to') || process.env.COMPLETION_EMAIL_TO || '',
+    completion_cc: get('completion_email_cc') || process.env.COMPLETION_EMAIL_CC || '',
+    reply_to: get('completion_email_reply_to') || process.env.COMPLETION_EMAIL_REPLY_TO || '',
   });
 });
 
 router.put('/smtp', requireRole('admin'), (req, res) => {
   const db = getDb();
   const upsert = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
-  const { host, port, user, pass, from } = req.body;
+  const { host, port, user, pass, from, completion_to, completion_cc, reply_to } = req.body;
+  const addresses = [completion_to, completion_cc, reply_to].filter(Boolean)
+    .flatMap(v => String(v).split(/[;,]/)).map(v => v.trim()).filter(Boolean);
+  if (addresses.some(v => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v))) {
+    return res.status(400).json({ error: 'Ungültige E-Mail-Adresse' });
+  }
   if (host !== undefined) upsert.run('smtp_host', host);
   if (port !== undefined) upsert.run('smtp_port', String(port));
   if (user !== undefined) upsert.run('smtp_user', user);
   if (pass && pass !== '***') upsert.run('smtp_pass', pass);
   if (from !== undefined) upsert.run('smtp_from', from);
+  if (completion_to !== undefined) upsert.run('completion_email_to', completion_to);
+  if (completion_cc !== undefined) upsert.run('completion_email_cc', completion_cc);
+  if (reply_to !== undefined) upsert.run('completion_email_reply_to', reply_to);
   res.json({ ok: true });
 });
 
@@ -272,77 +282,6 @@ router.put('/customers/:id', requireRole('admin', 'planer'), (req, res) => {
     if (v !== undefined) db.prepare(`UPDATE customers SET ${k} = ? WHERE id = ?`).run(v, req.params.id);
   });
   res.json(db.prepare('SELECT * FROM customers WHERE id = ?').get(req.params.id));
-});
-
-// GET /api/settings/drive-status  – Drive connection test (admin only)
-router.get('/drive-status', requireRole('admin'), async (req, res) => {
-  const enabled = drive.isDriveEnabled();
-  const rootFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
-  if (!enabled) {
-    return res.json({ enabled: false, message: 'Google Drive nicht konfiguriert (GOOGLE_SERVICE_ACCOUNT_JSON/FILE fehlt)' });
-  }
-  if (!rootFolderId) {
-    return res.json({ enabled: true, folderConfigured: false, message: 'GOOGLE_DRIVE_FOLDER_ID nicht gesetzt' });
-  }
-  try {
-    // Verify permissions by listing files in the root folder (result intentionally discarded)
-    await drive.listPdfFiles(rootFolderId);
-    // Also check recent failed uploads (no google_drive_file_id)
-    const db = getDb();
-    const failedAtts  = db.prepare('SELECT COUNT(*) as n FROM order_attachments WHERE google_drive_file_id IS NULL').get();
-    const failedPhotos = db.prepare('SELECT COUNT(*) as n FROM order_photos WHERE google_drive_file_id IS NULL').get();
-    res.json({
-      enabled: true,
-      folderConfigured: true,
-      rootFolderId,
-      message: 'Verbindung OK',
-      pending_uploads: {
-        attachments: failedAtts.n,
-        photos: failedPhotos.n,
-      },
-    });
-  } catch (e) {
-    res.json({ enabled: true, folderConfigured: true, rootFolderId, message: 'Fehler: ' + e.message });
-  }
-});
-
-// POST /api/settings/drive-retry  – retry failed Drive uploads (admin only)
-router.post('/drive-retry', requireRole('admin'), async (req, res) => {
-  if (!drive.isDriveEnabled()) {
-    return res.status(400).json({ error: 'Drive nicht konfiguriert' });
-  }
-
-  const db = getDb();
-  const atts   = db.prepare('SELECT * FROM order_attachments WHERE google_drive_file_id IS NULL').all();
-  const photos = db.prepare('SELECT * FROM order_photos       WHERE google_drive_file_id IS NULL').all();
-
-  let ok = 0, fail = 0;
-
-  // Tag each record with its table to avoid ID collisions between the two tables
-  const all = [
-    ...atts.map(r => ({ ...r, _table: 'order_attachments' })),
-    ...photos.map(r => ({ ...r, _table: 'order_photos' })),
-  ];
-
-  for (const rec of all) {
-    const table = rec._table;
-    const candidates = [];
-    if (rec.dir_name) candidates.push(path.join(UPLOADS_DIR, rec.dir_name, rec.filename));
-    candidates.push(path.join(UPLOADS_DIR, String(rec.order_id), rec.filename));
-    const fp = candidates.find(p => fs.existsSync(p));
-    if (!fp) { fail++; continue; }
-
-    try {
-      const driveFile = await drive.uploadFile(fp, rec.original_name, null, rec.dir_name);
-      if (driveFile) {
-        db.prepare(`UPDATE ${table} SET google_drive_file_id=?, google_drive_web_url=? WHERE id=?`)
-          .run(driveFile.id, driveFile.webViewLink, rec.id);
-        ok++;
-      } else { fail++; }
-    } catch { fail++; }
-  }
-
-  res.json({ ok, fail, total: atts.length + photos.length });
 });
 
 // ── Datenbank-Tabellen-Viewer (admin only) ────────────────────────────────────

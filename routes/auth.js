@@ -1,58 +1,99 @@
+'use strict';
+
 const router = require('express').Router();
 const bcrypt = require('bcryptjs');
 const { getDb } = require('../lib/database');
 const { requireLogin } = require('../middleware/auth');
+const { createRateLimit } = require('../middleware/rate-limit');
 
-// POST /api/auth/login
-router.post('/login', (req, res) => {
-  const { username, password } = req.body;
+const MAX_FAILED_LOGINS = 5;
+const LOCK_MINUTES = 15;
+const LOGIN_WINDOW_MS = LOCK_MINUTES * 60 * 1000;
+const failedLoginAttempts = new Map();
+const loginRateLimit = createRateLimit({ windowMs: 15 * 60 * 1000, max: 30, message: 'Zu viele Anmeldeversuche. Bitte später erneut versuchen.' });
+const dummyPasswordHash = bcrypt.hashSync('kein-gueltiges-passwort', 10);
+
+function isLocked(user) {
+  if (!user?.locked_until) return false;
+  return new Date(user.locked_until).getTime() > Date.now();
+}
+
+function validPassword(password) {
+  return typeof password === 'string' && password.length >= 12 && /[a-z]/.test(password) && /[A-Z]/.test(password) && /\d/.test(password);
+}
+
+router.post('/login', loginRateLimit, (req, res, next) => {
+  const username = String(req.body?.username || '').trim();
+  const password = String(req.body?.password || '');
   if (!username || !password) return res.status(400).json({ error: 'Benutzername und Passwort erforderlich' });
 
+  const attemptKey = `${req.ip}:${username.toLowerCase()}`;
+  const now = Date.now();
+  const recent = (failedLoginAttempts.get(attemptKey) || []).filter(timestamp => now - timestamp < LOGIN_WINDOW_MS);
+  if (recent.length >= MAX_FAILED_LOGINS) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((LOGIN_WINDOW_MS - (now - recent[0])) / 1000))));
+    return res.status(429).json({ error: 'Zu viele Anmeldeversuche. Bitte später erneut versuchen.' });
+  }
+
   const db = getDb();
-  const user = db.prepare('SELECT * FROM users WHERE username = ? AND active = 1').get(username);
-  if (!user || !bcrypt.compareSync(password, user.password_hash)) {
+  const user = db.prepare('SELECT * FROM users WHERE username=? COLLATE NOCASE AND active=1').get(username);
+  const passwordMatches = bcrypt.compareSync(password, user?.password_hash || dummyPasswordHash);
+  if (!user || isLocked(user) || !passwordMatches) {
+    recent.push(now);
+    failedLoginAttempts.set(attemptKey, recent);
+    if (failedLoginAttempts.size > 10_000) {
+      for (const [key, timestamps] of failedLoginAttempts) {
+        if (!timestamps.some(timestamp => now - timestamp < LOGIN_WINDOW_MS)) failedLoginAttempts.delete(key);
+      }
+    }
+    if (user && !isLocked(user)) {
+      const failures = Number(user.failed_login_count || 0) + 1;
+      const lockedUntil = failures >= MAX_FAILED_LOGINS ? new Date(Date.now() + LOCK_MINUTES * 60 * 1000).toISOString() : null;
+      db.prepare('UPDATE users SET failed_login_count=?,locked_until=? WHERE id=?').run(failures, lockedUntil, user.id);
+    }
     return res.status(401).json({ error: 'Ungültige Anmeldedaten' });
   }
 
-  req.session.userId   = user.id;
-  req.session.userRole = user.role;
-  req.session.fullName = user.full_name;
-
-  res.json({
-    id:       user.id,
-    username: user.username,
-    fullName: user.full_name,
-    role:     user.role,
-    email:    user.email
+  req.session.regenerate(error => {
+    if (error) return next(error);
+    req.session.userId = user.id;
+    req.session.userRole = user.role;
+    req.session.fullName = user.full_name;
+    failedLoginAttempts.delete(attemptKey);
+    db.prepare("UPDATE users SET failed_login_count=0,locked_until=NULL,last_login_at=datetime('now') WHERE id=?").run(user.id);
+    req.session.save(saveError => {
+      if (saveError) return next(saveError);
+      res.json({ id: user.id, username: user.username, fullName: user.full_name, role: user.role, email: user.email });
+    });
   });
 });
 
-// POST /api/auth/logout
-router.post('/logout', (req, res) => {
-  req.session.destroy(() => res.json({ ok: true }));
+router.post('/logout', requireLogin, (req, res, next) => {
+  req.session.destroy(error => {
+    if (error) return next(error);
+    res.clearCookie('helbling.staff.sid');
+    res.json({ ok: true });
+  });
 });
 
-// GET /api/auth/me
 router.get('/me', requireLogin, (req, res) => {
-  const db = getDb();
-  const user = db.prepare('SELECT id, username, full_name, email, role FROM users WHERE id = ?').get(req.session.userId);
-  if (!user) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
+  const user = getDb().prepare('SELECT id,username,full_name,email,role FROM users WHERE id=? AND active=1').get(req.session.userId);
+  if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' });
   res.json({ id: user.id, username: user.username, fullName: user.full_name, email: user.email, role: user.role });
 });
 
-// POST /api/auth/change-password  (own password)
 router.post('/change-password', requireLogin, (req, res) => {
-  const { currentPassword, newPassword } = req.body;
-  if (!currentPassword || !newPassword || newPassword.length < 6) {
-    return res.status(400).json({ error: 'Ungültige Eingabe (min. 6 Zeichen für neues Passwort)' });
+  const { currentPassword, newPassword } = req.body || {};
+  if (!currentPassword || !validPassword(newPassword)) {
+    return res.status(400).json({ error: 'Neues Passwort: mindestens 12 Zeichen, Gross-/Kleinbuchstaben und eine Zahl.' });
   }
   const db = getDb();
-  const user = db.prepare('SELECT password_hash FROM users WHERE id = ?').get(req.session.userId);
-  if (!bcrypt.compareSync(currentPassword, user.password_hash)) {
+  const user = db.prepare('SELECT password_hash FROM users WHERE id=? AND active=1').get(req.session.userId);
+  if (!user || !bcrypt.compareSync(currentPassword, user.password_hash)) {
     return res.status(401).json({ error: 'Aktuelles Passwort falsch' });
   }
-  const hash = bcrypt.hashSync(newPassword, 10);
-  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, req.session.userId);
+  db.prepare("UPDATE users SET password_hash=?,password_changed_at=datetime('now'),failed_login_count=0,locked_until=NULL WHERE id=?")
+    .run(bcrypt.hashSync(newPassword, 12), req.session.userId);
   res.json({ ok: true });
 });
 

@@ -2,13 +2,13 @@ const router = require('express').Router();
 const path = require('path');
 const fs = require('fs');
 const { getDb } = require('../lib/database');
-const { requireLogin } = require('../middleware/auth');
+const { requireRole } = require('../middleware/auth');
 const { getSmtpConfig, getTransporter, buildHtmlReport, generatePdfSafe } = require('../lib/mailer');
 
 const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(__dirname, '..', 'uploads');
 
 // POST /api/email/send
-router.post('/send', requireLogin, async (req, res) => {
+router.post('/send', requireRole('admin', 'planer'), async (req, res) => {
   const { orderId, to, subject } = req.body;
   if (!orderId || !to) return res.status(400).json({ error: 'orderId und to erforderlich' });
 
@@ -85,7 +85,7 @@ router.post('/send', requireLogin, async (req, res) => {
 });
 
 // GET /api/email/rapport/:orderId – returns rapport HTML for print/preview
-router.get('/rapport/:orderId', requireLogin, (req, res) => {
+router.get('/rapport/:orderId', requireRole('admin', 'planer'), (req, res) => {
   const db = getDb();
   const orderId = parseInt(req.params.orderId);
   const order = db.prepare(`SELECT o.*, c.name AS cust_name FROM orders o LEFT JOIN customers c ON c.id = o.customer_id WHERE o.id = ?`).get(orderId);
@@ -109,7 +109,7 @@ router.get('/rapport/:orderId', requireLogin, (req, res) => {
 });
 
 // GET /api/email/config-status
-router.get('/config-status', requireLogin, (req, res) => {
+router.get('/config-status', requireRole('admin', 'planer'), (req, res) => {
   const cfg = getSmtpConfig();
   res.json({
     configured: !!(cfg.user && cfg.pass),

@@ -58,7 +58,7 @@ const App = {
 
   defaultView() {
     switch(App.state.role) {
-      case 'admin':   return 'admin-orders';
+      case 'admin':   return 'planer-orders';
       case 'planer':  return 'planer-orders';
       case 'monteur': return 'monteur-orders';
     }
@@ -77,14 +77,11 @@ const App = {
       navItems.push({ id: 'planer-orders',       icon: '📋', label: 'Aufträge' });
       navItems.push({ id: 'planer-anfragen',     icon: '📩', label: 'Kundenanfragen' });
       navItems.push({ id: 'tagesuebersicht',     icon: '📊', label: 'Tagesübersicht' });
-      if (role === 'planer') {
-        navItems.push({ id: 'planer-lieferschein', icon: '📥', label: 'LS-Import' });
-      }
+      navItems.push({ id: 'planer-lieferschein', icon: '📥', label: 'LS-Import' });
     }
 
     if (role === 'admin') {
       navItems.push(
-        { id: 'admin-orders',  icon: '📋', label: 'Alle Aufträge' },
         { id: 'admin-users',   icon: '👥', label: 'Benutzer' },
         { id: 'admin-settings',icon: '⚙️',  label: 'Einstellungen' },
       );
@@ -100,6 +97,7 @@ const App = {
   },
 
   navigate(viewId) {
+    if (!UI.guardDiscard()) return;
     // Update active nav link
     document.querySelectorAll('#nav-menu a').forEach(a => {
       a.classList.toggle('active', a.dataset.view === viewId);
@@ -111,7 +109,6 @@ const App = {
       'planer-orders':    'Aufträge',
       'planer-anfragen':  'Kundenanfragen',
       'planer-lieferschein': 'LS-Import',
-      'admin-orders':     'Alle Aufträge',
       'admin-users':      'Benutzer',
       'admin-settings':   'Einstellungen',
       'change-password':  'Passwort ändern',
@@ -125,7 +122,6 @@ const App = {
       case 'planer-orders':    PlanerViews.renderOrders(); break;
       case 'planer-anfragen':     PlanerViews.renderAnfragen(); break;
       case 'planer-lieferschein': PlanerViews.renderLieferschein(); break;
-      case 'admin-orders':     PlanerViews.renderOrders(); break;
       case 'admin-users':      AdminViews.renderUsers(); break;
       case 'admin-settings':   AdminViews.renderSettings(); break;
       case 'change-password':  App.renderChangePassword(); break;
@@ -168,3 +164,8 @@ const App = {
 
 // ── Start ────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => App.init());
+window.addEventListener('beforeunload', e => {
+  if (!UI._dirty) return;
+  e.preventDefault();
+  e.returnValue = '';
+});

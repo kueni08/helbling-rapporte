@@ -119,10 +119,10 @@ const TagesuebersichtView = {
                   : (o.travel_time != null ? o.travel_time+' h' : '–');
                 return `
                 <tr style="${i % 2 === 1 ? 'background:#fafafa' : ''}">
-                  <td style="padding:8px;text-align:center;font-weight:700;color:#1a3a6b;font-size:14px">${i+1}</td>
+                  <td style="padding:8px;text-align:center;font-weight:700;color:#1C1B78;font-size:14px">${i+1}</td>
                   <td style="padding:8px;white-space:nowrap">
                     <a href="#" onclick="MonteurViews.renderWorkForm(${o.id});App.navigate('monteur-orders');return false"
-                       style="font-weight:600;color:#1a3a6b;text-decoration:none">${esc(o.order_number||String(o.id))}</a>
+                       style="font-weight:600;color:#1C1B78;text-decoration:none">${esc(o.order_number||String(o.id))}</a>
                   </td>
                   <td style="padding:8px">
                     <div style="font-weight:500">${esc(o.customer_name||'–')}</div>
@@ -140,7 +140,7 @@ const TagesuebersichtView = {
                       o.status==='in_bearbeitung'? '#fff8e1' : '#e8f0fe'
                     };color:${
                       o.status==='abgeschlossen' ? '#2d7a2d' :
-                      o.status==='in_bearbeitung'? '#c67a00' : '#1a3a6b'
+                      o.status==='in_bearbeitung'? '#c67a00' : '#1C1B78'
                     }">${esc(o.status)}</span>
                   </td>
                 </tr>
