@@ -1,0 +1,10 @@
+[Unit]
+Description=Tägliche Sicherung der Helbling-Rapporte
+
+[Timer]
+OnCalendar=*-*-* 02:15:00 Europe/Zurich
+Persistent=true
+RandomizedDelaySec=10m
+
+[Install]
+WantedBy=timers.target

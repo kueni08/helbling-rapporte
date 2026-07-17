@@ -1,0 +1,19 @@
+[Unit]
+Description=Helbling Rapporte lokale Sicherung
+After=helbling-rapporte.service
+
+[Service]
+Type=oneshot
+User=helbling-rapporte
+Group=helbling-rapporte
+Environment=DB_PATH=/srv/helbling-rapporte/db/rapporte.db
+Environment=UPLOADS_DIR=/srv/helbling-rapporte/uploads
+Environment=BACKUP_ROOT=/srv/helbling-rapporte/backups
+ExecStart=/usr/local/sbin/helbling-rapporte-backup
+UMask=0027
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/srv/helbling-rapporte/backups
