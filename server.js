@@ -15,11 +15,28 @@ if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
   );
 }
 
-const { initDatabase } = require('./lib/database');
+const { initDatabase, getDb } = require('./lib/database');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const HOST = process.env.HOST || '0.0.0.0';
 app.set('trust proxy', 1);
+
+function assertProductionConfig() {
+  if (process.env.NODE_ENV !== 'production') return;
+  const unsafe = new Set([
+    'helbling-secret-change-me',
+    'change-customer-portal-session-secret',
+    'bitte-aendern-langen-zufallsstring-einfuegen'
+  ]);
+  const secrets = [process.env.SESSION_SECRET, process.env.CUSTOMER_PORTAL_SESSION_SECRET];
+  if (secrets.some(secret => !secret || secret.length < 32 || unsafe.has(secret))) {
+    throw new Error('Produktion erfordert zwei unterschiedliche Session-Secrets mit mindestens 32 Zeichen.');
+  }
+  if (secrets[0] === secrets[1]) {
+    throw new Error('SESSION_SECRET und CUSTOMER_PORTAL_SESSION_SECRET müssen unterschiedlich sein.');
+  }
+}
 
 // Ensure uploads directory exists
 const uploadsDir = process.env.UPLOADS_DIR || path.join(__dirname, 'uploads');
@@ -92,15 +109,26 @@ app.get(['/kundenportal', '/kundenportal/'], (req, res) => {
   res.sendFile(path.join(__dirname, 'views', 'kundenportal.html'));
 });
 
+app.get('/healthz', (req, res) => {
+  try {
+    getDb().prepare('SELECT 1').get();
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ ok: true });
+  } catch {
+    res.status(503).json({ ok: false });
+  }
+});
+
 // Serve the SPA for any non-API route
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // Initialize DB then start server
+assertProductionConfig();
 initDatabase();
-app.listen(PORT, () => {
-  console.log(`\n✅ Helbling Rapporte läuft auf http://localhost:${PORT}`);
+app.listen(PORT, HOST, () => {
+  console.log(`\n✅ Helbling Rapporte läuft auf http://${HOST}:${PORT}`);
   console.log(`   Standard-Login: admin / admin123`);
 
   // Lieferschein-Watcher starten (lokaler Ordner)

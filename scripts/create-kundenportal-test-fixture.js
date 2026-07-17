@@ -13,7 +13,8 @@ const { initDatabase, getDb } = require('../lib/database');
 initDatabase();
 const db = getDb();
 const email = process.env.PORTAL_TEST_EMAIL || 'privera.abnahme@example.test';
-const password = `He!${crypto.randomBytes(12).toString('base64url')}7a`;
+const password = process.env.PORTAL_TEST_PASSWORD || `He!${crypto.randomBytes(12).toString('base64url')}7a`;
+if (password.length < 12) throw new Error('Das Testpasswort muss mindestens 12 Zeichen lang sein.');
 
 let customer = db.prepare('SELECT * FROM customers WHERE name=?').get('Privera AG');
 if (!customer) {
