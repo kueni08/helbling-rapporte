@@ -62,8 +62,8 @@ EOF
 fi
 
 install -o root -g root -m 0644 deploy/infomaniak/helbling-rapporte.service /etc/systemd/system/helbling-rapporte.service
-install -o root -g root -m 0750 deploy/infomaniak/backup-local.sh /usr/local/sbin/helbling-rapporte-backup
-install -o root -g root -m 0750 deploy/infomaniak/verify-backup.sh /usr/local/sbin/helbling-rapporte-verify-backup
+install -o root -g helbling-rapporte -m 0750 deploy/infomaniak/backup-local.sh /usr/local/sbin/helbling-rapporte-backup
+install -o root -g helbling-rapporte -m 0750 deploy/infomaniak/verify-backup.sh /usr/local/sbin/helbling-rapporte-verify-backup
 install -o root -g root -m 0644 deploy/infomaniak/helbling-rapporte-backup.service /etc/systemd/system/helbling-rapporte-backup.service
 install -o root -g root -m 0644 deploy/infomaniak/helbling-rapporte-backup.timer /etc/systemd/system/helbling-rapporte-backup.timer
 
@@ -83,7 +83,16 @@ systemctl enable --now helbling-rapporte-backup.timer
 systemctl enable --now caddy
 systemctl restart caddy
 
-curl --fail --silent --show-error http://127.0.0.1:3000/healthz
+for attempt in $(seq 1 30); do
+  if curl --fail --silent --show-error http://127.0.0.1:3000/healthz; then
+    break
+  fi
+  if [[ "$attempt" -eq 30 ]]; then
+    journalctl -u helbling-rapporte.service -n 80 --no-pager
+    exit 1
+  fi
+  sleep 1
+done
 /usr/local/sbin/helbling-rapporte-backup
 LATEST_BACKUP="$(find /srv/helbling-rapporte/backups -mindepth 1 -maxdepth 1 -type d | sort | tail -n 1)"
 /usr/local/sbin/helbling-rapporte-verify-backup "$LATEST_BACKUP"

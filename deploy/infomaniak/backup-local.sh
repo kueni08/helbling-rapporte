@@ -22,7 +22,7 @@ else
   install -d -m 0750 "$TMP/uploads"
 fi
 
-find "$TMP" -type f -print0 | sort -z | xargs -0 sha256sum > "${TMP}/SHA256SUMS"
+(cd "$TMP" && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
 mv -- "$TMP" "$TARGET"
 find "$BACKUP_ROOT" -mindepth 1 -maxdepth 1 -type d -mtime "+${RETENTION_DAYS}" -exec rm -rf -- {} +
 printf 'Backup geprüft: %s\n' "$TARGET"
