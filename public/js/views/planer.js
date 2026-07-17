@@ -546,7 +546,7 @@ const PlanerViews = {
     const today = new Date().toLocaleDateString('de-CH');
     const rows = orders.map(o => `<tr>
       <td><code>${UI.esc(o.order_number)}</code></td>
-      <td style="color:#1a4fa0;font-weight:600">${UI.esc(o.project_number || '')}</td>
+      <td style="color:#1C1B78;font-weight:600">${UI.esc(o.project_number || '')}</td>
       <td>${o.planned_date ? new Date(o.planned_date + 'T00:00:00').toLocaleDateString('de-CH') : '–'}</td>
       <td>${UI.esc(o.customer_name || o.cust_name || '')}</td>
       <td>${UI.esc(o.installation_address || '')}</td>
@@ -1332,7 +1332,7 @@ const PlanerViews = {
           <span style="color:var(--text2);word-break:break-all"> ${tokenUrl}</span>
           <button onclick="navigator.clipboard.writeText('${tokenUrl}').then(()=>UI.toast('Link kopiert','success'))" style="margin-left:8px;background:none;border:1px solid var(--border);border-radius:4px;padding:2px 8px;font-size:11px;cursor:pointer;color:var(--accent)">Kopieren</button>
         </div>` : ''}
-        ${a.order_number ? `<div style="background:rgba(26,79,160,.08);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px">
+        ${a.order_number ? `<div style="background:rgba(28,27,120,.08);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px">
           <strong>Verknüpfter Auftrag:</strong> ${UI.esc(a.order_number)} — ${UI.statusBadge(a.order_status||'')}
           ${a.order_planned_date ? ` · <strong>Datum:</strong> ${UI.fmtDate(a.order_planned_date)}` : ''}
         </div>` : ''}

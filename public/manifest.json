@@ -1,18 +1,17 @@
 {
   "name": "Helbling Rapporte",
-  "short_name": "HR Rapporte",
-  "description": "Montageverwaltung für Helbling",
+  "short_name": "HE Rapporte",
+  "description": "Montageverwaltung für Helbling & Co. AG",
+  "id": "/",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#0f1117",
-  "theme_color": "#1a3a6b",
-  "orientation": "portrait-primary",
+  "background_color": "#ffffff",
+  "theme_color": "#1C1B78",
+  "lang": "de-CH",
   "icons": [
-    {
-      "src": "/icons/icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
-    }
+    { "src": "/icons/he-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/he-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/he-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }
