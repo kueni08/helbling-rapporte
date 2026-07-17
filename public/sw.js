@@ -1,11 +1,12 @@
 const CACHE_PREFIX = 'helbling-rapporte-';
 const CACHE = `${CACHE_PREFIX}v15`;
 const STATIC = [
-  '/', '/manifest.json', '/css/app.css', '/js/api.js', '/js/ui.js', '/js/app.js', '/js/pwa.js',
-  '/js/order-fields.js', '/js/views/admin.js', '/js/views/planer.js', '/js/views/monteur.js',
-  '/js/views/tagesuebersicht.js', '/icons/he-180.png', '/icons/he-192.png', '/icons/he-512.png',
+  '/', '/manifest.json', '/css/app.css?v=15', '/js/api.js?v=15', '/js/ui.js?v=15', '/js/app.js?v=15', '/js/pwa.js?v=15',
+  '/js/order-fields.js?v=15', '/js/views/admin.js?v=15', '/js/views/planer.js?v=15', '/js/views/monteur.js?v=15',
+  '/js/views/tagesuebersicht.js?v=15', '/icons/he-180.png', '/icons/he-192.png', '/icons/he-512.png',
   '/icons/he-maskable-512.png'
 ];
+const STATIC_PATHS = new Set(STATIC.map(asset => new URL(asset, self.location.origin).pathname));
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(STATIC)).then(() => self.skipWaiting()));
@@ -24,7 +25,7 @@ self.addEventListener('fetch', event => {
     event.respondWith(fetch(event.request, { cache: 'no-store' }).catch(() => caches.match('/')));
     return;
   }
-  if (STATIC.includes(url.pathname)) {
+  if (STATIC_PATHS.has(url.pathname)) {
     event.respondWith(caches.match(event.request).then(cached => cached || fetch(event.request)));
   }
 });
